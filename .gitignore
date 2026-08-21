@@ -1,0 +1,26 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Local tool and runtime state
+.docker-config/
+.codex-tmp/
+.gocache/
+bin/
+coverage.out
+*.log
+
+# Frontend generated files
+node_modules/
+.next/
+out/
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

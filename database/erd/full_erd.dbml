@@ -1,0 +1,2946 @@
+// Generated from database/wms_schema.sql. Do not edit manually.
+// Import this file into dbdiagram.io or another DBML-compatible tool.
+
+Project WMS {
+  database_type: 'PostgreSQL'
+  Note: 'WMS PostgreSQL 15+ schema; transaction IDs are varchar business identifiers.'
+}
+
+Table wms.account_status {
+  account_status_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(30) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  allows_login boolean [not null, note: 'default false']
+  is_active boolean [not null, note: 'default true']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+}
+
+Table wms.authentication_policy {
+  authentication_policy_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  max_failed_attempts integer [not null]
+  lockout_seconds integer [not null]
+  session_ttl_seconds integer [not null]
+  is_default boolean [not null, note: 'default false']
+  is_active boolean [not null, note: 'default true']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+}
+
+Table wms.session_revocation_reason {
+  session_revocation_reason_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.app_module {
+  module_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(50) [not null, unique]
+  name varchar(100) [not null]
+  display_order integer [not null, note: 'default 0']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.app_account {
+  account_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  username varchar(100) [not null, unique]
+  email varchar(254) [unique]
+  display_name varchar(150) [not null]
+  password_hash text
+  external_subject varchar(255) [unique]
+  account_status_id uuid [not null]
+  authentication_policy_id uuid
+  preferred_timezone varchar(50)
+  failed_login_count integer [not null, note: 'default 0']
+  locked_until timestamptz
+  last_login_at timestamptz
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid
+  version_no integer [not null, note: 'default 1']
+}
+
+Table wms.app_session {
+  session_id varchar(120) [pk, not null]
+  account_id uuid [not null]
+  token_hash varchar(128) [not null, unique]
+  issued_at timestamptz [not null, note: 'default clock_timestamp()']
+  expires_at timestamptz [not null]
+  last_seen_at timestamptz [not null, note: 'default clock_timestamp()']
+  revoked_at timestamptz
+  session_revocation_reason_id uuid
+  ip_address inet
+  user_agent text
+}
+
+Table wms.app_role {
+  role_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(50) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  is_active boolean [not null, note: 'default true']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid
+}
+
+Table wms.app_permission {
+  permission_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(100) [not null, unique]
+  name varchar(150) [not null]
+  module_code varchar(50) [not null]
+  description text
+  is_active boolean [not null, note: 'default true']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+}
+
+Table wms.app_menu {
+  menu_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  parent_menu_id uuid
+  code varchar(50) [not null, unique]
+  label varchar(100) [not null]
+  route varchar(255)
+  icon_name varchar(100)
+  display_order integer [not null, note: 'default 0']
+  require_all_permissions boolean [not null, note: 'default false']
+  is_active boolean [not null, note: 'default true']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+}
+
+Table wms.account_role {
+  account_id uuid [pk, not null]
+  role_id uuid [pk, not null]
+  valid_from timestamptz [not null, note: 'default clock_timestamp()']
+  valid_until timestamptz
+  assigned_by uuid
+}
+
+Table wms.role_permission {
+  role_id uuid [pk, not null]
+  permission_id uuid [pk, not null]
+  granted_by uuid
+  granted_at timestamptz [not null, note: 'default clock_timestamp()']
+}
+
+Table wms.menu_permission {
+  menu_id uuid [pk, not null]
+  permission_id uuid [pk, not null]
+}
+
+Table wms.organization {
+  organization_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(150) [not null]
+  legal_name varchar(200)
+  tax_number varchar(100)
+  timezone_name varchar(50) [not null]
+  address_line_1 varchar(255)
+  address_line_2 varchar(255)
+  city varchar(100)
+  province varchar(100)
+  postal_code varchar(20)
+  country_code varchar(2)
+  is_active boolean [not null, note: 'default true']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid
+}
+
+Table wms.warehouse {
+  warehouse_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  operator_id uuid [not null]
+  code varchar(40) [not null]
+  name varchar(150) [not null]
+  timezone_name varchar(50) [not null]
+  address_line_1 varchar(255)
+  address_line_2 varchar(255)
+  city varchar(100)
+  province varchar(100)
+  postal_code varchar(20)
+  country_code varchar(2)
+  is_active boolean [not null, note: 'default true']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid
+  indexes {
+    (operator_id, code) [unique]
+    (warehouse_id, operator_id) [unique]
+  }
+}
+
+Table wms.warehouse_owner {
+  warehouse_id uuid [pk, not null]
+  owner_id uuid [pk, not null]
+  is_active boolean [not null, note: 'default true']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid
+  indexes {
+    (owner_id, warehouse_id) [unique]
+  }
+}
+
+Table wms.location_type {
+  location_type_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  allows_receiving boolean [not null, note: 'default false']
+  allows_storage boolean [not null, note: 'default false']
+  allows_picking boolean [not null, note: 'default false']
+  allows_shipping boolean [not null, note: 'default false']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.warehouse_zone {
+  zone_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  warehouse_id uuid [not null]
+  code varchar(40) [not null]
+  name varchar(100) [not null]
+  description text
+  is_active boolean [not null, note: 'default true']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid
+  indexes {
+    (warehouse_id, code) [unique]
+    (zone_id, warehouse_id) [unique]
+  }
+}
+
+Table wms.warehouse_location {
+  location_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  warehouse_id uuid [not null]
+  zone_id uuid [not null]
+  location_type_id uuid [not null]
+  code varchar(60) [not null]
+  barcode varchar(100)
+  aisle varchar(20)
+  bay varchar(20)
+  level_no varchar(20)
+  position_no varchar(20)
+  pick_sequence integer [not null, note: 'default 0']
+  max_weight numeric(20,6)
+  max_volume numeric(20,6)
+  is_pick_face boolean [not null, note: 'default false']
+  is_locked boolean [not null, note: 'default false']
+  is_active boolean [not null, note: 'default true']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid
+  indexes {
+    (warehouse_id, code) [unique]
+    (warehouse_id, barcode) [unique]
+    (location_id, warehouse_id) [unique]
+  }
+}
+
+Table wms.account_owner_access {
+  account_id uuid [pk, not null]
+  owner_id uuid [pk, not null]
+  granted_by uuid
+  granted_at timestamptz [not null, note: 'default clock_timestamp()']
+}
+
+Table wms.account_warehouse_access {
+  account_id uuid [pk, not null]
+  warehouse_id uuid [pk, not null]
+  granted_by uuid
+  granted_at timestamptz [not null, note: 'default clock_timestamp()']
+}
+
+Table wms.partner_type {
+  partner_type_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.business_partner {
+  partner_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  owner_id uuid [not null]
+  code varchar(40) [not null]
+  name varchar(150) [not null]
+  legal_name varchar(200)
+  tax_number varchar(100)
+  email varchar(254)
+  phone varchar(50)
+  address_line_1 varchar(255)
+  address_line_2 varchar(255)
+  city varchar(100)
+  province varchar(100)
+  postal_code varchar(20)
+  country_code varchar(2)
+  is_active boolean [not null, note: 'default true']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid
+  indexes {
+    (owner_id, code) [unique]
+    (owner_id, partner_id) [unique]
+  }
+}
+
+Table wms.business_partner_type {
+  partner_id uuid [pk, not null]
+  partner_type_id uuid [pk, not null]
+}
+
+Table wms.uom {
+  uom_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(20) [not null, unique]
+  name varchar(100) [not null]
+  decimal_scale smallint [not null, note: 'default 0']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.item_category {
+  category_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  owner_id uuid [not null]
+  parent_category_id uuid
+  code varchar(40) [not null]
+  name varchar(100) [not null]
+  is_active boolean [not null, note: 'default true']
+  indexes {
+    (owner_id, code) [unique]
+    (owner_id, category_id) [unique]
+  }
+}
+
+Table wms.item {
+  item_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  owner_id uuid [not null]
+  category_id uuid
+  code varchar(60) [not null]
+  name varchar(200) [not null]
+  description text
+  base_uom_id uuid [not null]
+  weight numeric(20,6)
+  volume numeric(20,6)
+  lot_controlled boolean [not null, note: 'default false']
+  serial_controlled boolean [not null, note: 'default false']
+  shelf_life_days integer
+  minimum_receive_days integer
+  is_active boolean [not null, note: 'default true']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid
+  indexes {
+    (owner_id, code) [unique]
+    (owner_id, item_id) [unique]
+  }
+}
+
+Table wms.item_uom {
+  item_uom_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  item_id uuid [not null]
+  uom_id uuid [not null]
+  conversion_to_base numeric(20,6) [not null]
+  length numeric(20,6)
+  width numeric(20,6)
+  height numeric(20,6)
+  weight numeric(20,6)
+  is_receiving_uom boolean [not null, note: 'default true']
+  is_picking_uom boolean [not null, note: 'default true']
+  is_active boolean [not null, note: 'default true']
+  indexes {
+    (item_id, uom_id) [unique]
+  }
+}
+
+Table wms.item_barcode {
+  item_barcode_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  item_id uuid [not null]
+  uom_id uuid
+  barcode varchar(100) [not null, unique]
+  is_primary boolean [not null, note: 'default false']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.inventory_status {
+  inventory_status_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  is_allocatable boolean [not null, note: 'default false']
+  is_pickable boolean [not null, note: 'default false']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.quality_status {
+  quality_status_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.inspection_result {
+  inspection_result_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  is_accepted boolean [not null, note: 'default false']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.quarantine_disposition_type {
+  quarantine_disposition_type_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  releases_to_available boolean [not null, note: 'default false']
+  requires_reinspection boolean [not null, note: 'default false']
+  removes_inventory boolean [not null, note: 'default false']
+  removal_movement_type_id uuid
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.reason_code {
+  reason_code_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  module_code varchar(50) [not null]
+  code varchar(40) [not null]
+  name varchar(100) [not null]
+  description text
+  requires_note boolean [not null, note: 'default false']
+  is_active boolean [not null, note: 'default true']
+  indexes {
+    (module_code, code) [unique]
+  }
+}
+
+Table wms.handling_unit_type {
+  handling_unit_type_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  max_weight numeric(20,6)
+  max_volume numeric(20,6)
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.document_type {
+  document_type_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  module_code varchar(50) [not null]
+  description text
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.document_status {
+  status_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  document_type_id uuid [not null]
+  code varchar(40) [not null]
+  name varchar(100) [not null]
+  description text
+  is_initial boolean [not null, note: 'default false']
+  is_final boolean [not null, note: 'default false']
+  is_cancelled boolean [not null, note: 'default false']
+  display_order integer [not null, note: 'default 0']
+  is_active boolean [not null, note: 'default true']
+  indexes {
+    (document_type_id, code) [unique]
+    (document_type_id, status_id) [unique]
+  }
+}
+
+Table wms.document_status_transition {
+  transition_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  document_type_id uuid [not null]
+  from_status_id uuid [not null]
+  to_status_id uuid [not null]
+  required_permission_id uuid
+  is_active boolean [not null, note: 'default true']
+  indexes {
+    (document_type_id, from_status_id, to_status_id) [unique]
+  }
+}
+
+Table wms.task_type {
+  task_type_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.task_status {
+  task_status_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  is_initial boolean [not null, note: 'default false']
+  is_final boolean [not null, note: 'default false']
+  is_cancelled boolean [not null, note: 'default false']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.task_status_transition {
+  task_status_transition_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  from_status_id uuid [not null]
+  to_status_id uuid [not null]
+  required_permission_id uuid
+  is_active boolean [not null, note: 'default true']
+  indexes {
+    (from_status_id, to_status_id) [unique]
+  }
+}
+
+Table wms.task_priority {
+  task_priority_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  priority_value integer [not null, unique]
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.putaway_strategy {
+  putaway_strategy_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  owner_id uuid
+  warehouse_id uuid
+  code varchar(40) [not null]
+  name varchar(100) [not null]
+  description text
+  is_active boolean [not null, note: 'default true']
+  indexes {
+    (owner_id, warehouse_id, code) [unique]
+  }
+}
+
+Table wms.putaway_strategy_rule {
+  rule_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  putaway_strategy_id uuid [not null]
+  sequence_no integer [not null]
+  category_id uuid
+  location_type_id uuid
+  zone_id uuid
+  minimum_empty_percent numeric(7,4)
+  is_active boolean [not null, note: 'default true']
+  indexes {
+    (putaway_strategy_id, sequence_no) [unique]
+  }
+}
+
+Table wms.picking_strategy {
+  picking_strategy_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  owner_id uuid
+  warehouse_id uuid
+  code varchar(40) [not null]
+  name varchar(100) [not null]
+  description text
+  is_active boolean [not null, note: 'default true']
+  indexes {
+    (owner_id, warehouse_id, code) [unique]
+  }
+}
+
+Table wms.picking_sort_method {
+  picking_sort_method_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.picking_strategy_rule {
+  rule_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  picking_strategy_id uuid [not null]
+  sequence_no integer [not null]
+  inventory_status_id uuid
+  zone_id uuid
+  picking_sort_method_id uuid [not null]
+  is_active boolean [not null, note: 'default true']
+  indexes {
+    (picking_strategy_id, sequence_no) [unique]
+  }
+}
+
+Table wms.document_number_rule {
+  document_number_rule_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  document_type_id uuid [not null]
+  prefix varchar(20) [not null]
+  separator varchar(3) [not null, note: 'default \'-\'']
+  sequence_length smallint [not null, note: 'default 6']
+  include_partner_code boolean [not null, note: 'default true']
+  include_warehouse_code boolean [not null, note: 'default true']
+  is_active boolean [not null, note: 'default true']
+  effective_from date [not null, note: 'default current_date']
+  effective_until date
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid
+}
+
+Table wms.document_daily_counter {
+  document_type_id uuid [pk, not null]
+  business_date date [pk, not null]
+  last_number bigint [not null]
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+}
+
+Table wms.inventory_lot {
+  lot_id varchar(120) [pk, not null]
+  owner_id uuid [not null]
+  item_id uuid [not null]
+  lot_number varchar(100) [not null]
+  manufacture_date date
+  expiry_date date
+  quality_status_id uuid
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid
+  indexes {
+    (owner_id, item_id, lot_number) [unique]
+  }
+}
+
+Table wms.serial_number {
+  serial_id varchar(160) [pk, not null]
+  owner_id uuid [not null]
+  item_id uuid [not null]
+  serial_no varchar(120) [not null]
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid
+  indexes {
+    (owner_id, item_id, serial_no) [unique]
+  }
+}
+
+Table wms.handling_unit {
+  handling_unit_id varchar(120) [pk, not null]
+  warehouse_id uuid [not null]
+  owner_id uuid [not null]
+  handling_unit_type_id uuid [not null]
+  parent_handling_unit_id varchar(120)
+  current_location_id uuid
+  barcode varchar(120) [not null, unique]
+  is_closed boolean [not null, note: 'default false']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid
+}
+
+Table wms.purchase_order {
+  purchase_order_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  owner_id uuid [not null]
+  vendor_id uuid [not null]
+  warehouse_id uuid [not null]
+  business_date date [not null]
+  purchase_order_no varchar(120) [not null]
+  ordered_at timestamptz [not null]
+  expected_arrival_at timestamptz
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid
+  version_no integer [not null, note: 'default 1']
+  indexes {
+    (owner_id, purchase_order_no) [unique]
+    (purchase_order_id, owner_id) [unique]
+  }
+}
+
+Table wms.purchase_order_line {
+  purchase_order_line_id varchar(150) [pk, not null]
+  purchase_order_id varchar(120) [not null]
+  owner_id uuid [not null]
+  line_no integer [not null]
+  item_id uuid [not null]
+  ordered_qty numeric(20,6) [not null]
+  uom_id uuid [not null]
+  vendor_item_code varchar(100)
+  expected_lot_no varchar(100)
+  expected_expiry_date date
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  indexes {
+    (purchase_order_id, line_no) [unique]
+    (purchase_order_line_id, purchase_order_id) [unique]
+  }
+}
+
+Table wms.inbound_order {
+  inbound_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  owner_id uuid [not null]
+  vendor_id uuid [not null]
+  warehouse_id uuid [not null]
+  business_date date [not null]
+  expected_arrival_at timestamptz
+  external_reference varchar(120)
+  supplier_reference varchar(120)
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid
+  version_no integer [not null, note: 'default 1']
+}
+
+Table wms.inbound_order_line {
+  inbound_line_id varchar(150) [pk, not null]
+  inbound_id varchar(120) [not null]
+  purchase_order_line_id varchar(150)
+  line_no integer [not null]
+  item_id uuid [not null]
+  expected_qty numeric(20,6) [not null]
+  uom_id uuid [not null]
+  expected_lot_no varchar(100)
+  expected_expiry_date date
+  customer_line_reference varchar(100)
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  indexes {
+    (inbound_id, line_no) [unique]
+  }
+}
+
+Table wms.receipt {
+  receipt_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  inbound_id varchar(120)
+  owner_id uuid [not null]
+  warehouse_id uuid [not null]
+  business_date date [not null]
+  received_at timestamptz [not null]
+  dock_location_id uuid
+  vehicle_number varchar(60)
+  seal_number varchar(60)
+  delivery_note_no varchar(100)
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.receipt_line {
+  receipt_line_id varchar(150) [pk, not null]
+  receipt_id varchar(120) [not null]
+  inbound_line_id varchar(150)
+  line_no integer [not null]
+  item_id uuid [not null]
+  received_qty numeric(20,6) [not null]
+  rejected_qty numeric(20,6) [not null, note: 'default 0']
+  uom_id uuid [not null]
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  indexes {
+    (receipt_id, line_no) [unique]
+  }
+}
+
+Table wms.receipt_inventory {
+  receipt_inventory_id varchar(160) [pk, not null]
+  receipt_line_id varchar(150) [not null]
+  item_id uuid [not null]
+  source_qty numeric(20,6) [not null]
+  source_uom_id uuid [not null]
+  base_qty numeric(20,6) [not null]
+  base_uom_id uuid [not null]
+  lot_id varchar(120)
+  handling_unit_id varchar(120)
+  received_location_id uuid [not null]
+  initial_inventory_status_id uuid [not null]
+  initial_balance_id varchar(160)
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.receipt_line_serial {
+  receipt_inventory_id varchar(160) [pk, not null]
+  serial_id varchar(160) [pk, not null, unique]
+}
+
+Table wms.quality_inspection {
+  inspection_id varchar(120) [pk, not null]
+  receipt_inventory_id varchar(160) [not null]
+  parent_inspection_id varchar(120)
+  quality_status_id uuid [not null]
+  inspection_result_id uuid
+  inspected_qty numeric(20,6) [not null]
+  passed_qty numeric(20,6) [not null, note: 'default 0']
+  failed_qty numeric(20,6) [not null, note: 'default 0']
+  inspected_at timestamptz
+  inspected_by uuid
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.putaway_task {
+  putaway_task_id varchar(120) [pk, not null]
+  task_type_id uuid [not null]
+  task_status_id uuid [not null]
+  task_priority_id uuid [not null]
+  receipt_inventory_id varchar(160) [not null]
+  source_balance_id varchar(160)
+  owner_id uuid [not null]
+  warehouse_id uuid [not null]
+  item_id uuid [not null]
+  lot_id varchar(120)
+  handling_unit_id varchar(120)
+  source_location_id uuid [not null]
+  target_location_id uuid [not null]
+  planned_qty numeric(20,6) [not null]
+  completed_qty numeric(20,6) [not null, note: 'default 0']
+  uom_id uuid [not null]
+  assigned_to uuid
+  started_at timestamptz
+  completed_at timestamptz
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.movement_type {
+  movement_type_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.internal_move_type {
+  internal_move_type_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  requires_approval boolean [not null, note: 'default false']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.inventory_adjustment_type {
+  inventory_adjustment_type_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  quantity_effect smallint [not null]
+  requires_approval boolean [not null, note: 'default true']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.stock_count_type {
+  stock_count_type_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  requires_freeze boolean [not null, note: 'default false']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.inventory_balance {
+  balance_id varchar(160) [pk, not null]
+  owner_id uuid [not null]
+  warehouse_id uuid [not null]
+  location_id uuid [not null]
+  item_id uuid [not null]
+  lot_id varchar(120)
+  handling_unit_id varchar(120)
+  inventory_status_id uuid [not null]
+  on_hand_qty numeric(20,6) [not null, note: 'default 0']
+  reserved_qty numeric(20,6) [not null, note: 'default 0']
+  uom_id uuid [not null]
+  version_no bigint [not null, note: 'default 1']
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  indexes {
+    (owner_id, warehouse_id, location_id, item_id, lot_id, handling_unit_id, inventory_status_id) [unique]
+  }
+}
+
+Table wms.inventory_movement {
+  movement_id varchar(140) [pk, not null]
+  movement_type_id uuid [not null]
+  owner_id uuid [not null]
+  warehouse_id uuid [not null]
+  business_date date [not null]
+  occurred_at timestamptz [not null, note: 'default clock_timestamp()']
+  item_id uuid [not null]
+  lot_id varchar(120)
+  serial_id varchar(160)
+  handling_unit_id varchar(120)
+  from_location_id uuid
+  to_location_id uuid
+  from_status_id uuid
+  to_status_id uuid
+  quantity numeric(20,6) [not null]
+  uom_id uuid [not null]
+  source_document_id varchar(140) [not null]
+  source_line_id varchar(160)
+  reason_code_id uuid
+  notes text
+  created_by uuid [not null]
+}
+
+Table wms.quarantine_case {
+  quarantine_case_id varchar(140) [pk, not null]
+  parent_quarantine_case_id varchar(140)
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  receipt_inventory_id varchar(160) [not null]
+  inspection_id varchar(120) [not null, unique]
+  quarantine_balance_id varchar(160) [not null]
+  owner_id uuid [not null]
+  warehouse_id uuid [not null]
+  quarantine_qty numeric(20,6) [not null]
+  uom_id uuid [not null]
+  opened_at timestamptz [not null, note: 'default clock_timestamp()']
+  closed_at timestamptz
+  notes text
+  created_by uuid [not null]
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid
+  version_no integer [not null, note: 'default 1']
+}
+
+Table wms.quarantine_disposition {
+  quarantine_disposition_id varchar(150) [pk, not null]
+  quarantine_case_id varchar(140) [not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  quarantine_disposition_type_id uuid [not null]
+  disposition_qty numeric(20,6) [not null]
+  uom_id uuid [not null]
+  client_decision_reference varchar(120)
+  decision_notes text
+  decided_at timestamptz [not null]
+  decided_by uuid [not null]
+  processed_at timestamptz
+  inventory_movement_id varchar(140) [unique]
+  resulting_balance_id varchar(160)
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.rework_task {
+  rework_task_id varchar(140) [pk, not null]
+  quarantine_disposition_id varchar(150) [not null, unique]
+  task_type_id uuid [not null]
+  task_status_id uuid [not null]
+  task_priority_id uuid [not null]
+  planned_qty numeric(20,6) [not null]
+  completed_qty numeric(20,6) [not null, note: 'default 0']
+  uom_id uuid [not null]
+  assigned_to uuid
+  work_instructions text
+  result_notes text
+  started_at timestamptz
+  completed_at timestamptz
+  reinspection_id varchar(120) [unique]
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.carrier {
+  carrier_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  business_partner_id uuid [unique]
+  code varchar(40) [not null, unique]
+  name varchar(150) [not null]
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.carrier_service {
+  carrier_service_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  carrier_id uuid [not null]
+  code varchar(40) [not null]
+  name varchar(100) [not null]
+  is_active boolean [not null, note: 'default true']
+  indexes {
+    (carrier_id, code) [unique]
+  }
+}
+
+Table wms.carrier_driver {
+  driver_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  carrier_id uuid [not null]
+  account_id uuid [unique]
+  code varchar(40) [not null]
+  name varchar(150) [not null]
+  phone_number varchar(50)
+  license_number varchar(80)
+  is_active boolean [not null, note: 'default true']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid
+  indexes {
+    (carrier_id, code) [unique]
+  }
+}
+
+Table wms.validation_severity {
+  validation_severity_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(20) [not null, unique]
+  name varchar(80) [not null]
+  blocks_processing boolean [not null, note: 'default true']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.outbound_validation_rule {
+  outbound_validation_rule_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(50) [not null, unique]
+  name varchar(120) [not null]
+  description text
+  handler_code varchar(60) [not null]
+  validation_severity_id uuid [not null]
+  display_order integer [not null, note: 'default 0']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.outbound_check_exception_status {
+  outbound_check_exception_status_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(30) [not null, unique]
+  name varchar(100) [not null]
+  is_final boolean [not null, note: 'default false']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.outbound_check_resolution_type {
+  outbound_check_resolution_type_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(120) [not null]
+  description text
+  counts_as_stock_correction boolean [not null, note: 'default false']
+  counts_as_replacement boolean [not null, note: 'default false']
+  counts_as_short_acceptance boolean [not null, note: 'default false']
+  requires_approval boolean [not null, note: 'default false']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.outbound_wave_type {
+  outbound_wave_type_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.outbound_check_result {
+  outbound_check_result_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  is_pass boolean [not null, note: 'default false']
+  requires_note boolean [not null, note: 'default false']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.delivery_event_type {
+  delivery_event_type_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  marks_delivered boolean [not null, note: 'default false']
+  marks_failed boolean [not null, note: 'default false']
+  marks_returned boolean [not null, note: 'default false']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.delivery_failure_reason {
+  delivery_failure_reason_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.outbound_order {
+  outbound_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  owner_id uuid [not null]
+  customer_id uuid [not null]
+  warehouse_id uuid [not null]
+  business_date date [not null]
+  requested_ship_at timestamptz
+  external_reference varchar(120)
+  customer_order_no varchar(120)
+  client_delivery_order_no varchar(120) [not null]
+  ship_to_partner_id uuid
+  ship_to_name varchar(150) [not null]
+  ship_to_address_1 varchar(255) [not null]
+  ship_to_address_2 varchar(255)
+  ship_to_city varchar(100)
+  ship_to_province varchar(100)
+  ship_to_postal_code varchar(20)
+  ship_to_country_code varchar(2)
+  notes text
+  validated_at timestamptz
+  validated_by uuid
+  allocated_at timestamptz
+  completed_at timestamptz
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid
+  version_no integer [not null, note: 'default 1']
+  indexes {
+    (owner_id, client_delivery_order_no) [unique]
+  }
+}
+
+Table wms.outbound_order_line {
+  outbound_line_id varchar(150) [pk, not null]
+  outbound_id varchar(120) [not null]
+  line_no integer [not null]
+  item_id uuid [not null]
+  ordered_qty numeric(20,6) [not null]
+  allocated_qty numeric(20,6) [not null, note: 'default 0']
+  picked_qty numeric(20,6) [not null, note: 'default 0']
+  checked_qty numeric(20,6) [not null, note: 'default 0']
+  packed_qty numeric(20,6) [not null, note: 'default 0']
+  shipped_qty numeric(20,6) [not null, note: 'default 0']
+  delivered_qty numeric(20,6) [not null, note: 'default 0']
+  rejected_qty numeric(20,6) [not null, note: 'default 0']
+  short_accepted_qty numeric(20,6) [not null, note: 'default 0']
+  uom_id uuid [not null]
+  requested_lot_no varchar(100)
+  customer_line_reference varchar(100)
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  indexes {
+    (outbound_id, line_no) [unique]
+  }
+}
+
+Table wms.outbound_validation_run {
+  validation_run_id varchar(140) [pk, not null]
+  outbound_id varchar(120) [not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  validated_at timestamptz
+  validated_by uuid
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.outbound_validation_result_detail {
+  validation_result_id varchar(170) [pk, not null]
+  validation_run_id varchar(140) [not null]
+  outbound_validation_rule_id uuid [not null]
+  passed boolean [not null]
+  result_message text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  indexes {
+    (validation_run_id, outbound_validation_rule_id) [unique]
+  }
+}
+
+Table wms.outbound_wave {
+  wave_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  outbound_wave_type_id uuid [not null]
+  owner_id uuid [not null]
+  warehouse_id uuid [not null]
+  picking_strategy_id uuid
+  business_date date [not null]
+  planned_release_at timestamptz
+  released_at timestamptz
+  completed_at timestamptz
+  notes text
+  version_no bigint [not null, note: 'default 1']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid [not null]
+}
+
+Table wms.outbound_wave_order {
+  wave_id varchar(120) [pk, not null]
+  outbound_id varchar(120) [pk, not null]
+  added_at timestamptz [not null, note: 'default clock_timestamp()']
+  added_by uuid [not null]
+}
+
+Table wms.inventory_reservation {
+  reservation_id varchar(140) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  picking_strategy_id uuid
+  outbound_line_id varchar(150) [not null]
+  balance_id varchar(160) [not null]
+  reserved_qty numeric(20,6) [not null]
+  picked_qty numeric(20,6) [not null, note: 'default 0']
+  uom_id uuid [not null]
+  reserved_at timestamptz [not null, note: 'default clock_timestamp()']
+  released_at timestamptz
+  created_by uuid [not null]
+}
+
+Table wms.pick_task {
+  pick_task_id varchar(140) [pk, not null]
+  task_type_id uuid [not null]
+  task_status_id uuid [not null]
+  task_priority_id uuid [not null]
+  wave_id varchar(120) [not null]
+  reservation_id varchar(140) [not null, unique]
+  outbound_line_id varchar(150) [not null]
+  source_location_id uuid [not null]
+  target_location_id uuid
+  planned_qty numeric(20,6) [not null]
+  picked_qty numeric(20,6) [not null, note: 'default 0']
+  uom_id uuid [not null]
+  assigned_to uuid
+  started_at timestamptz
+  completed_at timestamptz
+  short_qty numeric(20,6) [not null, note: 'default 0']
+  short_reason_code_id uuid
+  result_notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.pick_execution {
+  pick_execution_id varchar(170) [pk, not null]
+  pick_task_id varchar(140) [not null]
+  source_balance_id varchar(160) [not null]
+  staging_balance_id varchar(160) [not null]
+  picked_qty numeric(20,6) [not null]
+  uom_id uuid [not null]
+  movement_id varchar(140) [not null, unique]
+  picked_at timestamptz [not null, note: 'default clock_timestamp()']
+  picked_by uuid [not null]
+}
+
+Table wms.outbound_staging {
+  staging_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  outbound_id varchar(120) [not null]
+  wave_id varchar(120) [not null]
+  warehouse_id uuid [not null]
+  staging_location_id uuid [not null]
+  staged_at timestamptz
+  staged_by uuid
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.outbound_staging_line {
+  staging_line_id varchar(160) [pk, not null]
+  staging_id varchar(120) [not null]
+  pick_execution_id varchar(170) [not null, unique]
+  staging_balance_id varchar(160) [not null]
+  staged_qty numeric(20,6) [not null]
+  removed_qty numeric(20,6) [not null, note: 'default 0']
+  uom_id uuid [not null]
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.outbound_check {
+  outbound_check_id varchar(120) [pk, not null]
+  parent_check_id varchar(120)
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  staging_id varchar(120) [not null]
+  checked_at timestamptz
+  checked_by uuid
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.outbound_check_line {
+  outbound_check_line_id varchar(160) [pk, not null]
+  outbound_check_id varchar(120) [not null]
+  staging_line_id varchar(160) [not null]
+  line_no integer [not null]
+  expected_qty numeric(20,6) [not null]
+  checked_qty numeric(20,6)
+  exception_qty numeric(20,6) [not null, note: 'default 0']
+  uom_id uuid [not null]
+  outbound_check_result_id uuid
+  notes text
+  checked_at timestamptz
+  checked_by uuid
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  indexes {
+    (outbound_check_id, line_no) [unique]
+  }
+}
+
+Table wms.outbound_check_exception {
+  outbound_check_exception_id varchar(170) [pk, not null]
+  outbound_check_line_id varchar(160) [not null, unique]
+  status_id uuid [not null]
+  exception_qty numeric(20,6) [not null]
+  opened_at timestamptz [not null, note: 'default clock_timestamp()']
+  resolved_at timestamptz
+  resolved_by uuid
+  notes text
+  created_by uuid [not null]
+}
+
+Table wms.outbound_check_resolution {
+  outbound_check_resolution_id varchar(190) [pk, not null]
+  outbound_check_exception_id varchar(170) [not null]
+  outbound_check_resolution_type_id uuid [not null]
+  resolved_qty numeric(20,6) [not null]
+  notes text
+  approved_at timestamptz
+  approved_by uuid
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.outbound_check_resolution_movement {
+  outbound_check_resolution_id varchar(190) [pk, not null]
+  movement_id varchar(140) [pk, not null, unique]
+}
+
+Table wms.outbound_check_resolution_reservation {
+  outbound_check_resolution_id varchar(190) [pk, not null]
+  reservation_id varchar(140) [pk, not null, unique]
+}
+
+Table wms.packing {
+  packing_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  outbound_id varchar(120) [not null, unique]
+  warehouse_id uuid [not null]
+  packing_location_id uuid
+  packed_at timestamptz
+  packed_by uuid
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.packing_line {
+  packing_line_id varchar(150) [pk, not null]
+  packing_id varchar(120) [not null]
+  pick_task_id varchar(140) [not null]
+  outbound_check_line_id varchar(160) [not null, unique]
+  source_balance_id varchar(160) [not null]
+  packing_balance_id varchar(160) [not null]
+  handling_unit_id varchar(120)
+  packed_qty numeric(20,6) [not null]
+  uom_id uuid [not null]
+  movement_id varchar(140) [not null, unique]
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.shipment {
+  shipment_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  owner_id uuid [not null]
+  carrier_service_id uuid
+  warehouse_id uuid [not null]
+  business_date date [not null]
+  route_reference varchar(100)
+  tracking_number varchar(150)
+  vehicle_number varchar(60)
+  seal_number varchar(60)
+  shipped_at timestamptz
+  dispatched_by uuid
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.shipment_order {
+  shipment_id varchar(120) [pk, not null]
+  outbound_id varchar(120) [pk, not null]
+  added_at timestamptz [not null, note: 'default clock_timestamp()']
+  added_by uuid [not null]
+  removed_at timestamptz
+  removed_by uuid
+}
+
+Table wms.shipment_driver {
+  shipment_id varchar(120) [pk, not null]
+  driver_id uuid [pk, not null]
+  is_primary boolean [not null, note: 'default false']
+  assigned_at timestamptz [not null, note: 'default clock_timestamp()']
+  assigned_by uuid [not null]
+}
+
+Table wms.shipment_line {
+  shipment_line_id varchar(160) [pk, not null]
+  shipment_id varchar(120) [not null]
+  packing_line_id varchar(150) [not null, unique]
+  source_balance_id varchar(160) [not null]
+  shipped_qty numeric(20,6) [not null]
+  uom_id uuid [not null]
+  movement_id varchar(140) [not null, unique]
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.shipment_packing {
+  shipment_id varchar(120) [pk, not null]
+  packing_id varchar(120) [pk, not null]
+}
+
+Table wms.delivery {
+  delivery_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  shipment_id varchar(120) [not null]
+  outbound_id varchar(120) [not null]
+  business_date date [not null]
+  planned_delivery_at timestamptz
+  arrived_at timestamptz
+  delivered_at timestamptz
+  recipient_name varchar(150)
+  recipient_reference varchar(100)
+  proof_reference varchar(200)
+  proof_uri text
+  latitude numeric(10,7)
+  longitude numeric(10,7)
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid [not null]
+  indexes {
+    (shipment_id, outbound_id) [unique]
+  }
+}
+
+Table wms.delivery_line {
+  delivery_line_id varchar(160) [pk, not null]
+  delivery_id varchar(120) [not null]
+  shipment_line_id varchar(160) [not null, unique]
+  planned_qty numeric(20,6) [not null]
+  delivered_qty numeric(20,6) [not null, note: 'default 0']
+  returned_qty numeric(20,6) [not null, note: 'default 0']
+  uom_id uuid [not null]
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.delivery_event {
+  delivery_event_id varchar(160) [pk, not null]
+  delivery_id varchar(120) [not null]
+  delivery_event_type_id uuid [not null]
+  event_at timestamptz [not null]
+  delivery_failure_reason_id uuid
+  recipient_name varchar(150)
+  recipient_reference varchar(100)
+  proof_reference varchar(200)
+  proof_uri text
+  notes text
+  latitude numeric(10,7)
+  longitude numeric(10,7)
+  recorded_by uuid [not null]
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+}
+
+Table wms.delivery_event_line {
+  delivery_event_id varchar(160) [pk, not null]
+  delivery_line_id varchar(160) [pk, not null]
+  delivered_qty numeric(20,6) [not null]
+}
+
+Table wms.outbound_return_policy {
+  owner_id uuid [pk, not null]
+  warehouse_id uuid [pk, not null]
+  return_location_id uuid [not null]
+  return_inventory_status_id uuid [not null]
+  is_active boolean [not null, note: 'default true']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid
+}
+
+Table wms.delivery_return_line {
+  delivery_return_line_id varchar(170) [pk, not null]
+  delivery_id varchar(120) [not null]
+  delivery_line_id varchar(160) [not null]
+  return_location_id uuid [not null]
+  returned_balance_id varchar(160) [not null]
+  returned_qty numeric(20,6) [not null]
+  uom_id uuid [not null]
+  movement_id varchar(140) [not null, unique]
+  returned_at timestamptz [not null]
+  returned_by uuid [not null]
+}
+
+Table wms.internal_move_order {
+  internal_move_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  internal_move_type_id uuid [not null]
+  owner_id uuid [not null]
+  warehouse_id uuid [not null]
+  business_date date [not null]
+  reason_code_id uuid
+  requested_at timestamptz [not null, note: 'default clock_timestamp()']
+  approved_at timestamptz
+  approved_by uuid
+  completed_at timestamptz
+  notes text
+  version_no bigint [not null, note: 'default 1']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid [not null]
+}
+
+Table wms.internal_move_order_line {
+  internal_move_line_id varchar(150) [pk, not null]
+  internal_move_id varchar(120) [not null]
+  line_no integer [not null]
+  source_balance_id varchar(160) [not null]
+  target_location_id uuid [not null]
+  planned_qty numeric(20,6) [not null]
+  completed_qty numeric(20,6) [not null, note: 'default 0']
+  uom_id uuid [not null]
+  assigned_to uuid
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  indexes {
+    (internal_move_id, line_no) [unique]
+  }
+}
+
+Table wms.internal_move_execution {
+  internal_move_execution_id varchar(160) [pk, not null]
+  internal_move_line_id varchar(150) [not null]
+  quantity numeric(20,6) [not null]
+  source_balance_id varchar(160) [not null]
+  destination_balance_id varchar(160) [not null]
+  movement_id varchar(140) [not null, unique]
+  executed_at timestamptz [not null, note: 'default clock_timestamp()']
+  executed_by uuid [not null]
+}
+
+Table wms.transfer_order {
+  transfer_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  owner_id uuid [not null]
+  source_warehouse_id uuid [not null]
+  target_warehouse_id uuid [not null]
+  business_date date [not null]
+  requested_transfer_at timestamptz
+  approved_at timestamptz
+  approved_by uuid
+  completed_at timestamptz
+  notes text
+  version_no bigint [not null, note: 'default 1']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid [not null]
+}
+
+Table wms.transfer_order_line {
+  transfer_line_id varchar(150) [pk, not null]
+  transfer_id varchar(120) [not null]
+  line_no integer [not null]
+  item_id uuid [not null]
+  requested_qty numeric(20,6) [not null]
+  dispatched_qty numeric(20,6) [not null, note: 'default 0']
+  received_qty numeric(20,6) [not null, note: 'default 0']
+  uom_id uuid [not null]
+  requested_lot_id varchar(120)
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  indexes {
+    (transfer_id, line_no) [unique]
+  }
+}
+
+Table wms.transfer_dispatch {
+  transfer_dispatch_id varchar(120) [pk, not null]
+  transfer_id varchar(120) [not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  business_date date [not null]
+  carrier_partner_id uuid
+  tracking_number varchar(150)
+  vehicle_number varchar(60)
+  seal_number varchar(60)
+  dispatched_at timestamptz
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.transfer_dispatch_line {
+  transfer_dispatch_line_id varchar(150) [pk, not null]
+  transfer_dispatch_id varchar(120) [not null]
+  transfer_line_id varchar(150) [not null]
+  line_no integer [not null]
+  source_balance_id varchar(160) [not null]
+  dispatched_qty numeric(20,6) [not null]
+  received_qty numeric(20,6) [not null, note: 'default 0']
+  uom_id uuid [not null]
+  movement_id varchar(140) [unique]
+  confirmed_at timestamptz
+  confirmed_by uuid
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  indexes {
+    (transfer_dispatch_id, line_no) [unique]
+  }
+}
+
+Table wms.transfer_receipt {
+  transfer_receipt_id varchar(120) [pk, not null]
+  transfer_id varchar(120) [not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  warehouse_id uuid [not null]
+  business_date date [not null]
+  received_at timestamptz
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.transfer_receipt_line {
+  transfer_receipt_line_id varchar(150) [pk, not null]
+  transfer_receipt_id varchar(120) [not null]
+  transfer_dispatch_line_id varchar(150) [not null]
+  line_no integer [not null]
+  target_location_id uuid [not null]
+  received_qty numeric(20,6) [not null]
+  uom_id uuid [not null]
+  destination_balance_id varchar(160)
+  movement_id varchar(140) [unique]
+  posted_at timestamptz
+  posted_by uuid
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  indexes {
+    (transfer_receipt_id, line_no) [unique]
+  }
+}
+
+Table wms.inventory_status_change {
+  inventory_status_change_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  owner_id uuid [not null]
+  warehouse_id uuid [not null]
+  business_date date [not null]
+  reason_code_id uuid [not null]
+  approved_at timestamptz
+  approved_by uuid
+  posted_at timestamptz
+  notes text
+  version_no bigint [not null, note: 'default 1']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid [not null]
+}
+
+Table wms.inventory_status_change_line {
+  inventory_status_change_line_id varchar(150) [pk, not null]
+  inventory_status_change_id varchar(120) [not null]
+  line_no integer [not null]
+  source_balance_id varchar(160) [not null]
+  target_inventory_status_id uuid [not null]
+  quantity numeric(20,6) [not null]
+  uom_id uuid [not null]
+  destination_balance_id varchar(160)
+  movement_id varchar(140) [unique]
+  posted_at timestamptz
+  posted_by uuid
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  indexes {
+    (inventory_status_change_id, line_no) [unique]
+  }
+}
+
+Table wms.inventory_adjustment {
+  inventory_adjustment_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  owner_id uuid [not null]
+  warehouse_id uuid [not null]
+  business_date date [not null]
+  reason_code_id uuid [not null]
+  approved_at timestamptz
+  approved_by uuid
+  posted_at timestamptz
+  notes text
+  version_no bigint [not null, note: 'default 1']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid [not null]
+}
+
+Table wms.inventory_adjustment_line {
+  inventory_adjustment_line_id varchar(150) [pk, not null]
+  inventory_adjustment_id varchar(120) [not null]
+  line_no integer [not null]
+  inventory_adjustment_type_id uuid [not null]
+  source_balance_id varchar(160)
+  location_id uuid [not null]
+  item_id uuid [not null]
+  lot_id varchar(120)
+  handling_unit_id varchar(120)
+  inventory_status_id uuid [not null]
+  adjustment_qty numeric(20,6) [not null]
+  uom_id uuid [not null]
+  resulting_balance_id varchar(160)
+  movement_id varchar(140) [unique]
+  posted_at timestamptz
+  posted_by uuid
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  indexes {
+    (inventory_adjustment_id, line_no) [unique]
+  }
+}
+
+Table wms.stock_count {
+  stock_count_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  stock_count_type_id uuid [not null]
+  owner_id uuid [not null]
+  warehouse_id uuid [not null]
+  business_date date [not null]
+  reason_code_id uuid
+  freeze_inventory boolean [not null, note: 'default false']
+  started_at timestamptz
+  completed_at timestamptz
+  reviewed_at timestamptz
+  reviewed_by uuid
+  posted_at timestamptz
+  posted_by uuid
+  notes text
+  version_no bigint [not null, note: 'default 1']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid [not null]
+}
+
+Table wms.stock_count_line {
+  stock_count_line_id varchar(150) [pk, not null]
+  stock_count_id varchar(120) [not null]
+  line_no integer [not null]
+  balance_id varchar(160)
+  location_id uuid [not null]
+  item_id uuid [not null]
+  lot_id varchar(120)
+  handling_unit_id varchar(120)
+  inventory_status_id uuid [not null]
+  system_qty numeric(20,6) [not null]
+  system_version_no bigint
+  counted_qty numeric(20,6)
+  uom_id uuid [not null]
+  counted_at timestamptz
+  counted_by uuid
+  variance_movement_id varchar(140) [unique]
+  posted_at timestamptz
+  posted_by uuid
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  indexes {
+    (stock_count_id, line_no) [unique]
+  }
+}
+
+Table wms.currency {
+  currency_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(3) [not null, unique]
+  name varchar(100) [not null]
+  decimal_scale smallint [not null, note: 'default 2']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.billing_cycle {
+  billing_cycle_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  period_days integer
+  period_months integer
+  is_on_demand boolean [not null, note: 'default false']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.payment_term {
+  payment_term_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  due_days integer [not null]
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.charge_basis {
+  charge_basis_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  description text
+  requires_uom boolean [not null, note: 'default true']
+  use_event_quantity boolean [not null, note: 'default true']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.tax_rule {
+  tax_rule_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  owner_id uuid
+  code varchar(40) [not null]
+  name varchar(120) [not null]
+  rate_percent numeric(9,6) [not null]
+  is_inclusive boolean [not null, note: 'default false']
+  effective_from date [not null]
+  effective_until date
+  is_active boolean [not null, note: 'default true']
+  indexes {
+    (owner_id, code, effective_from) [unique]
+  }
+}
+
+Table wms.billing_service {
+  billing_service_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(50) [not null, unique]
+  name varchar(120) [not null]
+  module_code varchar(50) [not null]
+  description text
+  default_charge_basis_id uuid [not null]
+  default_uom_id uuid
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.billing_service_movement_type {
+  billing_service_id uuid [pk, not null]
+  movement_type_id uuid [pk, not null, unique]
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.billing_adjustment_type {
+  billing_adjustment_type_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  amount_effect smallint [not null]
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.payment_method {
+  payment_method_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  code varchar(40) [not null, unique]
+  name varchar(100) [not null]
+  requires_reference boolean [not null, note: 'default true']
+  is_active boolean [not null, note: 'default true']
+}
+
+Table wms.billing_account {
+  billing_account_id uuid [pk, not null, note: 'default gen_random_uuid()']
+  owner_id uuid [not null]
+  code varchar(40) [not null]
+  name varchar(150) [not null]
+  bill_to_partner_id uuid
+  currency_id uuid [not null]
+  billing_cycle_id uuid [not null]
+  payment_term_id uuid [not null]
+  default_tax_rule_id uuid
+  bill_to_name varchar(200) [not null]
+  bill_to_tax_number varchar(100)
+  bill_to_address_1 varchar(255) [not null]
+  bill_to_address_2 varchar(255)
+  bill_to_city varchar(100)
+  bill_to_province varchar(100)
+  bill_to_postal_code varchar(20)
+  bill_to_country_code varchar(2)
+  is_active boolean [not null, note: 'default true']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid
+  indexes {
+    (owner_id, code) [unique]
+    (owner_id, billing_account_id) [unique]
+  }
+}
+
+Table wms.billing_contract {
+  billing_contract_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  billing_account_id uuid [not null]
+  owner_id uuid [not null]
+  warehouse_id uuid
+  currency_id uuid [not null]
+  default_tax_rule_id uuid
+  contract_number varchar(100) [not null]
+  effective_from date [not null]
+  effective_until date
+  auto_renew boolean [not null, note: 'default false']
+  notes text
+  version_no bigint [not null, note: 'default 1']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid [not null]
+  indexes {
+    (billing_account_id, contract_number) [unique]
+  }
+}
+
+Table wms.rate_card {
+  rate_card_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  billing_contract_id varchar(120) [not null]
+  version_label varchar(40) [not null]
+  effective_from date [not null]
+  effective_until date
+  notes text
+  version_no bigint [not null, note: 'default 1']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid [not null]
+  indexes {
+    (billing_contract_id, version_label) [unique]
+  }
+}
+
+Table wms.rate_card_line {
+  rate_card_line_id varchar(150) [pk, not null]
+  rate_card_id varchar(120) [not null]
+  line_no integer [not null]
+  billing_service_id uuid [not null]
+  charge_basis_id uuid [not null]
+  uom_id uuid
+  warehouse_id uuid
+  item_id uuid
+  category_id uuid
+  unit_rate numeric(20,6) [not null]
+  included_quantity numeric(20,6) [not null, note: 'default 0']
+  minimum_charge numeric(20,4) [not null, note: 'default 0']
+  maximum_charge numeric(20,4)
+  rounding_increment numeric(20,6)
+  priority_no integer [not null, note: 'default 100']
+  tax_rule_id uuid
+  is_active boolean [not null, note: 'default true']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  indexes {
+    (rate_card_id, line_no) [unique]
+  }
+}
+
+Table wms.rate_card_tier {
+  rate_card_tier_id varchar(170) [pk, not null]
+  rate_card_line_id varchar(150) [not null]
+  tier_no integer [not null]
+  from_quantity numeric(20,6) [not null]
+  until_quantity numeric(20,6)
+  unit_rate numeric(20,6) [not null]
+  indexes {
+    (rate_card_line_id, tier_no) [unique]
+  }
+}
+
+Table wms.billable_event {
+  billable_event_id varchar(140) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  billing_account_id uuid [not null]
+  billing_contract_id varchar(120) [not null]
+  billing_service_id uuid [not null]
+  owner_id uuid [not null]
+  warehouse_id uuid
+  item_id uuid
+  category_id uuid
+  handling_unit_id varchar(120)
+  business_date date [not null]
+  occurred_at timestamptz [not null]
+  source_document_type_id uuid
+  source_document_id varchar(140) [not null]
+  source_line_id varchar(170)
+  event_key varchar(80) [not null, note: 'default \'DEFAULT\'']
+  quantity numeric(20,6) [not null]
+  uom_id uuid
+  attributes jsonb [not null, note: 'default \'{}\'::jsonb']
+  exclusion_reason_code_id uuid
+  rated_at timestamptz
+  rated_by uuid
+  excluded_at timestamptz
+  excluded_by uuid
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  indexes {
+    (billing_account_id, billing_service_id, source_document_id, source_line_id, event_key) [unique]
+  }
+}
+
+Table wms.billing_run {
+  billing_run_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  billing_account_id uuid [not null]
+  billing_contract_id varchar(120) [not null]
+  currency_id uuid [not null]
+  period_from date [not null]
+  period_until date [not null]
+  calculated_at timestamptz
+  reviewed_at timestamptz
+  reviewed_by uuid
+  net_amount numeric(20,4) [not null, note: 'default 0']
+  tax_amount numeric(20,4) [not null, note: 'default 0']
+  gross_amount numeric(20,4) [not null, note: 'default 0']
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.billing_charge {
+  billing_charge_id varchar(150) [pk, not null]
+  billing_run_id varchar(120) [not null]
+  billable_event_id varchar(140) [not null, unique]
+  rate_card_line_id varchar(150) [not null]
+  billed_quantity numeric(20,6) [not null]
+  uom_id uuid
+  unit_rate numeric(20,6) [not null]
+  net_amount numeric(20,4) [not null]
+  tax_rule_id uuid
+  tax_rate_percent numeric(9,6) [not null, note: 'default 0']
+  tax_amount numeric(20,4) [not null, note: 'default 0']
+  gross_amount numeric(20,4) [not null]
+  currency_id uuid [not null]
+  calculated_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.billing_invoice {
+  billing_invoice_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  billing_run_id varchar(120) [not null, unique]
+  billing_account_id uuid [not null]
+  billing_contract_id varchar(120) [not null]
+  currency_id uuid [not null]
+  invoice_date date [not null]
+  due_date date [not null]
+  bill_to_name varchar(200) [not null]
+  bill_to_tax_number varchar(100)
+  bill_to_address text [not null]
+  net_amount numeric(20,4) [not null, note: 'default 0']
+  adjustment_amount numeric(20,4) [not null, note: 'default 0']
+  tax_amount numeric(20,4) [not null, note: 'default 0']
+  gross_amount numeric(20,4) [not null, note: 'default 0']
+  credited_amount numeric(20,4) [not null, note: 'default 0']
+  paid_amount numeric(20,4) [not null, note: 'default 0']
+  balance_due numeric(20,4) [not null, note: 'default 0']
+  issued_at timestamptz
+  issued_by uuid
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  updated_at timestamptz [not null, note: 'default clock_timestamp()']
+  updated_by uuid [not null]
+}
+
+Table wms.billing_invoice_line {
+  billing_invoice_line_id varchar(150) [pk, not null]
+  billing_invoice_id varchar(120) [not null]
+  line_no integer [not null]
+  billing_charge_id varchar(150) [not null, unique]
+  billing_service_id uuid [not null]
+  description varchar(255) [not null]
+  quantity numeric(20,6) [not null]
+  uom_id uuid
+  unit_rate numeric(20,6) [not null]
+  net_amount numeric(20,4) [not null]
+  tax_rule_id uuid
+  tax_rate_percent numeric(9,6) [not null, note: 'default 0']
+  tax_amount numeric(20,4) [not null, note: 'default 0']
+  gross_amount numeric(20,4) [not null]
+  indexes {
+    (billing_invoice_id, line_no) [unique]
+  }
+}
+
+Table wms.billing_invoice_adjustment {
+  invoice_adjustment_id varchar(150) [pk, not null]
+  billing_invoice_id varchar(120) [not null]
+  line_no integer [not null]
+  billing_adjustment_type_id uuid [not null]
+  reason_code_id uuid [not null]
+  description varchar(255) [not null]
+  amount numeric(20,4) [not null]
+  tax_rule_id uuid
+  tax_rate_percent numeric(9,6) [not null, note: 'default 0']
+  tax_amount numeric(20,4) [not null, note: 'default 0']
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+  indexes {
+    (billing_invoice_id, line_no) [unique]
+  }
+}
+
+Table wms.billing_credit_note {
+  credit_note_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  billing_invoice_id varchar(120) [not null]
+  currency_id uuid [not null]
+  credit_date date [not null]
+  reason_code_id uuid [not null]
+  net_amount numeric(20,4) [not null, note: 'default 0']
+  tax_amount numeric(20,4) [not null, note: 'default 0']
+  gross_amount numeric(20,4) [not null, note: 'default 0']
+  issued_at timestamptz
+  issued_by uuid
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.billing_credit_note_line {
+  credit_note_line_id varchar(150) [pk, not null]
+  credit_note_id varchar(120) [not null]
+  billing_invoice_line_id varchar(150)
+  line_no integer [not null]
+  description varchar(255) [not null]
+  net_amount numeric(20,4) [not null]
+  tax_rate_percent numeric(9,6) [not null, note: 'default 0']
+  tax_amount numeric(20,4) [not null, note: 'default 0']
+  gross_amount numeric(20,4) [not null]
+  indexes {
+    (credit_note_id, line_no) [unique]
+  }
+}
+
+Table wms.billing_payment {
+  payment_id varchar(120) [pk, not null]
+  document_type_id uuid [not null]
+  status_id uuid [not null]
+  billing_account_id uuid [not null]
+  currency_id uuid [not null]
+  payment_method_id uuid [not null]
+  payment_date date [not null]
+  amount numeric(20,4) [not null]
+  unapplied_amount numeric(20,4) [not null]
+  external_reference varchar(150)
+  notes text
+  created_at timestamptz [not null, note: 'default clock_timestamp()']
+  created_by uuid [not null]
+}
+
+Table wms.billing_payment_allocation {
+  payment_allocation_id varchar(150) [pk, not null]
+  payment_id varchar(120) [not null]
+  allocation_no integer [not null]
+  billing_invoice_id varchar(120) [not null]
+  allocated_amount numeric(20,4) [not null]
+  allocated_at timestamptz [not null, note: 'default clock_timestamp()']
+  allocated_by uuid [not null]
+  indexes {
+    (payment_id, billing_invoice_id) [unique]
+    (payment_id, allocation_no) [unique]
+  }
+}
+
+Ref: wms.app_account.account_status_id > wms.account_status.account_status_id
+Ref: wms.app_account.authentication_policy_id > wms.authentication_policy.authentication_policy_id
+Ref: wms.app_account.created_by > wms.app_account.account_id
+Ref: wms.app_account.updated_by > wms.app_account.account_id
+Ref: wms.app_session.account_id > wms.app_account.account_id
+Ref: wms.app_session.session_revocation_reason_id > wms.session_revocation_reason.session_revocation_reason_id
+Ref: wms.app_role.created_by > wms.app_account.account_id
+Ref: wms.app_permission.module_code > wms.app_module.code
+Ref: wms.app_menu.parent_menu_id > wms.app_menu.menu_id
+Ref: wms.account_role.account_id > wms.app_account.account_id
+Ref: wms.account_role.role_id > wms.app_role.role_id
+Ref: wms.account_role.assigned_by > wms.app_account.account_id
+Ref: wms.role_permission.role_id > wms.app_role.role_id
+Ref: wms.role_permission.permission_id > wms.app_permission.permission_id
+Ref: wms.role_permission.granted_by > wms.app_account.account_id
+Ref: wms.menu_permission.menu_id > wms.app_menu.menu_id
+Ref: wms.menu_permission.permission_id > wms.app_permission.permission_id
+Ref: wms.organization.created_by > wms.app_account.account_id
+Ref: wms.organization.updated_by > wms.app_account.account_id
+Ref: wms.warehouse.operator_id > wms.organization.organization_id
+Ref: wms.warehouse.created_by > wms.app_account.account_id
+Ref: wms.warehouse.updated_by > wms.app_account.account_id
+Ref: wms.warehouse_owner.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.warehouse_owner.owner_id > wms.organization.organization_id
+Ref: wms.warehouse_owner.created_by > wms.app_account.account_id
+Ref: wms.warehouse_zone.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.warehouse_zone.created_by > wms.app_account.account_id
+Ref: wms.warehouse_location.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.warehouse_location.location_type_id > wms.location_type.location_type_id
+Ref: wms.warehouse_location.created_by > wms.app_account.account_id
+Ref: wms.warehouse_location.(zone_id, warehouse_id) > wms.warehouse_zone.(zone_id, warehouse_id)
+Ref: wms.account_owner_access.account_id > wms.app_account.account_id
+Ref: wms.account_owner_access.owner_id > wms.organization.organization_id
+Ref: wms.account_owner_access.granted_by > wms.app_account.account_id
+Ref: wms.account_warehouse_access.account_id > wms.app_account.account_id
+Ref: wms.account_warehouse_access.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.account_warehouse_access.granted_by > wms.app_account.account_id
+Ref: wms.business_partner.owner_id > wms.organization.organization_id
+Ref: wms.business_partner.created_by > wms.app_account.account_id
+Ref: wms.business_partner.updated_by > wms.app_account.account_id
+Ref: wms.business_partner_type.partner_id > wms.business_partner.partner_id
+Ref: wms.business_partner_type.partner_type_id > wms.partner_type.partner_type_id
+Ref: wms.item_category.owner_id > wms.organization.organization_id
+Ref: wms.item_category.(owner_id, parent_category_id) > wms.item_category.(owner_id, category_id)
+Ref: wms.item.owner_id > wms.organization.organization_id
+Ref: wms.item.base_uom_id > wms.uom.uom_id
+Ref: wms.item.created_by > wms.app_account.account_id
+Ref: wms.item.updated_by > wms.app_account.account_id
+Ref: wms.item.(owner_id, category_id) > wms.item_category.(owner_id, category_id)
+Ref: wms.item_uom.item_id > wms.item.item_id
+Ref: wms.item_uom.uom_id > wms.uom.uom_id
+Ref: wms.item_barcode.item_id > wms.item.item_id
+Ref: wms.item_barcode.uom_id > wms.uom.uom_id
+Ref: wms.reason_code.module_code > wms.app_module.code
+Ref: wms.document_type.module_code > wms.app_module.code
+Ref: wms.document_status.document_type_id > wms.document_type.document_type_id
+Ref: wms.document_status_transition.document_type_id > wms.document_type.document_type_id
+Ref: wms.document_status_transition.required_permission_id > wms.app_permission.permission_id
+Ref: wms.document_status_transition.(document_type_id, from_status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.document_status_transition.(document_type_id, to_status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.task_status_transition.from_status_id > wms.task_status.task_status_id
+Ref: wms.task_status_transition.to_status_id > wms.task_status.task_status_id
+Ref: wms.task_status_transition.required_permission_id > wms.app_permission.permission_id
+Ref: wms.putaway_strategy.owner_id > wms.organization.organization_id
+Ref: wms.putaway_strategy.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.putaway_strategy_rule.putaway_strategy_id > wms.putaway_strategy.putaway_strategy_id
+Ref: wms.putaway_strategy_rule.category_id > wms.item_category.category_id
+Ref: wms.putaway_strategy_rule.location_type_id > wms.location_type.location_type_id
+Ref: wms.putaway_strategy_rule.zone_id > wms.warehouse_zone.zone_id
+Ref: wms.picking_strategy.owner_id > wms.organization.organization_id
+Ref: wms.picking_strategy.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.picking_strategy_rule.picking_strategy_id > wms.picking_strategy.picking_strategy_id
+Ref: wms.picking_strategy_rule.inventory_status_id > wms.inventory_status.inventory_status_id
+Ref: wms.picking_strategy_rule.zone_id > wms.warehouse_zone.zone_id
+Ref: wms.picking_strategy_rule.picking_sort_method_id > wms.picking_sort_method.picking_sort_method_id
+Ref: wms.document_number_rule.document_type_id > wms.document_type.document_type_id
+Ref: wms.document_number_rule.created_by > wms.app_account.account_id
+Ref: wms.document_daily_counter.document_type_id > wms.document_type.document_type_id
+Ref: wms.inventory_lot.owner_id > wms.organization.organization_id
+Ref: wms.inventory_lot.item_id > wms.item.item_id
+Ref: wms.inventory_lot.quality_status_id > wms.quality_status.quality_status_id
+Ref: wms.inventory_lot.created_by > wms.app_account.account_id
+Ref: wms.serial_number.owner_id > wms.organization.organization_id
+Ref: wms.serial_number.item_id > wms.item.item_id
+Ref: wms.serial_number.created_by > wms.app_account.account_id
+Ref: wms.handling_unit.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.handling_unit.owner_id > wms.organization.organization_id
+Ref: wms.handling_unit.handling_unit_type_id > wms.handling_unit_type.handling_unit_type_id
+Ref: wms.handling_unit.parent_handling_unit_id > wms.handling_unit.handling_unit_id
+Ref: wms.handling_unit.current_location_id > wms.warehouse_location.location_id
+Ref: wms.handling_unit.created_by > wms.app_account.account_id
+Ref: wms.handling_unit.(owner_id, warehouse_id) > wms.warehouse_owner.(owner_id, warehouse_id)
+Ref: wms.purchase_order.document_type_id > wms.document_type.document_type_id
+Ref: wms.purchase_order.owner_id > wms.organization.organization_id
+Ref: wms.purchase_order.vendor_id > wms.business_partner.partner_id
+Ref: wms.purchase_order.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.purchase_order.created_by > wms.app_account.account_id
+Ref: wms.purchase_order.updated_by > wms.app_account.account_id
+Ref: wms.purchase_order.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.purchase_order.(owner_id, vendor_id) > wms.business_partner.(owner_id, partner_id)
+Ref: wms.purchase_order.(owner_id, warehouse_id) > wms.warehouse_owner.(owner_id, warehouse_id)
+Ref: wms.purchase_order_line.uom_id > wms.uom.uom_id
+Ref: wms.purchase_order_line.created_by > wms.app_account.account_id
+Ref: wms.purchase_order_line.(purchase_order_id, owner_id) > wms.purchase_order.(purchase_order_id, owner_id)
+Ref: wms.purchase_order_line.(owner_id, item_id) > wms.item.(owner_id, item_id)
+Ref: wms.inbound_order.document_type_id > wms.document_type.document_type_id
+Ref: wms.inbound_order.owner_id > wms.organization.organization_id
+Ref: wms.inbound_order.vendor_id > wms.business_partner.partner_id
+Ref: wms.inbound_order.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.inbound_order.created_by > wms.app_account.account_id
+Ref: wms.inbound_order.updated_by > wms.app_account.account_id
+Ref: wms.inbound_order.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.inbound_order.(owner_id, vendor_id) > wms.business_partner.(owner_id, partner_id)
+Ref: wms.inbound_order.(owner_id, warehouse_id) > wms.warehouse_owner.(owner_id, warehouse_id)
+Ref: wms.inbound_order_line.inbound_id > wms.inbound_order.inbound_id
+Ref: wms.inbound_order_line.purchase_order_line_id > wms.purchase_order_line.purchase_order_line_id
+Ref: wms.inbound_order_line.item_id > wms.item.item_id
+Ref: wms.inbound_order_line.uom_id > wms.uom.uom_id
+Ref: wms.inbound_order_line.created_by > wms.app_account.account_id
+Ref: wms.receipt.document_type_id > wms.document_type.document_type_id
+Ref: wms.receipt.inbound_id > wms.inbound_order.inbound_id
+Ref: wms.receipt.owner_id > wms.organization.organization_id
+Ref: wms.receipt.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.receipt.dock_location_id > wms.warehouse_location.location_id
+Ref: wms.receipt.created_by > wms.app_account.account_id
+Ref: wms.receipt.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.receipt.(owner_id, warehouse_id) > wms.warehouse_owner.(owner_id, warehouse_id)
+Ref: wms.receipt_line.receipt_id > wms.receipt.receipt_id
+Ref: wms.receipt_line.inbound_line_id > wms.inbound_order_line.inbound_line_id
+Ref: wms.receipt_line.item_id > wms.item.item_id
+Ref: wms.receipt_line.uom_id > wms.uom.uom_id
+Ref: wms.receipt_line.created_by > wms.app_account.account_id
+Ref: wms.receipt_inventory.receipt_line_id > wms.receipt_line.receipt_line_id
+Ref: wms.receipt_inventory.item_id > wms.item.item_id
+Ref: wms.receipt_inventory.source_uom_id > wms.uom.uom_id
+Ref: wms.receipt_inventory.base_uom_id > wms.uom.uom_id
+Ref: wms.receipt_inventory.lot_id > wms.inventory_lot.lot_id
+Ref: wms.receipt_inventory.handling_unit_id > wms.handling_unit.handling_unit_id
+Ref: wms.receipt_inventory.received_location_id > wms.warehouse_location.location_id
+Ref: wms.receipt_inventory.initial_inventory_status_id > wms.inventory_status.inventory_status_id
+Ref: wms.receipt_inventory.created_by > wms.app_account.account_id
+Ref: wms.receipt_line_serial.receipt_inventory_id > wms.receipt_inventory.receipt_inventory_id
+Ref: wms.receipt_line_serial.serial_id > wms.serial_number.serial_id
+Ref: wms.quality_inspection.receipt_inventory_id > wms.receipt_inventory.receipt_inventory_id
+Ref: wms.quality_inspection.parent_inspection_id > wms.quality_inspection.inspection_id
+Ref: wms.quality_inspection.quality_status_id > wms.quality_status.quality_status_id
+Ref: wms.quality_inspection.inspection_result_id > wms.inspection_result.inspection_result_id
+Ref: wms.quality_inspection.inspected_by > wms.app_account.account_id
+Ref: wms.quality_inspection.created_by > wms.app_account.account_id
+Ref: wms.putaway_task.task_type_id > wms.task_type.task_type_id
+Ref: wms.putaway_task.task_status_id > wms.task_status.task_status_id
+Ref: wms.putaway_task.task_priority_id > wms.task_priority.task_priority_id
+Ref: wms.putaway_task.receipt_inventory_id > wms.receipt_inventory.receipt_inventory_id
+Ref: wms.putaway_task.owner_id > wms.organization.organization_id
+Ref: wms.putaway_task.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.putaway_task.item_id > wms.item.item_id
+Ref: wms.putaway_task.lot_id > wms.inventory_lot.lot_id
+Ref: wms.putaway_task.handling_unit_id > wms.handling_unit.handling_unit_id
+Ref: wms.putaway_task.source_location_id > wms.warehouse_location.location_id
+Ref: wms.putaway_task.target_location_id > wms.warehouse_location.location_id
+Ref: wms.putaway_task.uom_id > wms.uom.uom_id
+Ref: wms.putaway_task.assigned_to > wms.app_account.account_id
+Ref: wms.putaway_task.created_by > wms.app_account.account_id
+Ref: wms.inventory_balance.owner_id > wms.organization.organization_id
+Ref: wms.inventory_balance.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.inventory_balance.location_id > wms.warehouse_location.location_id
+Ref: wms.inventory_balance.item_id > wms.item.item_id
+Ref: wms.inventory_balance.lot_id > wms.inventory_lot.lot_id
+Ref: wms.inventory_balance.handling_unit_id > wms.handling_unit.handling_unit_id
+Ref: wms.inventory_balance.inventory_status_id > wms.inventory_status.inventory_status_id
+Ref: wms.inventory_balance.uom_id > wms.uom.uom_id
+Ref: wms.inventory_balance.(owner_id, warehouse_id) > wms.warehouse_owner.(owner_id, warehouse_id)
+Ref: wms.inventory_movement.movement_type_id > wms.movement_type.movement_type_id
+Ref: wms.inventory_movement.owner_id > wms.organization.organization_id
+Ref: wms.inventory_movement.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.inventory_movement.item_id > wms.item.item_id
+Ref: wms.inventory_movement.lot_id > wms.inventory_lot.lot_id
+Ref: wms.inventory_movement.serial_id > wms.serial_number.serial_id
+Ref: wms.inventory_movement.handling_unit_id > wms.handling_unit.handling_unit_id
+Ref: wms.inventory_movement.from_location_id > wms.warehouse_location.location_id
+Ref: wms.inventory_movement.to_location_id > wms.warehouse_location.location_id
+Ref: wms.inventory_movement.from_status_id > wms.inventory_status.inventory_status_id
+Ref: wms.inventory_movement.to_status_id > wms.inventory_status.inventory_status_id
+Ref: wms.inventory_movement.uom_id > wms.uom.uom_id
+Ref: wms.inventory_movement.reason_code_id > wms.reason_code.reason_code_id
+Ref: wms.inventory_movement.created_by > wms.app_account.account_id
+Ref: wms.inventory_movement.(owner_id, warehouse_id) > wms.warehouse_owner.(owner_id, warehouse_id)
+Ref: wms.quarantine_case.parent_quarantine_case_id > wms.quarantine_case.quarantine_case_id
+Ref: wms.quarantine_case.document_type_id > wms.document_type.document_type_id
+Ref: wms.quarantine_case.receipt_inventory_id > wms.receipt_inventory.receipt_inventory_id
+Ref: wms.quarantine_case.inspection_id > wms.quality_inspection.inspection_id
+Ref: wms.quarantine_case.quarantine_balance_id > wms.inventory_balance.balance_id
+Ref: wms.quarantine_case.owner_id > wms.organization.organization_id
+Ref: wms.quarantine_case.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.quarantine_case.uom_id > wms.uom.uom_id
+Ref: wms.quarantine_case.created_by > wms.app_account.account_id
+Ref: wms.quarantine_case.updated_by > wms.app_account.account_id
+Ref: wms.quarantine_case.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.quarantine_case.(owner_id, warehouse_id) > wms.warehouse_owner.(owner_id, warehouse_id)
+Ref: wms.quarantine_disposition.quarantine_case_id > wms.quarantine_case.quarantine_case_id
+Ref: wms.quarantine_disposition.document_type_id > wms.document_type.document_type_id
+Ref: wms.quarantine_disposition.quarantine_disposition_type_id > wms.quarantine_disposition_type.quarantine_disposition_type_id
+Ref: wms.quarantine_disposition.uom_id > wms.uom.uom_id
+Ref: wms.quarantine_disposition.decided_by > wms.app_account.account_id
+Ref: wms.quarantine_disposition.inventory_movement_id > wms.inventory_movement.movement_id
+Ref: wms.quarantine_disposition.resulting_balance_id > wms.inventory_balance.balance_id
+Ref: wms.quarantine_disposition.created_by > wms.app_account.account_id
+Ref: wms.quarantine_disposition.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.rework_task.quarantine_disposition_id > wms.quarantine_disposition.quarantine_disposition_id
+Ref: wms.rework_task.task_type_id > wms.task_type.task_type_id
+Ref: wms.rework_task.task_status_id > wms.task_status.task_status_id
+Ref: wms.rework_task.task_priority_id > wms.task_priority.task_priority_id
+Ref: wms.rework_task.uom_id > wms.uom.uom_id
+Ref: wms.rework_task.assigned_to > wms.app_account.account_id
+Ref: wms.rework_task.reinspection_id > wms.quality_inspection.inspection_id
+Ref: wms.rework_task.created_by > wms.app_account.account_id
+Ref: wms.carrier.business_partner_id > wms.business_partner.partner_id
+Ref: wms.carrier_service.carrier_id > wms.carrier.carrier_id
+Ref: wms.carrier_driver.carrier_id > wms.carrier.carrier_id
+Ref: wms.carrier_driver.account_id > wms.app_account.account_id
+Ref: wms.carrier_driver.created_by > wms.app_account.account_id
+Ref: wms.outbound_validation_rule.validation_severity_id > wms.validation_severity.validation_severity_id
+Ref: wms.outbound_order.document_type_id > wms.document_type.document_type_id
+Ref: wms.outbound_order.owner_id > wms.organization.organization_id
+Ref: wms.outbound_order.customer_id > wms.business_partner.partner_id
+Ref: wms.outbound_order.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.outbound_order.ship_to_partner_id > wms.business_partner.partner_id
+Ref: wms.outbound_order.validated_by > wms.app_account.account_id
+Ref: wms.outbound_order.created_by > wms.app_account.account_id
+Ref: wms.outbound_order.updated_by > wms.app_account.account_id
+Ref: wms.outbound_order.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.outbound_order.(owner_id, customer_id) > wms.business_partner.(owner_id, partner_id)
+Ref: wms.outbound_order.(owner_id, ship_to_partner_id) > wms.business_partner.(owner_id, partner_id)
+Ref: wms.outbound_order.(owner_id, warehouse_id) > wms.warehouse_owner.(owner_id, warehouse_id)
+Ref: wms.outbound_order_line.outbound_id > wms.outbound_order.outbound_id
+Ref: wms.outbound_order_line.item_id > wms.item.item_id
+Ref: wms.outbound_order_line.uom_id > wms.uom.uom_id
+Ref: wms.outbound_order_line.created_by > wms.app_account.account_id
+Ref: wms.outbound_validation_run.outbound_id > wms.outbound_order.outbound_id
+Ref: wms.outbound_validation_run.document_type_id > wms.document_type.document_type_id
+Ref: wms.outbound_validation_run.validated_by > wms.app_account.account_id
+Ref: wms.outbound_validation_run.created_by > wms.app_account.account_id
+Ref: wms.outbound_validation_run.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.outbound_validation_result_detail.validation_run_id > wms.outbound_validation_run.validation_run_id
+Ref: wms.outbound_validation_result_detail.outbound_validation_rule_id > wms.outbound_validation_rule.outbound_validation_rule_id
+Ref: wms.outbound_wave.document_type_id > wms.document_type.document_type_id
+Ref: wms.outbound_wave.outbound_wave_type_id > wms.outbound_wave_type.outbound_wave_type_id
+Ref: wms.outbound_wave.owner_id > wms.organization.organization_id
+Ref: wms.outbound_wave.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.outbound_wave.picking_strategy_id > wms.picking_strategy.picking_strategy_id
+Ref: wms.outbound_wave.created_by > wms.app_account.account_id
+Ref: wms.outbound_wave.updated_by > wms.app_account.account_id
+Ref: wms.outbound_wave.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.outbound_wave.(owner_id, warehouse_id) > wms.warehouse_owner.(owner_id, warehouse_id)
+Ref: wms.outbound_wave_order.wave_id > wms.outbound_wave.wave_id
+Ref: wms.outbound_wave_order.outbound_id > wms.outbound_order.outbound_id
+Ref: wms.outbound_wave_order.added_by > wms.app_account.account_id
+Ref: wms.inventory_reservation.document_type_id > wms.document_type.document_type_id
+Ref: wms.inventory_reservation.picking_strategy_id > wms.picking_strategy.picking_strategy_id
+Ref: wms.inventory_reservation.outbound_line_id > wms.outbound_order_line.outbound_line_id
+Ref: wms.inventory_reservation.balance_id > wms.inventory_balance.balance_id
+Ref: wms.inventory_reservation.uom_id > wms.uom.uom_id
+Ref: wms.inventory_reservation.created_by > wms.app_account.account_id
+Ref: wms.inventory_reservation.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.pick_task.task_type_id > wms.task_type.task_type_id
+Ref: wms.pick_task.task_status_id > wms.task_status.task_status_id
+Ref: wms.pick_task.task_priority_id > wms.task_priority.task_priority_id
+Ref: wms.pick_task.wave_id > wms.outbound_wave.wave_id
+Ref: wms.pick_task.reservation_id > wms.inventory_reservation.reservation_id
+Ref: wms.pick_task.outbound_line_id > wms.outbound_order_line.outbound_line_id
+Ref: wms.pick_task.source_location_id > wms.warehouse_location.location_id
+Ref: wms.pick_task.target_location_id > wms.warehouse_location.location_id
+Ref: wms.pick_task.uom_id > wms.uom.uom_id
+Ref: wms.pick_task.assigned_to > wms.app_account.account_id
+Ref: wms.pick_task.short_reason_code_id > wms.reason_code.reason_code_id
+Ref: wms.pick_task.created_by > wms.app_account.account_id
+Ref: wms.pick_execution.pick_task_id > wms.pick_task.pick_task_id
+Ref: wms.pick_execution.source_balance_id > wms.inventory_balance.balance_id
+Ref: wms.pick_execution.staging_balance_id > wms.inventory_balance.balance_id
+Ref: wms.pick_execution.uom_id > wms.uom.uom_id
+Ref: wms.pick_execution.movement_id > wms.inventory_movement.movement_id
+Ref: wms.pick_execution.picked_by > wms.app_account.account_id
+Ref: wms.outbound_staging.document_type_id > wms.document_type.document_type_id
+Ref: wms.outbound_staging.outbound_id > wms.outbound_order.outbound_id
+Ref: wms.outbound_staging.wave_id > wms.outbound_wave.wave_id
+Ref: wms.outbound_staging.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.outbound_staging.staging_location_id > wms.warehouse_location.location_id
+Ref: wms.outbound_staging.staged_by > wms.app_account.account_id
+Ref: wms.outbound_staging.created_by > wms.app_account.account_id
+Ref: wms.outbound_staging.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.outbound_staging_line.staging_id > wms.outbound_staging.staging_id
+Ref: wms.outbound_staging_line.pick_execution_id > wms.pick_execution.pick_execution_id
+Ref: wms.outbound_staging_line.staging_balance_id > wms.inventory_balance.balance_id
+Ref: wms.outbound_staging_line.uom_id > wms.uom.uom_id
+Ref: wms.outbound_staging_line.created_by > wms.app_account.account_id
+Ref: wms.outbound_check.parent_check_id > wms.outbound_check.outbound_check_id
+Ref: wms.outbound_check.document_type_id > wms.document_type.document_type_id
+Ref: wms.outbound_check.staging_id > wms.outbound_staging.staging_id
+Ref: wms.outbound_check.checked_by > wms.app_account.account_id
+Ref: wms.outbound_check.created_by > wms.app_account.account_id
+Ref: wms.outbound_check.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.outbound_check_line.outbound_check_id > wms.outbound_check.outbound_check_id
+Ref: wms.outbound_check_line.staging_line_id > wms.outbound_staging_line.staging_line_id
+Ref: wms.outbound_check_line.uom_id > wms.uom.uom_id
+Ref: wms.outbound_check_line.outbound_check_result_id > wms.outbound_check_result.outbound_check_result_id
+Ref: wms.outbound_check_line.checked_by > wms.app_account.account_id
+Ref: wms.outbound_check_line.created_by > wms.app_account.account_id
+Ref: wms.outbound_check_exception.outbound_check_line_id > wms.outbound_check_line.outbound_check_line_id
+Ref: wms.outbound_check_exception.status_id > wms.outbound_check_exception_status.outbound_check_exception_status_id
+Ref: wms.outbound_check_exception.resolved_by > wms.app_account.account_id
+Ref: wms.outbound_check_exception.created_by > wms.app_account.account_id
+Ref: wms.outbound_check_resolution.outbound_check_exception_id > wms.outbound_check_exception.outbound_check_exception_id
+Ref: wms.outbound_check_resolution.outbound_check_resolution_type_id > wms.outbound_check_resolution_type.outbound_check_resolution_type_id
+Ref: wms.outbound_check_resolution.approved_by > wms.app_account.account_id
+Ref: wms.outbound_check_resolution.created_by > wms.app_account.account_id
+Ref: wms.outbound_check_resolution_movement.outbound_check_resolution_id > wms.outbound_check_resolution.outbound_check_resolution_id
+Ref: wms.outbound_check_resolution_movement.movement_id > wms.inventory_movement.movement_id
+Ref: wms.outbound_check_resolution_reservation.outbound_check_resolution_id > wms.outbound_check_resolution.outbound_check_resolution_id
+Ref: wms.outbound_check_resolution_reservation.reservation_id > wms.inventory_reservation.reservation_id
+Ref: wms.packing.document_type_id > wms.document_type.document_type_id
+Ref: wms.packing.outbound_id > wms.outbound_order.outbound_id
+Ref: wms.packing.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.packing.packing_location_id > wms.warehouse_location.location_id
+Ref: wms.packing.packed_by > wms.app_account.account_id
+Ref: wms.packing.created_by > wms.app_account.account_id
+Ref: wms.packing.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.packing_line.packing_id > wms.packing.packing_id
+Ref: wms.packing_line.pick_task_id > wms.pick_task.pick_task_id
+Ref: wms.packing_line.outbound_check_line_id > wms.outbound_check_line.outbound_check_line_id
+Ref: wms.packing_line.source_balance_id > wms.inventory_balance.balance_id
+Ref: wms.packing_line.packing_balance_id > wms.inventory_balance.balance_id
+Ref: wms.packing_line.handling_unit_id > wms.handling_unit.handling_unit_id
+Ref: wms.packing_line.uom_id > wms.uom.uom_id
+Ref: wms.packing_line.movement_id > wms.inventory_movement.movement_id
+Ref: wms.packing_line.created_by > wms.app_account.account_id
+Ref: wms.shipment.document_type_id > wms.document_type.document_type_id
+Ref: wms.shipment.owner_id > wms.organization.organization_id
+Ref: wms.shipment.carrier_service_id > wms.carrier_service.carrier_service_id
+Ref: wms.shipment.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.shipment.dispatched_by > wms.app_account.account_id
+Ref: wms.shipment.created_by > wms.app_account.account_id
+Ref: wms.shipment.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.shipment.(owner_id, warehouse_id) > wms.warehouse_owner.(owner_id, warehouse_id)
+Ref: wms.shipment_order.shipment_id > wms.shipment.shipment_id
+Ref: wms.shipment_order.outbound_id > wms.outbound_order.outbound_id
+Ref: wms.shipment_order.added_by > wms.app_account.account_id
+Ref: wms.shipment_order.removed_by > wms.app_account.account_id
+Ref: wms.shipment_driver.shipment_id > wms.shipment.shipment_id
+Ref: wms.shipment_driver.driver_id > wms.carrier_driver.driver_id
+Ref: wms.shipment_driver.assigned_by > wms.app_account.account_id
+Ref: wms.shipment_line.shipment_id > wms.shipment.shipment_id
+Ref: wms.shipment_line.packing_line_id > wms.packing_line.packing_line_id
+Ref: wms.shipment_line.source_balance_id > wms.inventory_balance.balance_id
+Ref: wms.shipment_line.uom_id > wms.uom.uom_id
+Ref: wms.shipment_line.movement_id > wms.inventory_movement.movement_id
+Ref: wms.shipment_line.created_by > wms.app_account.account_id
+Ref: wms.shipment_packing.shipment_id > wms.shipment.shipment_id
+Ref: wms.shipment_packing.packing_id > wms.packing.packing_id
+Ref: wms.delivery.document_type_id > wms.document_type.document_type_id
+Ref: wms.delivery.shipment_id > wms.shipment.shipment_id
+Ref: wms.delivery.outbound_id > wms.outbound_order.outbound_id
+Ref: wms.delivery.created_by > wms.app_account.account_id
+Ref: wms.delivery.updated_by > wms.app_account.account_id
+Ref: wms.delivery.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.delivery_line.delivery_id > wms.delivery.delivery_id
+Ref: wms.delivery_line.shipment_line_id > wms.shipment_line.shipment_line_id
+Ref: wms.delivery_line.uom_id > wms.uom.uom_id
+Ref: wms.delivery_line.created_by > wms.app_account.account_id
+Ref: wms.delivery_event.delivery_id > wms.delivery.delivery_id
+Ref: wms.delivery_event.delivery_event_type_id > wms.delivery_event_type.delivery_event_type_id
+Ref: wms.delivery_event.delivery_failure_reason_id > wms.delivery_failure_reason.delivery_failure_reason_id
+Ref: wms.delivery_event.recorded_by > wms.app_account.account_id
+Ref: wms.delivery_event_line.delivery_event_id > wms.delivery_event.delivery_event_id
+Ref: wms.delivery_event_line.delivery_line_id > wms.delivery_line.delivery_line_id
+Ref: wms.outbound_return_policy.owner_id > wms.organization.organization_id
+Ref: wms.outbound_return_policy.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.outbound_return_policy.return_inventory_status_id > wms.inventory_status.inventory_status_id
+Ref: wms.outbound_return_policy.created_by > wms.app_account.account_id
+Ref: wms.outbound_return_policy.updated_by > wms.app_account.account_id
+Ref: wms.outbound_return_policy.(owner_id, warehouse_id) > wms.warehouse_owner.(owner_id, warehouse_id)
+Ref: wms.outbound_return_policy.(return_location_id, warehouse_id) > wms.warehouse_location.(location_id, warehouse_id)
+Ref: wms.delivery_return_line.delivery_id > wms.delivery.delivery_id
+Ref: wms.delivery_return_line.delivery_line_id > wms.delivery_line.delivery_line_id
+Ref: wms.delivery_return_line.return_location_id > wms.warehouse_location.location_id
+Ref: wms.delivery_return_line.returned_balance_id > wms.inventory_balance.balance_id
+Ref: wms.delivery_return_line.uom_id > wms.uom.uom_id
+Ref: wms.delivery_return_line.movement_id > wms.inventory_movement.movement_id
+Ref: wms.delivery_return_line.returned_by > wms.app_account.account_id
+Ref: wms.internal_move_order.document_type_id > wms.document_type.document_type_id
+Ref: wms.internal_move_order.internal_move_type_id > wms.internal_move_type.internal_move_type_id
+Ref: wms.internal_move_order.owner_id > wms.organization.organization_id
+Ref: wms.internal_move_order.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.internal_move_order.reason_code_id > wms.reason_code.reason_code_id
+Ref: wms.internal_move_order.approved_by > wms.app_account.account_id
+Ref: wms.internal_move_order.created_by > wms.app_account.account_id
+Ref: wms.internal_move_order.updated_by > wms.app_account.account_id
+Ref: wms.internal_move_order.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.internal_move_order.(owner_id, warehouse_id) > wms.warehouse_owner.(owner_id, warehouse_id)
+Ref: wms.internal_move_order_line.internal_move_id > wms.internal_move_order.internal_move_id
+Ref: wms.internal_move_order_line.source_balance_id > wms.inventory_balance.balance_id
+Ref: wms.internal_move_order_line.target_location_id > wms.warehouse_location.location_id
+Ref: wms.internal_move_order_line.uom_id > wms.uom.uom_id
+Ref: wms.internal_move_order_line.assigned_to > wms.app_account.account_id
+Ref: wms.internal_move_order_line.created_by > wms.app_account.account_id
+Ref: wms.internal_move_execution.internal_move_line_id > wms.internal_move_order_line.internal_move_line_id
+Ref: wms.internal_move_execution.source_balance_id > wms.inventory_balance.balance_id
+Ref: wms.internal_move_execution.destination_balance_id > wms.inventory_balance.balance_id
+Ref: wms.internal_move_execution.movement_id > wms.inventory_movement.movement_id
+Ref: wms.internal_move_execution.executed_by > wms.app_account.account_id
+Ref: wms.transfer_order.document_type_id > wms.document_type.document_type_id
+Ref: wms.transfer_order.owner_id > wms.organization.organization_id
+Ref: wms.transfer_order.source_warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.transfer_order.target_warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.transfer_order.approved_by > wms.app_account.account_id
+Ref: wms.transfer_order.created_by > wms.app_account.account_id
+Ref: wms.transfer_order.updated_by > wms.app_account.account_id
+Ref: wms.transfer_order.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.transfer_order.(owner_id, source_warehouse_id) > wms.warehouse_owner.(owner_id, warehouse_id)
+Ref: wms.transfer_order.(owner_id, target_warehouse_id) > wms.warehouse_owner.(owner_id, warehouse_id)
+Ref: wms.transfer_order_line.transfer_id > wms.transfer_order.transfer_id
+Ref: wms.transfer_order_line.item_id > wms.item.item_id
+Ref: wms.transfer_order_line.uom_id > wms.uom.uom_id
+Ref: wms.transfer_order_line.requested_lot_id > wms.inventory_lot.lot_id
+Ref: wms.transfer_order_line.created_by > wms.app_account.account_id
+Ref: wms.transfer_dispatch.transfer_id > wms.transfer_order.transfer_id
+Ref: wms.transfer_dispatch.document_type_id > wms.document_type.document_type_id
+Ref: wms.transfer_dispatch.carrier_partner_id > wms.business_partner.partner_id
+Ref: wms.transfer_dispatch.created_by > wms.app_account.account_id
+Ref: wms.transfer_dispatch.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.transfer_dispatch_line.transfer_dispatch_id > wms.transfer_dispatch.transfer_dispatch_id
+Ref: wms.transfer_dispatch_line.transfer_line_id > wms.transfer_order_line.transfer_line_id
+Ref: wms.transfer_dispatch_line.source_balance_id > wms.inventory_balance.balance_id
+Ref: wms.transfer_dispatch_line.uom_id > wms.uom.uom_id
+Ref: wms.transfer_dispatch_line.movement_id > wms.inventory_movement.movement_id
+Ref: wms.transfer_dispatch_line.confirmed_by > wms.app_account.account_id
+Ref: wms.transfer_dispatch_line.created_by > wms.app_account.account_id
+Ref: wms.transfer_receipt.transfer_id > wms.transfer_order.transfer_id
+Ref: wms.transfer_receipt.document_type_id > wms.document_type.document_type_id
+Ref: wms.transfer_receipt.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.transfer_receipt.created_by > wms.app_account.account_id
+Ref: wms.transfer_receipt.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.transfer_receipt_line.transfer_receipt_id > wms.transfer_receipt.transfer_receipt_id
+Ref: wms.transfer_receipt_line.transfer_dispatch_line_id > wms.transfer_dispatch_line.transfer_dispatch_line_id
+Ref: wms.transfer_receipt_line.target_location_id > wms.warehouse_location.location_id
+Ref: wms.transfer_receipt_line.uom_id > wms.uom.uom_id
+Ref: wms.transfer_receipt_line.destination_balance_id > wms.inventory_balance.balance_id
+Ref: wms.transfer_receipt_line.movement_id > wms.inventory_movement.movement_id
+Ref: wms.transfer_receipt_line.posted_by > wms.app_account.account_id
+Ref: wms.transfer_receipt_line.created_by > wms.app_account.account_id
+Ref: wms.inventory_status_change.document_type_id > wms.document_type.document_type_id
+Ref: wms.inventory_status_change.owner_id > wms.organization.organization_id
+Ref: wms.inventory_status_change.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.inventory_status_change.reason_code_id > wms.reason_code.reason_code_id
+Ref: wms.inventory_status_change.approved_by > wms.app_account.account_id
+Ref: wms.inventory_status_change.created_by > wms.app_account.account_id
+Ref: wms.inventory_status_change.updated_by > wms.app_account.account_id
+Ref: wms.inventory_status_change.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.inventory_status_change.(owner_id, warehouse_id) > wms.warehouse_owner.(owner_id, warehouse_id)
+Ref: wms.inventory_status_change_line.inventory_status_change_id > wms.inventory_status_change.inventory_status_change_id
+Ref: wms.inventory_status_change_line.source_balance_id > wms.inventory_balance.balance_id
+Ref: wms.inventory_status_change_line.target_inventory_status_id > wms.inventory_status.inventory_status_id
+Ref: wms.inventory_status_change_line.uom_id > wms.uom.uom_id
+Ref: wms.inventory_status_change_line.destination_balance_id > wms.inventory_balance.balance_id
+Ref: wms.inventory_status_change_line.movement_id > wms.inventory_movement.movement_id
+Ref: wms.inventory_status_change_line.posted_by > wms.app_account.account_id
+Ref: wms.inventory_status_change_line.created_by > wms.app_account.account_id
+Ref: wms.inventory_adjustment.document_type_id > wms.document_type.document_type_id
+Ref: wms.inventory_adjustment.owner_id > wms.organization.organization_id
+Ref: wms.inventory_adjustment.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.inventory_adjustment.reason_code_id > wms.reason_code.reason_code_id
+Ref: wms.inventory_adjustment.approved_by > wms.app_account.account_id
+Ref: wms.inventory_adjustment.created_by > wms.app_account.account_id
+Ref: wms.inventory_adjustment.updated_by > wms.app_account.account_id
+Ref: wms.inventory_adjustment.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.inventory_adjustment.(owner_id, warehouse_id) > wms.warehouse_owner.(owner_id, warehouse_id)
+Ref: wms.inventory_adjustment_line.inventory_adjustment_id > wms.inventory_adjustment.inventory_adjustment_id
+Ref: wms.inventory_adjustment_line.inventory_adjustment_type_id > wms.inventory_adjustment_type.inventory_adjustment_type_id
+Ref: wms.inventory_adjustment_line.source_balance_id > wms.inventory_balance.balance_id
+Ref: wms.inventory_adjustment_line.location_id > wms.warehouse_location.location_id
+Ref: wms.inventory_adjustment_line.item_id > wms.item.item_id
+Ref: wms.inventory_adjustment_line.lot_id > wms.inventory_lot.lot_id
+Ref: wms.inventory_adjustment_line.handling_unit_id > wms.handling_unit.handling_unit_id
+Ref: wms.inventory_adjustment_line.inventory_status_id > wms.inventory_status.inventory_status_id
+Ref: wms.inventory_adjustment_line.uom_id > wms.uom.uom_id
+Ref: wms.inventory_adjustment_line.resulting_balance_id > wms.inventory_balance.balance_id
+Ref: wms.inventory_adjustment_line.movement_id > wms.inventory_movement.movement_id
+Ref: wms.inventory_adjustment_line.posted_by > wms.app_account.account_id
+Ref: wms.inventory_adjustment_line.created_by > wms.app_account.account_id
+Ref: wms.stock_count.document_type_id > wms.document_type.document_type_id
+Ref: wms.stock_count.stock_count_type_id > wms.stock_count_type.stock_count_type_id
+Ref: wms.stock_count.owner_id > wms.organization.organization_id
+Ref: wms.stock_count.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.stock_count.reason_code_id > wms.reason_code.reason_code_id
+Ref: wms.stock_count.reviewed_by > wms.app_account.account_id
+Ref: wms.stock_count.posted_by > wms.app_account.account_id
+Ref: wms.stock_count.created_by > wms.app_account.account_id
+Ref: wms.stock_count.updated_by > wms.app_account.account_id
+Ref: wms.stock_count.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.stock_count.(owner_id, warehouse_id) > wms.warehouse_owner.(owner_id, warehouse_id)
+Ref: wms.stock_count_line.stock_count_id > wms.stock_count.stock_count_id
+Ref: wms.stock_count_line.balance_id > wms.inventory_balance.balance_id
+Ref: wms.stock_count_line.location_id > wms.warehouse_location.location_id
+Ref: wms.stock_count_line.item_id > wms.item.item_id
+Ref: wms.stock_count_line.lot_id > wms.inventory_lot.lot_id
+Ref: wms.stock_count_line.handling_unit_id > wms.handling_unit.handling_unit_id
+Ref: wms.stock_count_line.inventory_status_id > wms.inventory_status.inventory_status_id
+Ref: wms.stock_count_line.uom_id > wms.uom.uom_id
+Ref: wms.stock_count_line.counted_by > wms.app_account.account_id
+Ref: wms.stock_count_line.variance_movement_id > wms.inventory_movement.movement_id
+Ref: wms.stock_count_line.posted_by > wms.app_account.account_id
+Ref: wms.stock_count_line.created_by > wms.app_account.account_id
+Ref: wms.tax_rule.owner_id > wms.organization.organization_id
+Ref: wms.billing_service.module_code > wms.app_module.code
+Ref: wms.billing_service.default_charge_basis_id > wms.charge_basis.charge_basis_id
+Ref: wms.billing_service.default_uom_id > wms.uom.uom_id
+Ref: wms.billing_service_movement_type.billing_service_id > wms.billing_service.billing_service_id
+Ref: wms.billing_service_movement_type.movement_type_id > wms.movement_type.movement_type_id
+Ref: wms.billing_account.owner_id > wms.organization.organization_id
+Ref: wms.billing_account.bill_to_partner_id > wms.business_partner.partner_id
+Ref: wms.billing_account.currency_id > wms.currency.currency_id
+Ref: wms.billing_account.billing_cycle_id > wms.billing_cycle.billing_cycle_id
+Ref: wms.billing_account.payment_term_id > wms.payment_term.payment_term_id
+Ref: wms.billing_account.default_tax_rule_id > wms.tax_rule.tax_rule_id
+Ref: wms.billing_account.created_by > wms.app_account.account_id
+Ref: wms.billing_account.updated_by > wms.app_account.account_id
+Ref: wms.billing_account.(owner_id, bill_to_partner_id) > wms.business_partner.(owner_id, partner_id)
+Ref: wms.billing_contract.document_type_id > wms.document_type.document_type_id
+Ref: wms.billing_contract.billing_account_id > wms.billing_account.billing_account_id
+Ref: wms.billing_contract.owner_id > wms.organization.organization_id
+Ref: wms.billing_contract.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.billing_contract.currency_id > wms.currency.currency_id
+Ref: wms.billing_contract.default_tax_rule_id > wms.tax_rule.tax_rule_id
+Ref: wms.billing_contract.created_by > wms.app_account.account_id
+Ref: wms.billing_contract.updated_by > wms.app_account.account_id
+Ref: wms.billing_contract.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.billing_contract.(owner_id, billing_account_id) > wms.billing_account.(owner_id, billing_account_id)
+Ref: wms.billing_contract.(owner_id, warehouse_id) > wms.warehouse_owner.(owner_id, warehouse_id)
+Ref: wms.rate_card.document_type_id > wms.document_type.document_type_id
+Ref: wms.rate_card.billing_contract_id > wms.billing_contract.billing_contract_id
+Ref: wms.rate_card.created_by > wms.app_account.account_id
+Ref: wms.rate_card.updated_by > wms.app_account.account_id
+Ref: wms.rate_card.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.rate_card_line.rate_card_id > wms.rate_card.rate_card_id
+Ref: wms.rate_card_line.billing_service_id > wms.billing_service.billing_service_id
+Ref: wms.rate_card_line.charge_basis_id > wms.charge_basis.charge_basis_id
+Ref: wms.rate_card_line.uom_id > wms.uom.uom_id
+Ref: wms.rate_card_line.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.rate_card_line.item_id > wms.item.item_id
+Ref: wms.rate_card_line.category_id > wms.item_category.category_id
+Ref: wms.rate_card_line.tax_rule_id > wms.tax_rule.tax_rule_id
+Ref: wms.rate_card_line.created_by > wms.app_account.account_id
+Ref: wms.rate_card_tier.rate_card_line_id > wms.rate_card_line.rate_card_line_id
+Ref: wms.billable_event.document_type_id > wms.document_type.document_type_id
+Ref: wms.billable_event.billing_account_id > wms.billing_account.billing_account_id
+Ref: wms.billable_event.billing_contract_id > wms.billing_contract.billing_contract_id
+Ref: wms.billable_event.billing_service_id > wms.billing_service.billing_service_id
+Ref: wms.billable_event.owner_id > wms.organization.organization_id
+Ref: wms.billable_event.warehouse_id > wms.warehouse.warehouse_id
+Ref: wms.billable_event.item_id > wms.item.item_id
+Ref: wms.billable_event.category_id > wms.item_category.category_id
+Ref: wms.billable_event.handling_unit_id > wms.handling_unit.handling_unit_id
+Ref: wms.billable_event.source_document_type_id > wms.document_type.document_type_id
+Ref: wms.billable_event.uom_id > wms.uom.uom_id
+Ref: wms.billable_event.exclusion_reason_code_id > wms.reason_code.reason_code_id
+Ref: wms.billable_event.rated_by > wms.app_account.account_id
+Ref: wms.billable_event.excluded_by > wms.app_account.account_id
+Ref: wms.billable_event.created_by > wms.app_account.account_id
+Ref: wms.billable_event.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.billing_run.document_type_id > wms.document_type.document_type_id
+Ref: wms.billing_run.billing_account_id > wms.billing_account.billing_account_id
+Ref: wms.billing_run.billing_contract_id > wms.billing_contract.billing_contract_id
+Ref: wms.billing_run.currency_id > wms.currency.currency_id
+Ref: wms.billing_run.reviewed_by > wms.app_account.account_id
+Ref: wms.billing_run.created_by > wms.app_account.account_id
+Ref: wms.billing_run.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.billing_charge.billing_run_id > wms.billing_run.billing_run_id
+Ref: wms.billing_charge.billable_event_id > wms.billable_event.billable_event_id
+Ref: wms.billing_charge.rate_card_line_id > wms.rate_card_line.rate_card_line_id
+Ref: wms.billing_charge.uom_id > wms.uom.uom_id
+Ref: wms.billing_charge.tax_rule_id > wms.tax_rule.tax_rule_id
+Ref: wms.billing_charge.currency_id > wms.currency.currency_id
+Ref: wms.billing_charge.created_by > wms.app_account.account_id
+Ref: wms.billing_invoice.document_type_id > wms.document_type.document_type_id
+Ref: wms.billing_invoice.billing_run_id > wms.billing_run.billing_run_id
+Ref: wms.billing_invoice.billing_account_id > wms.billing_account.billing_account_id
+Ref: wms.billing_invoice.billing_contract_id > wms.billing_contract.billing_contract_id
+Ref: wms.billing_invoice.currency_id > wms.currency.currency_id
+Ref: wms.billing_invoice.issued_by > wms.app_account.account_id
+Ref: wms.billing_invoice.created_by > wms.app_account.account_id
+Ref: wms.billing_invoice.updated_by > wms.app_account.account_id
+Ref: wms.billing_invoice.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.billing_invoice_line.billing_invoice_id > wms.billing_invoice.billing_invoice_id
+Ref: wms.billing_invoice_line.billing_charge_id > wms.billing_charge.billing_charge_id
+Ref: wms.billing_invoice_line.billing_service_id > wms.billing_service.billing_service_id
+Ref: wms.billing_invoice_line.uom_id > wms.uom.uom_id
+Ref: wms.billing_invoice_line.tax_rule_id > wms.tax_rule.tax_rule_id
+Ref: wms.billing_invoice_adjustment.billing_invoice_id > wms.billing_invoice.billing_invoice_id
+Ref: wms.billing_invoice_adjustment.billing_adjustment_type_id > wms.billing_adjustment_type.billing_adjustment_type_id
+Ref: wms.billing_invoice_adjustment.reason_code_id > wms.reason_code.reason_code_id
+Ref: wms.billing_invoice_adjustment.tax_rule_id > wms.tax_rule.tax_rule_id
+Ref: wms.billing_invoice_adjustment.created_by > wms.app_account.account_id
+Ref: wms.billing_credit_note.document_type_id > wms.document_type.document_type_id
+Ref: wms.billing_credit_note.billing_invoice_id > wms.billing_invoice.billing_invoice_id
+Ref: wms.billing_credit_note.currency_id > wms.currency.currency_id
+Ref: wms.billing_credit_note.reason_code_id > wms.reason_code.reason_code_id
+Ref: wms.billing_credit_note.issued_by > wms.app_account.account_id
+Ref: wms.billing_credit_note.created_by > wms.app_account.account_id
+Ref: wms.billing_credit_note.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.billing_credit_note_line.credit_note_id > wms.billing_credit_note.credit_note_id
+Ref: wms.billing_credit_note_line.billing_invoice_line_id > wms.billing_invoice_line.billing_invoice_line_id
+Ref: wms.billing_payment.document_type_id > wms.document_type.document_type_id
+Ref: wms.billing_payment.billing_account_id > wms.billing_account.billing_account_id
+Ref: wms.billing_payment.currency_id > wms.currency.currency_id
+Ref: wms.billing_payment.payment_method_id > wms.payment_method.payment_method_id
+Ref: wms.billing_payment.created_by > wms.app_account.account_id
+Ref: wms.billing_payment.(document_type_id, status_id) > wms.document_status.(document_type_id, status_id)
+Ref: wms.billing_payment_allocation.payment_id > wms.billing_payment.payment_id
+Ref: wms.billing_payment_allocation.billing_invoice_id > wms.billing_invoice.billing_invoice_id
+Ref: wms.billing_payment_allocation.allocated_by > wms.app_account.account_id
+Ref: wms.quarantine_disposition_type.removal_movement_type_id > wms.movement_type.movement_type_id
+Ref: wms.putaway_task.source_balance_id > wms.inventory_balance.balance_id
+Ref: wms.receipt_inventory.initial_balance_id > wms.inventory_balance.balance_id
+
+TableGroup security {
+  wms.account_status
+  wms.authentication_policy
+  wms.session_revocation_reason
+  wms.app_module
+  wms.app_account
+  wms.app_session
+  wms.app_role
+  wms.app_permission
+  wms.app_menu
+  wms.account_role
+  wms.role_permission
+  wms.menu_permission
+}
+
+TableGroup master {
+  wms.organization
+  wms.warehouse
+  wms.warehouse_owner
+  wms.location_type
+  wms.warehouse_zone
+  wms.warehouse_location
+  wms.account_owner_access
+  wms.account_warehouse_access
+  wms.partner_type
+  wms.business_partner
+  wms.business_partner_type
+  wms.uom
+  wms.item_category
+  wms.item
+  wms.item_uom
+  wms.item_barcode
+  wms.inventory_status
+  wms.quality_status
+  wms.inspection_result
+  wms.quarantine_disposition_type
+  wms.reason_code
+  wms.handling_unit_type
+}
+
+TableGroup configuration {
+  wms.document_type
+  wms.document_status
+  wms.document_status_transition
+  wms.task_type
+  wms.task_status
+  wms.task_status_transition
+  wms.task_priority
+  wms.putaway_strategy
+  wms.putaway_strategy_rule
+  wms.picking_strategy
+  wms.picking_sort_method
+  wms.picking_strategy_rule
+  wms.document_number_rule
+  wms.document_daily_counter
+}
+
+TableGroup inventory_identity {
+  wms.inventory_lot
+  wms.serial_number
+  wms.handling_unit
+}
+
+TableGroup inbound {
+  wms.purchase_order
+  wms.purchase_order_line
+  wms.inbound_order
+  wms.inbound_order_line
+  wms.receipt
+  wms.receipt_line
+  wms.receipt_inventory
+  wms.receipt_line_serial
+  wms.quality_inspection
+  wms.putaway_task
+  wms.quarantine_case
+  wms.quarantine_disposition
+  wms.rework_task
+}
+
+TableGroup stock_control {
+  wms.movement_type
+  wms.internal_move_type
+  wms.inventory_adjustment_type
+  wms.stock_count_type
+  wms.inventory_balance
+  wms.inventory_movement
+  wms.internal_move_order
+  wms.internal_move_order_line
+  wms.internal_move_execution
+  wms.transfer_order
+  wms.transfer_order_line
+  wms.transfer_dispatch
+  wms.transfer_dispatch_line
+  wms.transfer_receipt
+  wms.transfer_receipt_line
+  wms.inventory_status_change
+  wms.inventory_status_change_line
+  wms.inventory_adjustment
+  wms.inventory_adjustment_line
+  wms.stock_count
+  wms.stock_count_line
+}
+
+TableGroup outbound {
+  wms.carrier
+  wms.carrier_service
+  wms.carrier_driver
+  wms.validation_severity
+  wms.outbound_validation_rule
+  wms.outbound_check_exception_status
+  wms.outbound_check_resolution_type
+  wms.outbound_wave_type
+  wms.outbound_check_result
+  wms.delivery_event_type
+  wms.delivery_failure_reason
+  wms.outbound_order
+  wms.outbound_order_line
+  wms.outbound_validation_run
+  wms.outbound_validation_result_detail
+  wms.outbound_wave
+  wms.outbound_wave_order
+  wms.inventory_reservation
+  wms.pick_task
+  wms.pick_execution
+  wms.outbound_staging
+  wms.outbound_staging_line
+  wms.outbound_check
+  wms.outbound_check_line
+  wms.outbound_check_exception
+  wms.outbound_check_resolution
+  wms.outbound_check_resolution_movement
+  wms.outbound_check_resolution_reservation
+  wms.packing
+  wms.packing_line
+  wms.shipment
+  wms.shipment_order
+  wms.shipment_driver
+  wms.shipment_line
+  wms.shipment_packing
+  wms.delivery
+  wms.delivery_line
+  wms.delivery_event
+  wms.delivery_event_line
+  wms.outbound_return_policy
+  wms.delivery_return_line
+}
+
+TableGroup billing {
+  wms.currency
+  wms.billing_cycle
+  wms.payment_term
+  wms.charge_basis
+  wms.tax_rule
+  wms.billing_service
+  wms.billing_service_movement_type
+  wms.billing_adjustment_type
+  wms.payment_method
+  wms.billing_account
+  wms.billing_contract
+  wms.rate_card
+  wms.rate_card_line
+  wms.rate_card_tier
+  wms.billable_event
+  wms.billing_run
+  wms.billing_charge
+  wms.billing_invoice
+  wms.billing_invoice_line
+  wms.billing_invoice_adjustment
+  wms.billing_credit_note
+  wms.billing_credit_note_line
+  wms.billing_payment
+  wms.billing_payment_allocation
+}

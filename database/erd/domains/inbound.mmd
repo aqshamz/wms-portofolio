@@ -1,0 +1,228 @@
+%% Inbound ERD
+erDiagram
+  purchase_order {
+    varchar_120 purchase_order_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid owner_id FK
+    uuid vendor_id FK
+    uuid warehouse_id FK
+    date business_date
+    varchar_120 purchase_order_no
+    timestamptz ordered_at
+    timestamptz expected_arrival_at
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+    integer version_no "default 1"
+  }
+  purchase_order_line {
+    varchar_150 purchase_order_line_id PK
+    varchar_120 purchase_order_id FK
+    uuid owner_id FK
+    integer line_no
+    uuid item_id FK
+    numeric_20_6 ordered_qty
+    uuid uom_id FK
+    varchar_100 vendor_item_code
+    varchar_100 expected_lot_no
+    date expected_expiry_date
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  inbound_order {
+    varchar_120 inbound_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid owner_id FK
+    uuid vendor_id FK
+    uuid warehouse_id FK
+    date business_date
+    timestamptz expected_arrival_at
+    varchar_120 external_reference
+    varchar_120 supplier_reference
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+    integer version_no "default 1"
+  }
+  inbound_order_line {
+    varchar_150 inbound_line_id PK
+    varchar_120 inbound_id FK
+    varchar_150 purchase_order_line_id FK
+    integer line_no
+    uuid item_id FK
+    numeric_20_6 expected_qty
+    uuid uom_id FK
+    varchar_100 expected_lot_no
+    date expected_expiry_date
+    varchar_100 customer_line_reference
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  receipt {
+    varchar_120 receipt_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    varchar_120 inbound_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    date business_date
+    timestamptz received_at
+    uuid dock_location_id FK
+    varchar_60 vehicle_number
+    varchar_60 seal_number
+    varchar_100 delivery_note_no
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  receipt_line {
+    varchar_150 receipt_line_id PK
+    varchar_120 receipt_id FK
+    varchar_150 inbound_line_id FK
+    integer line_no
+    uuid item_id FK
+    numeric_20_6 received_qty
+    numeric_20_6 rejected_qty "default 0"
+    uuid uom_id FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  receipt_inventory {
+    varchar_160 receipt_inventory_id PK
+    varchar_150 receipt_line_id FK
+    uuid item_id FK
+    numeric_20_6 source_qty
+    uuid source_uom_id FK
+    numeric_20_6 base_qty
+    uuid base_uom_id FK
+    varchar_120 lot_id FK
+    varchar_120 handling_unit_id FK
+    uuid received_location_id FK
+    uuid initial_inventory_status_id FK
+    varchar_160 initial_balance_id FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  receipt_line_serial {
+    varchar_160 receipt_inventory_id PK,FK
+    varchar_160 serial_id PK,FK,UK
+  }
+  quality_inspection {
+    varchar_120 inspection_id PK
+    varchar_160 receipt_inventory_id FK
+    varchar_120 parent_inspection_id FK
+    uuid quality_status_id FK
+    uuid inspection_result_id FK
+    numeric_20_6 inspected_qty
+    numeric_20_6 passed_qty "default 0"
+    numeric_20_6 failed_qty "default 0"
+    timestamptz inspected_at
+    uuid inspected_by FK
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  putaway_task {
+    varchar_120 putaway_task_id PK
+    uuid task_type_id FK
+    uuid task_status_id FK
+    uuid task_priority_id FK
+    varchar_160 receipt_inventory_id FK
+    varchar_160 source_balance_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    uuid item_id FK
+    varchar_120 lot_id FK
+    varchar_120 handling_unit_id FK
+    uuid source_location_id FK
+    uuid target_location_id FK
+    numeric_20_6 planned_qty
+    numeric_20_6 completed_qty "default 0"
+    uuid uom_id FK
+    uuid assigned_to FK
+    timestamptz started_at
+    timestamptz completed_at
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  quarantine_case {
+    varchar_140 quarantine_case_id PK
+    varchar_140 parent_quarantine_case_id FK
+    uuid document_type_id FK
+    uuid status_id FK
+    varchar_160 receipt_inventory_id FK
+    varchar_120 inspection_id FK,UK
+    varchar_160 quarantine_balance_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    numeric_20_6 quarantine_qty
+    uuid uom_id FK
+    timestamptz opened_at "default clock_timestamp()"
+    timestamptz closed_at
+    text notes
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+    integer version_no "default 1"
+  }
+  quarantine_disposition {
+    varchar_150 quarantine_disposition_id PK
+    varchar_140 quarantine_case_id FK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid quarantine_disposition_type_id FK
+    numeric_20_6 disposition_qty
+    uuid uom_id FK
+    varchar_120 client_decision_reference
+    text decision_notes
+    timestamptz decided_at
+    uuid decided_by FK
+    timestamptz processed_at
+    varchar_140 inventory_movement_id FK,UK
+    varchar_160 resulting_balance_id FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  rework_task {
+    varchar_140 rework_task_id PK
+    varchar_150 quarantine_disposition_id FK,UK
+    uuid task_type_id FK
+    uuid task_status_id FK
+    uuid task_priority_id FK
+    numeric_20_6 planned_qty
+    numeric_20_6 completed_qty "default 0"
+    uuid uom_id FK
+    uuid assigned_to FK
+    text work_instructions
+    text result_notes
+    timestamptz started_at
+    timestamptz completed_at
+    varchar_120 reinspection_id FK,UK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  inbound_order ||--o{ inbound_order_line : "inbound_id"
+  purchase_order_line o|--o{ inbound_order_line : "purchase_order_line_id"
+  purchase_order ||--o{ purchase_order_line : "purchase_order_id, owner_id"
+  receipt_inventory ||--o{ putaway_task : "receipt_inventory_id"
+  quality_inspection o|--o{ quality_inspection : "parent_inspection_id"
+  receipt_inventory ||--o{ quality_inspection : "receipt_inventory_id"
+  quality_inspection ||--o{ quarantine_case : "inspection_id"
+  quarantine_case o|--o{ quarantine_case : "parent_quarantine_case_id"
+  receipt_inventory ||--o{ quarantine_case : "receipt_inventory_id"
+  quarantine_case ||--o{ quarantine_disposition : "quarantine_case_id"
+  receipt_line ||--o{ receipt_inventory : "receipt_line_id"
+  receipt_inventory ||--o{ receipt_line_serial : "receipt_inventory_id"
+  inbound_order_line o|--o{ receipt_line : "inbound_line_id"
+  receipt ||--o{ receipt_line : "receipt_id"
+  inbound_order o|--o{ receipt : "inbound_id"
+  quarantine_disposition ||--o{ rework_task : "quarantine_disposition_id"
+  quality_inspection o|--o{ rework_task : "reinspection_id"

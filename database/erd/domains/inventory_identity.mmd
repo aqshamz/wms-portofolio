@@ -1,0 +1,34 @@
+%% Inventory identity ERD
+erDiagram
+  inventory_lot {
+    varchar_120 lot_id PK
+    uuid owner_id FK
+    uuid item_id FK
+    varchar_100 lot_number
+    date manufacture_date
+    date expiry_date
+    uuid quality_status_id FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  serial_number {
+    varchar_160 serial_id PK
+    uuid owner_id FK
+    uuid item_id FK
+    varchar_120 serial_no
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  handling_unit {
+    varchar_120 handling_unit_id PK
+    uuid warehouse_id FK
+    uuid owner_id FK
+    uuid handling_unit_type_id FK
+    varchar_120 parent_handling_unit_id FK
+    uuid current_location_id FK
+    varchar_120 barcode UK
+    boolean is_closed "default false"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  handling_unit o|--o{ handling_unit : "parent_handling_unit_id"

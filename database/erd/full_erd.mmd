@@ -1,0 +1,2460 @@
+%% Complete WMS ERD
+erDiagram
+  account_status {
+    uuid account_status_id PK "default gen_random_uuid()"
+    varchar_30 code UK
+    varchar_100 name
+    text description
+    boolean allows_login "default false"
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+  }
+  authentication_policy {
+    uuid authentication_policy_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    integer max_failed_attempts
+    integer lockout_seconds
+    integer session_ttl_seconds
+    boolean is_default "default false"
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+  }
+  session_revocation_reason {
+    uuid session_revocation_reason_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  app_module {
+    uuid module_id PK "default gen_random_uuid()"
+    varchar_50 code UK
+    varchar_100 name
+    integer display_order "default 0"
+    boolean is_active "default true"
+  }
+  app_account {
+    uuid account_id PK "default gen_random_uuid()"
+    varchar_100 username UK
+    varchar_254 email UK
+    varchar_150 display_name
+    text password_hash
+    varchar_255 external_subject UK
+    uuid account_status_id FK
+    uuid authentication_policy_id FK
+    varchar_50 preferred_timezone
+    integer failed_login_count "default 0"
+    timestamptz locked_until
+    timestamptz last_login_at
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+    integer version_no "default 1"
+  }
+  app_session {
+    varchar_120 session_id PK
+    uuid account_id FK
+    varchar_128 token_hash UK
+    timestamptz issued_at "default clock_timestamp()"
+    timestamptz expires_at
+    timestamptz last_seen_at "default clock_timestamp()"
+    timestamptz revoked_at
+    uuid session_revocation_reason_id FK
+    inet ip_address
+    text user_agent
+  }
+  app_role {
+    uuid role_id PK "default gen_random_uuid()"
+    varchar_50 code UK
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  app_permission {
+    uuid permission_id PK "default gen_random_uuid()"
+    varchar_100 code UK
+    varchar_150 name
+    varchar_50 module_code FK
+    text description
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+  }
+  app_menu {
+    uuid menu_id PK "default gen_random_uuid()"
+    uuid parent_menu_id FK
+    varchar_50 code UK
+    varchar_100 label
+    varchar_255 route
+    varchar_100 icon_name
+    integer display_order "default 0"
+    boolean require_all_permissions "default false"
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+  }
+  account_role {
+    uuid account_id PK,FK
+    uuid role_id PK,FK
+    timestamptz valid_from "default clock_timestamp()"
+    timestamptz valid_until
+    uuid assigned_by FK
+  }
+  role_permission {
+    uuid role_id PK,FK
+    uuid permission_id PK,FK
+    uuid granted_by FK
+    timestamptz granted_at "default clock_timestamp()"
+  }
+  menu_permission {
+    uuid menu_id PK,FK
+    uuid permission_id PK,FK
+  }
+  organization {
+    uuid organization_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_150 name
+    varchar_200 legal_name
+    varchar_100 tax_number
+    varchar_50 timezone_name
+    varchar_255 address_line_1
+    varchar_255 address_line_2
+    varchar_100 city
+    varchar_100 province
+    varchar_20 postal_code
+    varchar_2 country_code
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  warehouse {
+    uuid warehouse_id PK "default gen_random_uuid()"
+    uuid operator_id FK
+    varchar_40 code
+    varchar_150 name
+    varchar_50 timezone_name
+    varchar_255 address_line_1
+    varchar_255 address_line_2
+    varchar_100 city
+    varchar_100 province
+    varchar_20 postal_code
+    varchar_2 country_code
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  warehouse_owner {
+    uuid warehouse_id PK,FK
+    uuid owner_id PK,FK
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  location_type {
+    uuid location_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean allows_receiving "default false"
+    boolean allows_storage "default false"
+    boolean allows_picking "default false"
+    boolean allows_shipping "default false"
+    boolean is_active "default true"
+  }
+  warehouse_zone {
+    uuid zone_id PK "default gen_random_uuid()"
+    uuid warehouse_id FK
+    varchar_40 code
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  warehouse_location {
+    uuid location_id PK "default gen_random_uuid()"
+    uuid warehouse_id FK
+    uuid zone_id FK
+    uuid location_type_id FK
+    varchar_60 code
+    varchar_100 barcode
+    varchar_20 aisle
+    varchar_20 bay
+    varchar_20 level_no
+    varchar_20 position_no
+    integer pick_sequence "default 0"
+    numeric_20_6 max_weight
+    numeric_20_6 max_volume
+    boolean is_pick_face "default false"
+    boolean is_locked "default false"
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  account_owner_access {
+    uuid account_id PK,FK
+    uuid owner_id PK,FK
+    uuid granted_by FK
+    timestamptz granted_at "default clock_timestamp()"
+  }
+  account_warehouse_access {
+    uuid account_id PK,FK
+    uuid warehouse_id PK,FK
+    uuid granted_by FK
+    timestamptz granted_at "default clock_timestamp()"
+  }
+  partner_type {
+    uuid partner_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  business_partner {
+    uuid partner_id PK "default gen_random_uuid()"
+    uuid owner_id FK
+    varchar_40 code
+    varchar_150 name
+    varchar_200 legal_name
+    varchar_100 tax_number
+    varchar_254 email
+    varchar_50 phone
+    varchar_255 address_line_1
+    varchar_255 address_line_2
+    varchar_100 city
+    varchar_100 province
+    varchar_20 postal_code
+    varchar_2 country_code
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  business_partner_type {
+    uuid partner_id PK,FK
+    uuid partner_type_id PK,FK
+  }
+  uom {
+    uuid uom_id PK "default gen_random_uuid()"
+    varchar_20 code UK
+    varchar_100 name
+    smallint decimal_scale "default 0"
+    boolean is_active "default true"
+  }
+  item_category {
+    uuid category_id PK "default gen_random_uuid()"
+    uuid owner_id FK
+    uuid parent_category_id FK
+    varchar_40 code
+    varchar_100 name
+    boolean is_active "default true"
+  }
+  item {
+    uuid item_id PK "default gen_random_uuid()"
+    uuid owner_id FK
+    uuid category_id FK
+    varchar_60 code
+    varchar_200 name
+    text description
+    uuid base_uom_id FK
+    numeric_20_6 weight
+    numeric_20_6 volume
+    boolean lot_controlled "default false"
+    boolean serial_controlled "default false"
+    integer shelf_life_days
+    integer minimum_receive_days
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  item_uom {
+    uuid item_uom_id PK "default gen_random_uuid()"
+    uuid item_id FK
+    uuid uom_id FK
+    numeric_20_6 conversion_to_base
+    numeric_20_6 length
+    numeric_20_6 width
+    numeric_20_6 height
+    numeric_20_6 weight
+    boolean is_receiving_uom "default true"
+    boolean is_picking_uom "default true"
+    boolean is_active "default true"
+  }
+  item_barcode {
+    uuid item_barcode_id PK "default gen_random_uuid()"
+    uuid item_id FK
+    uuid uom_id FK
+    varchar_100 barcode UK
+    boolean is_primary "default false"
+    boolean is_active "default true"
+  }
+  inventory_status {
+    uuid inventory_status_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_allocatable "default false"
+    boolean is_pickable "default false"
+    boolean is_active "default true"
+  }
+  quality_status {
+    uuid quality_status_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  inspection_result {
+    uuid inspection_result_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_accepted "default false"
+    boolean is_active "default true"
+  }
+  quarantine_disposition_type {
+    uuid quarantine_disposition_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean releases_to_available "default false"
+    boolean requires_reinspection "default false"
+    boolean removes_inventory "default false"
+    uuid removal_movement_type_id FK
+    boolean is_active "default true"
+  }
+  reason_code {
+    uuid reason_code_id PK "default gen_random_uuid()"
+    varchar_50 module_code FK
+    varchar_40 code
+    varchar_100 name
+    text description
+    boolean requires_note "default false"
+    boolean is_active "default true"
+  }
+  handling_unit_type {
+    uuid handling_unit_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    numeric_20_6 max_weight
+    numeric_20_6 max_volume
+    boolean is_active "default true"
+  }
+  document_type {
+    uuid document_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    varchar_50 module_code FK
+    text description
+    boolean is_active "default true"
+  }
+  document_status {
+    uuid status_id PK "default gen_random_uuid()"
+    uuid document_type_id FK
+    varchar_40 code
+    varchar_100 name
+    text description
+    boolean is_initial "default false"
+    boolean is_final "default false"
+    boolean is_cancelled "default false"
+    integer display_order "default 0"
+    boolean is_active "default true"
+  }
+  document_status_transition {
+    uuid transition_id PK "default gen_random_uuid()"
+    uuid document_type_id FK
+    uuid from_status_id FK
+    uuid to_status_id FK
+    uuid required_permission_id FK
+    boolean is_active "default true"
+  }
+  task_type {
+    uuid task_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  task_status {
+    uuid task_status_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    boolean is_initial "default false"
+    boolean is_final "default false"
+    boolean is_cancelled "default false"
+    boolean is_active "default true"
+  }
+  task_status_transition {
+    uuid task_status_transition_id PK "default gen_random_uuid()"
+    uuid from_status_id FK
+    uuid to_status_id FK
+    uuid required_permission_id FK
+    boolean is_active "default true"
+  }
+  task_priority {
+    uuid task_priority_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    integer priority_value UK
+    boolean is_active "default true"
+  }
+  putaway_strategy {
+    uuid putaway_strategy_id PK "default gen_random_uuid()"
+    uuid owner_id FK
+    uuid warehouse_id FK
+    varchar_40 code
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  putaway_strategy_rule {
+    uuid rule_id PK "default gen_random_uuid()"
+    uuid putaway_strategy_id FK
+    integer sequence_no
+    uuid category_id FK
+    uuid location_type_id FK
+    uuid zone_id FK
+    numeric_7_4 minimum_empty_percent
+    boolean is_active "default true"
+  }
+  picking_strategy {
+    uuid picking_strategy_id PK "default gen_random_uuid()"
+    uuid owner_id FK
+    uuid warehouse_id FK
+    varchar_40 code
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  picking_sort_method {
+    uuid picking_sort_method_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  picking_strategy_rule {
+    uuid rule_id PK "default gen_random_uuid()"
+    uuid picking_strategy_id FK
+    integer sequence_no
+    uuid inventory_status_id FK
+    uuid zone_id FK
+    uuid picking_sort_method_id FK
+    boolean is_active "default true"
+  }
+  document_number_rule {
+    uuid document_number_rule_id PK "default gen_random_uuid()"
+    uuid document_type_id FK
+    varchar_20 prefix
+    varchar_3 separator "default '-'"
+    smallint sequence_length "default 6"
+    boolean include_partner_code "default true"
+    boolean include_warehouse_code "default true"
+    boolean is_active "default true"
+    date effective_from "default current_date"
+    date effective_until
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  document_daily_counter {
+    uuid document_type_id PK,FK
+    date business_date PK
+    bigint last_number
+    timestamptz updated_at "default clock_timestamp()"
+  }
+  inventory_lot {
+    varchar_120 lot_id PK
+    uuid owner_id FK
+    uuid item_id FK
+    varchar_100 lot_number
+    date manufacture_date
+    date expiry_date
+    uuid quality_status_id FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  serial_number {
+    varchar_160 serial_id PK
+    uuid owner_id FK
+    uuid item_id FK
+    varchar_120 serial_no
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  handling_unit {
+    varchar_120 handling_unit_id PK
+    uuid warehouse_id FK
+    uuid owner_id FK
+    uuid handling_unit_type_id FK
+    varchar_120 parent_handling_unit_id FK
+    uuid current_location_id FK
+    varchar_120 barcode UK
+    boolean is_closed "default false"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  purchase_order {
+    varchar_120 purchase_order_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid owner_id FK
+    uuid vendor_id FK
+    uuid warehouse_id FK
+    date business_date
+    varchar_120 purchase_order_no
+    timestamptz ordered_at
+    timestamptz expected_arrival_at
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+    integer version_no "default 1"
+  }
+  purchase_order_line {
+    varchar_150 purchase_order_line_id PK
+    varchar_120 purchase_order_id FK
+    uuid owner_id FK
+    integer line_no
+    uuid item_id FK
+    numeric_20_6 ordered_qty
+    uuid uom_id FK
+    varchar_100 vendor_item_code
+    varchar_100 expected_lot_no
+    date expected_expiry_date
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  inbound_order {
+    varchar_120 inbound_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid owner_id FK
+    uuid vendor_id FK
+    uuid warehouse_id FK
+    date business_date
+    timestamptz expected_arrival_at
+    varchar_120 external_reference
+    varchar_120 supplier_reference
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+    integer version_no "default 1"
+  }
+  inbound_order_line {
+    varchar_150 inbound_line_id PK
+    varchar_120 inbound_id FK
+    varchar_150 purchase_order_line_id FK
+    integer line_no
+    uuid item_id FK
+    numeric_20_6 expected_qty
+    uuid uom_id FK
+    varchar_100 expected_lot_no
+    date expected_expiry_date
+    varchar_100 customer_line_reference
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  receipt {
+    varchar_120 receipt_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    varchar_120 inbound_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    date business_date
+    timestamptz received_at
+    uuid dock_location_id FK
+    varchar_60 vehicle_number
+    varchar_60 seal_number
+    varchar_100 delivery_note_no
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  receipt_line {
+    varchar_150 receipt_line_id PK
+    varchar_120 receipt_id FK
+    varchar_150 inbound_line_id FK
+    integer line_no
+    uuid item_id FK
+    numeric_20_6 received_qty
+    numeric_20_6 rejected_qty "default 0"
+    uuid uom_id FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  receipt_inventory {
+    varchar_160 receipt_inventory_id PK
+    varchar_150 receipt_line_id FK
+    uuid item_id FK
+    numeric_20_6 source_qty
+    uuid source_uom_id FK
+    numeric_20_6 base_qty
+    uuid base_uom_id FK
+    varchar_120 lot_id FK
+    varchar_120 handling_unit_id FK
+    uuid received_location_id FK
+    uuid initial_inventory_status_id FK
+    varchar_160 initial_balance_id FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  receipt_line_serial {
+    varchar_160 receipt_inventory_id PK,FK
+    varchar_160 serial_id PK,FK,UK
+  }
+  quality_inspection {
+    varchar_120 inspection_id PK
+    varchar_160 receipt_inventory_id FK
+    varchar_120 parent_inspection_id FK
+    uuid quality_status_id FK
+    uuid inspection_result_id FK
+    numeric_20_6 inspected_qty
+    numeric_20_6 passed_qty "default 0"
+    numeric_20_6 failed_qty "default 0"
+    timestamptz inspected_at
+    uuid inspected_by FK
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  putaway_task {
+    varchar_120 putaway_task_id PK
+    uuid task_type_id FK
+    uuid task_status_id FK
+    uuid task_priority_id FK
+    varchar_160 receipt_inventory_id FK
+    varchar_160 source_balance_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    uuid item_id FK
+    varchar_120 lot_id FK
+    varchar_120 handling_unit_id FK
+    uuid source_location_id FK
+    uuid target_location_id FK
+    numeric_20_6 planned_qty
+    numeric_20_6 completed_qty "default 0"
+    uuid uom_id FK
+    uuid assigned_to FK
+    timestamptz started_at
+    timestamptz completed_at
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  movement_type {
+    uuid movement_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  internal_move_type {
+    uuid internal_move_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean requires_approval "default false"
+    boolean is_active "default true"
+  }
+  inventory_adjustment_type {
+    uuid inventory_adjustment_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    smallint quantity_effect
+    boolean requires_approval "default true"
+    boolean is_active "default true"
+  }
+  stock_count_type {
+    uuid stock_count_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean requires_freeze "default false"
+    boolean is_active "default true"
+  }
+  inventory_balance {
+    varchar_160 balance_id PK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    uuid location_id FK
+    uuid item_id FK
+    varchar_120 lot_id FK
+    varchar_120 handling_unit_id FK
+    uuid inventory_status_id FK
+    numeric_20_6 on_hand_qty "default 0"
+    numeric_20_6 reserved_qty "default 0"
+    uuid uom_id FK
+    bigint version_no "default 1"
+    timestamptz updated_at "default clock_timestamp()"
+  }
+  inventory_movement {
+    varchar_140 movement_id PK
+    uuid movement_type_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    date business_date
+    timestamptz occurred_at "default clock_timestamp()"
+    uuid item_id FK
+    varchar_120 lot_id FK
+    varchar_160 serial_id FK
+    varchar_120 handling_unit_id FK
+    uuid from_location_id FK
+    uuid to_location_id FK
+    uuid from_status_id FK
+    uuid to_status_id FK
+    numeric_20_6 quantity
+    uuid uom_id FK
+    varchar_140 source_document_id
+    varchar_160 source_line_id
+    uuid reason_code_id FK
+    text notes
+    uuid created_by FK
+  }
+  quarantine_case {
+    varchar_140 quarantine_case_id PK
+    varchar_140 parent_quarantine_case_id FK
+    uuid document_type_id FK
+    uuid status_id FK
+    varchar_160 receipt_inventory_id FK
+    varchar_120 inspection_id FK,UK
+    varchar_160 quarantine_balance_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    numeric_20_6 quarantine_qty
+    uuid uom_id FK
+    timestamptz opened_at "default clock_timestamp()"
+    timestamptz closed_at
+    text notes
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+    integer version_no "default 1"
+  }
+  quarantine_disposition {
+    varchar_150 quarantine_disposition_id PK
+    varchar_140 quarantine_case_id FK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid quarantine_disposition_type_id FK
+    numeric_20_6 disposition_qty
+    uuid uom_id FK
+    varchar_120 client_decision_reference
+    text decision_notes
+    timestamptz decided_at
+    uuid decided_by FK
+    timestamptz processed_at
+    varchar_140 inventory_movement_id FK,UK
+    varchar_160 resulting_balance_id FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  rework_task {
+    varchar_140 rework_task_id PK
+    varchar_150 quarantine_disposition_id FK,UK
+    uuid task_type_id FK
+    uuid task_status_id FK
+    uuid task_priority_id FK
+    numeric_20_6 planned_qty
+    numeric_20_6 completed_qty "default 0"
+    uuid uom_id FK
+    uuid assigned_to FK
+    text work_instructions
+    text result_notes
+    timestamptz started_at
+    timestamptz completed_at
+    varchar_120 reinspection_id FK,UK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  carrier {
+    uuid carrier_id PK "default gen_random_uuid()"
+    uuid business_partner_id FK,UK
+    varchar_40 code UK
+    varchar_150 name
+    boolean is_active "default true"
+  }
+  carrier_service {
+    uuid carrier_service_id PK "default gen_random_uuid()"
+    uuid carrier_id FK
+    varchar_40 code
+    varchar_100 name
+    boolean is_active "default true"
+  }
+  carrier_driver {
+    uuid driver_id PK "default gen_random_uuid()"
+    uuid carrier_id FK
+    uuid account_id FK,UK
+    varchar_40 code
+    varchar_150 name
+    varchar_50 phone_number
+    varchar_80 license_number
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  validation_severity {
+    uuid validation_severity_id PK "default gen_random_uuid()"
+    varchar_20 code UK
+    varchar_80 name
+    boolean blocks_processing "default true"
+    boolean is_active "default true"
+  }
+  outbound_validation_rule {
+    uuid outbound_validation_rule_id PK "default gen_random_uuid()"
+    varchar_50 code UK
+    varchar_120 name
+    text description
+    varchar_60 handler_code
+    uuid validation_severity_id FK
+    integer display_order "default 0"
+    boolean is_active "default true"
+  }
+  outbound_check_exception_status {
+    uuid outbound_check_exception_status_id PK "default gen_random_uuid()"
+    varchar_30 code UK
+    varchar_100 name
+    boolean is_final "default false"
+    boolean is_active "default true"
+  }
+  outbound_check_resolution_type {
+    uuid outbound_check_resolution_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_120 name
+    text description
+    boolean counts_as_stock_correction "default false"
+    boolean counts_as_replacement "default false"
+    boolean counts_as_short_acceptance "default false"
+    boolean requires_approval "default false"
+    boolean is_active "default true"
+  }
+  outbound_wave_type {
+    uuid outbound_wave_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  outbound_check_result {
+    uuid outbound_check_result_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_pass "default false"
+    boolean requires_note "default false"
+    boolean is_active "default true"
+  }
+  delivery_event_type {
+    uuid delivery_event_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean marks_delivered "default false"
+    boolean marks_failed "default false"
+    boolean marks_returned "default false"
+    boolean is_active "default true"
+  }
+  delivery_failure_reason {
+    uuid delivery_failure_reason_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  outbound_order {
+    varchar_120 outbound_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid owner_id FK
+    uuid customer_id FK
+    uuid warehouse_id FK
+    date business_date
+    timestamptz requested_ship_at
+    varchar_120 external_reference
+    varchar_120 customer_order_no
+    varchar_120 client_delivery_order_no
+    uuid ship_to_partner_id FK
+    varchar_150 ship_to_name
+    varchar_255 ship_to_address_1
+    varchar_255 ship_to_address_2
+    varchar_100 ship_to_city
+    varchar_100 ship_to_province
+    varchar_20 ship_to_postal_code
+    varchar_2 ship_to_country_code
+    text notes
+    timestamptz validated_at
+    uuid validated_by FK
+    timestamptz allocated_at
+    timestamptz completed_at
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+    integer version_no "default 1"
+  }
+  outbound_order_line {
+    varchar_150 outbound_line_id PK
+    varchar_120 outbound_id FK
+    integer line_no
+    uuid item_id FK
+    numeric_20_6 ordered_qty
+    numeric_20_6 allocated_qty "default 0"
+    numeric_20_6 picked_qty "default 0"
+    numeric_20_6 checked_qty "default 0"
+    numeric_20_6 packed_qty "default 0"
+    numeric_20_6 shipped_qty "default 0"
+    numeric_20_6 delivered_qty "default 0"
+    numeric_20_6 rejected_qty "default 0"
+    numeric_20_6 short_accepted_qty "default 0"
+    uuid uom_id FK
+    varchar_100 requested_lot_no
+    varchar_100 customer_line_reference
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  outbound_validation_run {
+    varchar_140 validation_run_id PK
+    varchar_120 outbound_id FK
+    uuid document_type_id FK
+    uuid status_id FK
+    timestamptz validated_at
+    uuid validated_by FK
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  outbound_validation_result_detail {
+    varchar_170 validation_result_id PK
+    varchar_140 validation_run_id FK
+    uuid outbound_validation_rule_id FK
+    boolean passed
+    text result_message
+    timestamptz created_at "default clock_timestamp()"
+  }
+  outbound_wave {
+    varchar_120 wave_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid outbound_wave_type_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    uuid picking_strategy_id FK
+    date business_date
+    timestamptz planned_release_at
+    timestamptz released_at
+    timestamptz completed_at
+    text notes
+    bigint version_no "default 1"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  outbound_wave_order {
+    varchar_120 wave_id PK,FK
+    varchar_120 outbound_id PK,FK
+    timestamptz added_at "default clock_timestamp()"
+    uuid added_by FK
+  }
+  inventory_reservation {
+    varchar_140 reservation_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid picking_strategy_id FK
+    varchar_150 outbound_line_id FK
+    varchar_160 balance_id FK
+    numeric_20_6 reserved_qty
+    numeric_20_6 picked_qty "default 0"
+    uuid uom_id FK
+    timestamptz reserved_at "default clock_timestamp()"
+    timestamptz released_at
+    uuid created_by FK
+  }
+  pick_task {
+    varchar_140 pick_task_id PK
+    uuid task_type_id FK
+    uuid task_status_id FK
+    uuid task_priority_id FK
+    varchar_120 wave_id FK
+    varchar_140 reservation_id FK,UK
+    varchar_150 outbound_line_id FK
+    uuid source_location_id FK
+    uuid target_location_id FK
+    numeric_20_6 planned_qty
+    numeric_20_6 picked_qty "default 0"
+    uuid uom_id FK
+    uuid assigned_to FK
+    timestamptz started_at
+    timestamptz completed_at
+    numeric_20_6 short_qty "default 0"
+    uuid short_reason_code_id FK
+    text result_notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  pick_execution {
+    varchar_170 pick_execution_id PK
+    varchar_140 pick_task_id FK
+    varchar_160 source_balance_id FK
+    varchar_160 staging_balance_id FK
+    numeric_20_6 picked_qty
+    uuid uom_id FK
+    varchar_140 movement_id FK,UK
+    timestamptz picked_at "default clock_timestamp()"
+    uuid picked_by FK
+  }
+  outbound_staging {
+    varchar_120 staging_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    varchar_120 outbound_id FK
+    varchar_120 wave_id FK
+    uuid warehouse_id FK
+    uuid staging_location_id FK
+    timestamptz staged_at
+    uuid staged_by FK
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  outbound_staging_line {
+    varchar_160 staging_line_id PK
+    varchar_120 staging_id FK
+    varchar_170 pick_execution_id FK,UK
+    varchar_160 staging_balance_id FK
+    numeric_20_6 staged_qty
+    numeric_20_6 removed_qty "default 0"
+    uuid uom_id FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  outbound_check {
+    varchar_120 outbound_check_id PK
+    varchar_120 parent_check_id FK
+    uuid document_type_id FK
+    uuid status_id FK
+    varchar_120 staging_id FK
+    timestamptz checked_at
+    uuid checked_by FK
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  outbound_check_line {
+    varchar_160 outbound_check_line_id PK
+    varchar_120 outbound_check_id FK
+    varchar_160 staging_line_id FK
+    integer line_no
+    numeric_20_6 expected_qty
+    numeric_20_6 checked_qty
+    numeric_20_6 exception_qty "default 0"
+    uuid uom_id FK
+    uuid outbound_check_result_id FK
+    text notes
+    timestamptz checked_at
+    uuid checked_by FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  outbound_check_exception {
+    varchar_170 outbound_check_exception_id PK
+    varchar_160 outbound_check_line_id FK,UK
+    uuid status_id FK
+    numeric_20_6 exception_qty
+    timestamptz opened_at "default clock_timestamp()"
+    timestamptz resolved_at
+    uuid resolved_by FK
+    text notes
+    uuid created_by FK
+  }
+  outbound_check_resolution {
+    varchar_190 outbound_check_resolution_id PK
+    varchar_170 outbound_check_exception_id FK
+    uuid outbound_check_resolution_type_id FK
+    numeric_20_6 resolved_qty
+    text notes
+    timestamptz approved_at
+    uuid approved_by FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  outbound_check_resolution_movement {
+    varchar_190 outbound_check_resolution_id PK,FK
+    varchar_140 movement_id PK,FK,UK
+  }
+  outbound_check_resolution_reservation {
+    varchar_190 outbound_check_resolution_id PK,FK
+    varchar_140 reservation_id PK,FK,UK
+  }
+  packing {
+    varchar_120 packing_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    varchar_120 outbound_id FK,UK
+    uuid warehouse_id FK
+    uuid packing_location_id FK
+    timestamptz packed_at
+    uuid packed_by FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  packing_line {
+    varchar_150 packing_line_id PK
+    varchar_120 packing_id FK
+    varchar_140 pick_task_id FK
+    varchar_160 outbound_check_line_id FK,UK
+    varchar_160 source_balance_id FK
+    varchar_160 packing_balance_id FK
+    varchar_120 handling_unit_id FK
+    numeric_20_6 packed_qty
+    uuid uom_id FK
+    varchar_140 movement_id FK,UK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  shipment {
+    varchar_120 shipment_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid owner_id FK
+    uuid carrier_service_id FK
+    uuid warehouse_id FK
+    date business_date
+    varchar_100 route_reference
+    varchar_150 tracking_number
+    varchar_60 vehicle_number
+    varchar_60 seal_number
+    timestamptz shipped_at
+    uuid dispatched_by FK
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  shipment_order {
+    varchar_120 shipment_id PK,FK
+    varchar_120 outbound_id PK,FK
+    timestamptz added_at "default clock_timestamp()"
+    uuid added_by FK
+    timestamptz removed_at
+    uuid removed_by FK
+  }
+  shipment_driver {
+    varchar_120 shipment_id PK,FK
+    uuid driver_id PK,FK
+    boolean is_primary "default false"
+    timestamptz assigned_at "default clock_timestamp()"
+    uuid assigned_by FK
+  }
+  shipment_line {
+    varchar_160 shipment_line_id PK
+    varchar_120 shipment_id FK
+    varchar_150 packing_line_id FK,UK
+    varchar_160 source_balance_id FK
+    numeric_20_6 shipped_qty
+    uuid uom_id FK
+    varchar_140 movement_id FK,UK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  shipment_packing {
+    varchar_120 shipment_id PK,FK
+    varchar_120 packing_id PK,FK
+  }
+  delivery {
+    varchar_120 delivery_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    varchar_120 shipment_id FK
+    varchar_120 outbound_id FK
+    date business_date
+    timestamptz planned_delivery_at
+    timestamptz arrived_at
+    timestamptz delivered_at
+    varchar_150 recipient_name
+    varchar_100 recipient_reference
+    varchar_200 proof_reference
+    text proof_uri
+    numeric_10_7 latitude
+    numeric_10_7 longitude
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  delivery_line {
+    varchar_160 delivery_line_id PK
+    varchar_120 delivery_id FK
+    varchar_160 shipment_line_id FK,UK
+    numeric_20_6 planned_qty
+    numeric_20_6 delivered_qty "default 0"
+    numeric_20_6 returned_qty "default 0"
+    uuid uom_id FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  delivery_event {
+    varchar_160 delivery_event_id PK
+    varchar_120 delivery_id FK
+    uuid delivery_event_type_id FK
+    timestamptz event_at
+    uuid delivery_failure_reason_id FK
+    varchar_150 recipient_name
+    varchar_100 recipient_reference
+    varchar_200 proof_reference
+    text proof_uri
+    text notes
+    numeric_10_7 latitude
+    numeric_10_7 longitude
+    uuid recorded_by FK
+    timestamptz created_at "default clock_timestamp()"
+  }
+  delivery_event_line {
+    varchar_160 delivery_event_id PK,FK
+    varchar_160 delivery_line_id PK,FK
+    numeric_20_6 delivered_qty
+  }
+  outbound_return_policy {
+    uuid owner_id PK,FK
+    uuid warehouse_id PK,FK
+    uuid return_location_id FK
+    uuid return_inventory_status_id FK
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  delivery_return_line {
+    varchar_170 delivery_return_line_id PK
+    varchar_120 delivery_id FK
+    varchar_160 delivery_line_id FK
+    uuid return_location_id FK
+    varchar_160 returned_balance_id FK
+    numeric_20_6 returned_qty
+    uuid uom_id FK
+    varchar_140 movement_id FK,UK
+    timestamptz returned_at
+    uuid returned_by FK
+  }
+  internal_move_order {
+    varchar_120 internal_move_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid internal_move_type_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    date business_date
+    uuid reason_code_id FK
+    timestamptz requested_at "default clock_timestamp()"
+    timestamptz approved_at
+    uuid approved_by FK
+    timestamptz completed_at
+    text notes
+    bigint version_no "default 1"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  internal_move_order_line {
+    varchar_150 internal_move_line_id PK
+    varchar_120 internal_move_id FK
+    integer line_no
+    varchar_160 source_balance_id FK
+    uuid target_location_id FK
+    numeric_20_6 planned_qty
+    numeric_20_6 completed_qty "default 0"
+    uuid uom_id FK
+    uuid assigned_to FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  internal_move_execution {
+    varchar_160 internal_move_execution_id PK
+    varchar_150 internal_move_line_id FK
+    numeric_20_6 quantity
+    varchar_160 source_balance_id FK
+    varchar_160 destination_balance_id FK
+    varchar_140 movement_id FK,UK
+    timestamptz executed_at "default clock_timestamp()"
+    uuid executed_by FK
+  }
+  transfer_order {
+    varchar_120 transfer_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid owner_id FK
+    uuid source_warehouse_id FK
+    uuid target_warehouse_id FK
+    date business_date
+    timestamptz requested_transfer_at
+    timestamptz approved_at
+    uuid approved_by FK
+    timestamptz completed_at
+    text notes
+    bigint version_no "default 1"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  transfer_order_line {
+    varchar_150 transfer_line_id PK
+    varchar_120 transfer_id FK
+    integer line_no
+    uuid item_id FK
+    numeric_20_6 requested_qty
+    numeric_20_6 dispatched_qty "default 0"
+    numeric_20_6 received_qty "default 0"
+    uuid uom_id FK
+    varchar_120 requested_lot_id FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  transfer_dispatch {
+    varchar_120 transfer_dispatch_id PK
+    varchar_120 transfer_id FK
+    uuid document_type_id FK
+    uuid status_id FK
+    date business_date
+    uuid carrier_partner_id FK
+    varchar_150 tracking_number
+    varchar_60 vehicle_number
+    varchar_60 seal_number
+    timestamptz dispatched_at
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  transfer_dispatch_line {
+    varchar_150 transfer_dispatch_line_id PK
+    varchar_120 transfer_dispatch_id FK
+    varchar_150 transfer_line_id FK
+    integer line_no
+    varchar_160 source_balance_id FK
+    numeric_20_6 dispatched_qty
+    numeric_20_6 received_qty "default 0"
+    uuid uom_id FK
+    varchar_140 movement_id FK,UK
+    timestamptz confirmed_at
+    uuid confirmed_by FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  transfer_receipt {
+    varchar_120 transfer_receipt_id PK
+    varchar_120 transfer_id FK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid warehouse_id FK
+    date business_date
+    timestamptz received_at
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  transfer_receipt_line {
+    varchar_150 transfer_receipt_line_id PK
+    varchar_120 transfer_receipt_id FK
+    varchar_150 transfer_dispatch_line_id FK
+    integer line_no
+    uuid target_location_id FK
+    numeric_20_6 received_qty
+    uuid uom_id FK
+    varchar_160 destination_balance_id FK
+    varchar_140 movement_id FK,UK
+    timestamptz posted_at
+    uuid posted_by FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  inventory_status_change {
+    varchar_120 inventory_status_change_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    date business_date
+    uuid reason_code_id FK
+    timestamptz approved_at
+    uuid approved_by FK
+    timestamptz posted_at
+    text notes
+    bigint version_no "default 1"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  inventory_status_change_line {
+    varchar_150 inventory_status_change_line_id PK
+    varchar_120 inventory_status_change_id FK
+    integer line_no
+    varchar_160 source_balance_id FK
+    uuid target_inventory_status_id FK
+    numeric_20_6 quantity
+    uuid uom_id FK
+    varchar_160 destination_balance_id FK
+    varchar_140 movement_id FK,UK
+    timestamptz posted_at
+    uuid posted_by FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  inventory_adjustment {
+    varchar_120 inventory_adjustment_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    date business_date
+    uuid reason_code_id FK
+    timestamptz approved_at
+    uuid approved_by FK
+    timestamptz posted_at
+    text notes
+    bigint version_no "default 1"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  inventory_adjustment_line {
+    varchar_150 inventory_adjustment_line_id PK
+    varchar_120 inventory_adjustment_id FK
+    integer line_no
+    uuid inventory_adjustment_type_id FK
+    varchar_160 source_balance_id FK
+    uuid location_id FK
+    uuid item_id FK
+    varchar_120 lot_id FK
+    varchar_120 handling_unit_id FK
+    uuid inventory_status_id FK
+    numeric_20_6 adjustment_qty
+    uuid uom_id FK
+    varchar_160 resulting_balance_id FK
+    varchar_140 movement_id FK,UK
+    timestamptz posted_at
+    uuid posted_by FK
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  stock_count {
+    varchar_120 stock_count_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid stock_count_type_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    date business_date
+    uuid reason_code_id FK
+    boolean freeze_inventory "default false"
+    timestamptz started_at
+    timestamptz completed_at
+    timestamptz reviewed_at
+    uuid reviewed_by FK
+    timestamptz posted_at
+    uuid posted_by FK
+    text notes
+    bigint version_no "default 1"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  stock_count_line {
+    varchar_150 stock_count_line_id PK
+    varchar_120 stock_count_id FK
+    integer line_no
+    varchar_160 balance_id FK
+    uuid location_id FK
+    uuid item_id FK
+    varchar_120 lot_id FK
+    varchar_120 handling_unit_id FK
+    uuid inventory_status_id FK
+    numeric_20_6 system_qty
+    bigint system_version_no
+    numeric_20_6 counted_qty
+    uuid uom_id FK
+    timestamptz counted_at
+    uuid counted_by FK
+    varchar_140 variance_movement_id FK,UK
+    timestamptz posted_at
+    uuid posted_by FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  currency {
+    uuid currency_id PK "default gen_random_uuid()"
+    varchar_3 code UK
+    varchar_100 name
+    smallint decimal_scale "default 2"
+    boolean is_active "default true"
+  }
+  billing_cycle {
+    uuid billing_cycle_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    integer period_days
+    integer period_months
+    boolean is_on_demand "default false"
+    boolean is_active "default true"
+  }
+  payment_term {
+    uuid payment_term_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    integer due_days
+    boolean is_active "default true"
+  }
+  charge_basis {
+    uuid charge_basis_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean requires_uom "default true"
+    boolean use_event_quantity "default true"
+    boolean is_active "default true"
+  }
+  tax_rule {
+    uuid tax_rule_id PK "default gen_random_uuid()"
+    uuid owner_id FK
+    varchar_40 code
+    varchar_120 name
+    numeric_9_6 rate_percent
+    boolean is_inclusive "default false"
+    date effective_from
+    date effective_until
+    boolean is_active "default true"
+  }
+  billing_service {
+    uuid billing_service_id PK "default gen_random_uuid()"
+    varchar_50 code UK
+    varchar_120 name
+    varchar_50 module_code FK
+    text description
+    uuid default_charge_basis_id FK
+    uuid default_uom_id FK
+    boolean is_active "default true"
+  }
+  billing_service_movement_type {
+    uuid billing_service_id PK,FK
+    uuid movement_type_id PK,FK,UK
+    boolean is_active "default true"
+  }
+  billing_adjustment_type {
+    uuid billing_adjustment_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    smallint amount_effect
+    boolean is_active "default true"
+  }
+  payment_method {
+    uuid payment_method_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    boolean requires_reference "default true"
+    boolean is_active "default true"
+  }
+  billing_account {
+    uuid billing_account_id PK "default gen_random_uuid()"
+    uuid owner_id FK
+    varchar_40 code
+    varchar_150 name
+    uuid bill_to_partner_id FK
+    uuid currency_id FK
+    uuid billing_cycle_id FK
+    uuid payment_term_id FK
+    uuid default_tax_rule_id FK
+    varchar_200 bill_to_name
+    varchar_100 bill_to_tax_number
+    varchar_255 bill_to_address_1
+    varchar_255 bill_to_address_2
+    varchar_100 bill_to_city
+    varchar_100 bill_to_province
+    varchar_20 bill_to_postal_code
+    varchar_2 bill_to_country_code
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  billing_contract {
+    varchar_120 billing_contract_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid billing_account_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    uuid currency_id FK
+    uuid default_tax_rule_id FK
+    varchar_100 contract_number
+    date effective_from
+    date effective_until
+    boolean auto_renew "default false"
+    text notes
+    bigint version_no "default 1"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  rate_card {
+    varchar_120 rate_card_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    varchar_120 billing_contract_id FK
+    varchar_40 version_label
+    date effective_from
+    date effective_until
+    text notes
+    bigint version_no "default 1"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  rate_card_line {
+    varchar_150 rate_card_line_id PK
+    varchar_120 rate_card_id FK
+    integer line_no
+    uuid billing_service_id FK
+    uuid charge_basis_id FK
+    uuid uom_id FK
+    uuid warehouse_id FK
+    uuid item_id FK
+    uuid category_id FK
+    numeric_20_6 unit_rate
+    numeric_20_6 included_quantity "default 0"
+    numeric_20_4 minimum_charge "default 0"
+    numeric_20_4 maximum_charge
+    numeric_20_6 rounding_increment
+    integer priority_no "default 100"
+    uuid tax_rule_id FK
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  rate_card_tier {
+    varchar_170 rate_card_tier_id PK
+    varchar_150 rate_card_line_id FK
+    integer tier_no
+    numeric_20_6 from_quantity
+    numeric_20_6 until_quantity
+    numeric_20_6 unit_rate
+  }
+  billable_event {
+    varchar_140 billable_event_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid billing_account_id FK
+    varchar_120 billing_contract_id FK
+    uuid billing_service_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    uuid item_id FK
+    uuid category_id FK
+    varchar_120 handling_unit_id FK
+    date business_date
+    timestamptz occurred_at
+    uuid source_document_type_id FK
+    varchar_140 source_document_id
+    varchar_170 source_line_id
+    varchar_80 event_key "default 'DEFAULT'"
+    numeric_20_6 quantity
+    uuid uom_id FK
+    jsonb attributes "default '{}'::jsonb"
+    uuid exclusion_reason_code_id FK
+    timestamptz rated_at
+    uuid rated_by FK
+    timestamptz excluded_at
+    uuid excluded_by FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  billing_run {
+    varchar_120 billing_run_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid billing_account_id FK
+    varchar_120 billing_contract_id FK
+    uuid currency_id FK
+    date period_from
+    date period_until
+    timestamptz calculated_at
+    timestamptz reviewed_at
+    uuid reviewed_by FK
+    numeric_20_4 net_amount "default 0"
+    numeric_20_4 tax_amount "default 0"
+    numeric_20_4 gross_amount "default 0"
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  billing_charge {
+    varchar_150 billing_charge_id PK
+    varchar_120 billing_run_id FK
+    varchar_140 billable_event_id FK,UK
+    varchar_150 rate_card_line_id FK
+    numeric_20_6 billed_quantity
+    uuid uom_id FK
+    numeric_20_6 unit_rate
+    numeric_20_4 net_amount
+    uuid tax_rule_id FK
+    numeric_9_6 tax_rate_percent "default 0"
+    numeric_20_4 tax_amount "default 0"
+    numeric_20_4 gross_amount
+    uuid currency_id FK
+    timestamptz calculated_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  billing_invoice {
+    varchar_120 billing_invoice_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    varchar_120 billing_run_id FK,UK
+    uuid billing_account_id FK
+    varchar_120 billing_contract_id FK
+    uuid currency_id FK
+    date invoice_date
+    date due_date
+    varchar_200 bill_to_name
+    varchar_100 bill_to_tax_number
+    text bill_to_address
+    numeric_20_4 net_amount "default 0"
+    numeric_20_4 adjustment_amount "default 0"
+    numeric_20_4 tax_amount "default 0"
+    numeric_20_4 gross_amount "default 0"
+    numeric_20_4 credited_amount "default 0"
+    numeric_20_4 paid_amount "default 0"
+    numeric_20_4 balance_due "default 0"
+    timestamptz issued_at
+    uuid issued_by FK
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  billing_invoice_line {
+    varchar_150 billing_invoice_line_id PK
+    varchar_120 billing_invoice_id FK
+    integer line_no
+    varchar_150 billing_charge_id FK,UK
+    uuid billing_service_id FK
+    varchar_255 description
+    numeric_20_6 quantity
+    uuid uom_id FK
+    numeric_20_6 unit_rate
+    numeric_20_4 net_amount
+    uuid tax_rule_id FK
+    numeric_9_6 tax_rate_percent "default 0"
+    numeric_20_4 tax_amount "default 0"
+    numeric_20_4 gross_amount
+  }
+  billing_invoice_adjustment {
+    varchar_150 invoice_adjustment_id PK
+    varchar_120 billing_invoice_id FK
+    integer line_no
+    uuid billing_adjustment_type_id FK
+    uuid reason_code_id FK
+    varchar_255 description
+    numeric_20_4 amount
+    uuid tax_rule_id FK
+    numeric_9_6 tax_rate_percent "default 0"
+    numeric_20_4 tax_amount "default 0"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  billing_credit_note {
+    varchar_120 credit_note_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    varchar_120 billing_invoice_id FK
+    uuid currency_id FK
+    date credit_date
+    uuid reason_code_id FK
+    numeric_20_4 net_amount "default 0"
+    numeric_20_4 tax_amount "default 0"
+    numeric_20_4 gross_amount "default 0"
+    timestamptz issued_at
+    uuid issued_by FK
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  billing_credit_note_line {
+    varchar_150 credit_note_line_id PK
+    varchar_120 credit_note_id FK
+    varchar_150 billing_invoice_line_id FK
+    integer line_no
+    varchar_255 description
+    numeric_20_4 net_amount
+    numeric_9_6 tax_rate_percent "default 0"
+    numeric_20_4 tax_amount "default 0"
+    numeric_20_4 gross_amount
+  }
+  billing_payment {
+    varchar_120 payment_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid billing_account_id FK
+    uuid currency_id FK
+    uuid payment_method_id FK
+    date payment_date
+    numeric_20_4 amount
+    numeric_20_4 unapplied_amount
+    varchar_150 external_reference
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  billing_payment_allocation {
+    varchar_150 payment_allocation_id PK
+    varchar_120 payment_id FK
+    integer allocation_no
+    varchar_120 billing_invoice_id FK
+    numeric_20_4 allocated_amount
+    timestamptz allocated_at "default clock_timestamp()"
+    uuid allocated_by FK
+  }
+  account_status ||--o{ app_account : "account_status_id"
+  authentication_policy o|--o{ app_account : "authentication_policy_id"
+  app_account o|--o{ app_account : "created_by"
+  app_account o|--o{ app_account : "updated_by"
+  app_account ||--o{ app_session : "account_id"
+  session_revocation_reason o|--o{ app_session : "session_revocation_reason_id"
+  app_account o|--o{ app_role : "created_by"
+  app_module ||--o{ app_permission : "module_code"
+  app_menu o|--o{ app_menu : "parent_menu_id"
+  app_account ||--o{ account_role : "account_id"
+  app_role ||--o{ account_role : "role_id"
+  app_account o|--o{ account_role : "assigned_by"
+  app_role ||--o{ role_permission : "role_id"
+  app_permission ||--o{ role_permission : "permission_id"
+  app_account o|--o{ role_permission : "granted_by"
+  app_menu ||--o{ menu_permission : "menu_id"
+  app_permission ||--o{ menu_permission : "permission_id"
+  app_account o|--o{ organization : "created_by"
+  app_account o|--o{ organization : "updated_by"
+  organization ||--o{ warehouse : "operator_id"
+  app_account o|--o{ warehouse : "created_by"
+  app_account o|--o{ warehouse : "updated_by"
+  warehouse ||--o{ warehouse_owner : "warehouse_id"
+  organization ||--o{ warehouse_owner : "owner_id"
+  app_account o|--o{ warehouse_owner : "created_by"
+  warehouse ||--o{ warehouse_zone : "warehouse_id"
+  app_account o|--o{ warehouse_zone : "created_by"
+  warehouse ||--o{ warehouse_location : "warehouse_id"
+  location_type ||--o{ warehouse_location : "location_type_id"
+  app_account o|--o{ warehouse_location : "created_by"
+  warehouse_zone ||--o{ warehouse_location : "zone_id, warehouse_id"
+  app_account ||--o{ account_owner_access : "account_id"
+  organization ||--o{ account_owner_access : "owner_id"
+  app_account o|--o{ account_owner_access : "granted_by"
+  app_account ||--o{ account_warehouse_access : "account_id"
+  warehouse ||--o{ account_warehouse_access : "warehouse_id"
+  app_account o|--o{ account_warehouse_access : "granted_by"
+  organization ||--o{ business_partner : "owner_id"
+  app_account o|--o{ business_partner : "created_by"
+  app_account o|--o{ business_partner : "updated_by"
+  business_partner ||--o{ business_partner_type : "partner_id"
+  partner_type ||--o{ business_partner_type : "partner_type_id"
+  organization ||--o{ item_category : "owner_id"
+  item_category o|--o{ item_category : "owner_id, parent_category_id"
+  organization ||--o{ item : "owner_id"
+  uom ||--o{ item : "base_uom_id"
+  app_account o|--o{ item : "created_by"
+  app_account o|--o{ item : "updated_by"
+  item_category o|--o{ item : "owner_id, category_id"
+  item ||--o{ item_uom : "item_id"
+  uom ||--o{ item_uom : "uom_id"
+  item ||--o{ item_barcode : "item_id"
+  uom o|--o{ item_barcode : "uom_id"
+  app_module ||--o{ reason_code : "module_code"
+  app_module ||--o{ document_type : "module_code"
+  document_type ||--o{ document_status : "document_type_id"
+  document_type ||--o{ document_status_transition : "document_type_id"
+  app_permission o|--o{ document_status_transition : "required_permission_id"
+  document_status ||--o{ document_status_transition : "document_type_id, from_status_id"
+  document_status ||--o{ document_status_transition : "document_type_id, to_status_id"
+  task_status ||--o{ task_status_transition : "from_status_id"
+  task_status ||--o{ task_status_transition : "to_status_id"
+  app_permission o|--o{ task_status_transition : "required_permission_id"
+  organization o|--o{ putaway_strategy : "owner_id"
+  warehouse o|--o{ putaway_strategy : "warehouse_id"
+  putaway_strategy ||--o{ putaway_strategy_rule : "putaway_strategy_id"
+  item_category o|--o{ putaway_strategy_rule : "category_id"
+  location_type o|--o{ putaway_strategy_rule : "location_type_id"
+  warehouse_zone o|--o{ putaway_strategy_rule : "zone_id"
+  organization o|--o{ picking_strategy : "owner_id"
+  warehouse o|--o{ picking_strategy : "warehouse_id"
+  picking_strategy ||--o{ picking_strategy_rule : "picking_strategy_id"
+  inventory_status o|--o{ picking_strategy_rule : "inventory_status_id"
+  warehouse_zone o|--o{ picking_strategy_rule : "zone_id"
+  picking_sort_method ||--o{ picking_strategy_rule : "picking_sort_method_id"
+  document_type ||--o{ document_number_rule : "document_type_id"
+  app_account o|--o{ document_number_rule : "created_by"
+  document_type ||--o{ document_daily_counter : "document_type_id"
+  organization ||--o{ inventory_lot : "owner_id"
+  item ||--o{ inventory_lot : "item_id"
+  quality_status o|--o{ inventory_lot : "quality_status_id"
+  app_account o|--o{ inventory_lot : "created_by"
+  organization ||--o{ serial_number : "owner_id"
+  item ||--o{ serial_number : "item_id"
+  app_account o|--o{ serial_number : "created_by"
+  warehouse ||--o{ handling_unit : "warehouse_id"
+  organization ||--o{ handling_unit : "owner_id"
+  handling_unit_type ||--o{ handling_unit : "handling_unit_type_id"
+  handling_unit o|--o{ handling_unit : "parent_handling_unit_id"
+  warehouse_location o|--o{ handling_unit : "current_location_id"
+  app_account o|--o{ handling_unit : "created_by"
+  warehouse_owner ||--o{ handling_unit : "owner_id, warehouse_id"
+  document_type ||--o{ purchase_order : "document_type_id"
+  organization ||--o{ purchase_order : "owner_id"
+  business_partner ||--o{ purchase_order : "vendor_id"
+  warehouse ||--o{ purchase_order : "warehouse_id"
+  app_account ||--o{ purchase_order : "created_by"
+  app_account o|--o{ purchase_order : "updated_by"
+  document_status ||--o{ purchase_order : "document_type_id, status_id"
+  business_partner ||--o{ purchase_order : "owner_id, vendor_id"
+  warehouse_owner ||--o{ purchase_order : "owner_id, warehouse_id"
+  uom ||--o{ purchase_order_line : "uom_id"
+  app_account ||--o{ purchase_order_line : "created_by"
+  purchase_order ||--o{ purchase_order_line : "purchase_order_id, owner_id"
+  item ||--o{ purchase_order_line : "owner_id, item_id"
+  document_type ||--o{ inbound_order : "document_type_id"
+  organization ||--o{ inbound_order : "owner_id"
+  business_partner ||--o{ inbound_order : "vendor_id"
+  warehouse ||--o{ inbound_order : "warehouse_id"
+  app_account ||--o{ inbound_order : "created_by"
+  app_account o|--o{ inbound_order : "updated_by"
+  document_status ||--o{ inbound_order : "document_type_id, status_id"
+  business_partner ||--o{ inbound_order : "owner_id, vendor_id"
+  warehouse_owner ||--o{ inbound_order : "owner_id, warehouse_id"
+  inbound_order ||--o{ inbound_order_line : "inbound_id"
+  purchase_order_line o|--o{ inbound_order_line : "purchase_order_line_id"
+  item ||--o{ inbound_order_line : "item_id"
+  uom ||--o{ inbound_order_line : "uom_id"
+  app_account ||--o{ inbound_order_line : "created_by"
+  document_type ||--o{ receipt : "document_type_id"
+  inbound_order o|--o{ receipt : "inbound_id"
+  organization ||--o{ receipt : "owner_id"
+  warehouse ||--o{ receipt : "warehouse_id"
+  warehouse_location o|--o{ receipt : "dock_location_id"
+  app_account ||--o{ receipt : "created_by"
+  document_status ||--o{ receipt : "document_type_id, status_id"
+  warehouse_owner ||--o{ receipt : "owner_id, warehouse_id"
+  receipt ||--o{ receipt_line : "receipt_id"
+  inbound_order_line o|--o{ receipt_line : "inbound_line_id"
+  item ||--o{ receipt_line : "item_id"
+  uom ||--o{ receipt_line : "uom_id"
+  app_account ||--o{ receipt_line : "created_by"
+  receipt_line ||--o{ receipt_inventory : "receipt_line_id"
+  item ||--o{ receipt_inventory : "item_id"
+  uom ||--o{ receipt_inventory : "source_uom_id"
+  uom ||--o{ receipt_inventory : "base_uom_id"
+  inventory_lot o|--o{ receipt_inventory : "lot_id"
+  handling_unit o|--o{ receipt_inventory : "handling_unit_id"
+  warehouse_location ||--o{ receipt_inventory : "received_location_id"
+  inventory_status ||--o{ receipt_inventory : "initial_inventory_status_id"
+  app_account ||--o{ receipt_inventory : "created_by"
+  receipt_inventory ||--o{ receipt_line_serial : "receipt_inventory_id"
+  serial_number ||--o{ receipt_line_serial : "serial_id"
+  receipt_inventory ||--o{ quality_inspection : "receipt_inventory_id"
+  quality_inspection o|--o{ quality_inspection : "parent_inspection_id"
+  quality_status ||--o{ quality_inspection : "quality_status_id"
+  inspection_result o|--o{ quality_inspection : "inspection_result_id"
+  app_account o|--o{ quality_inspection : "inspected_by"
+  app_account ||--o{ quality_inspection : "created_by"
+  task_type ||--o{ putaway_task : "task_type_id"
+  task_status ||--o{ putaway_task : "task_status_id"
+  task_priority ||--o{ putaway_task : "task_priority_id"
+  receipt_inventory ||--o{ putaway_task : "receipt_inventory_id"
+  organization ||--o{ putaway_task : "owner_id"
+  warehouse ||--o{ putaway_task : "warehouse_id"
+  item ||--o{ putaway_task : "item_id"
+  inventory_lot o|--o{ putaway_task : "lot_id"
+  handling_unit o|--o{ putaway_task : "handling_unit_id"
+  warehouse_location ||--o{ putaway_task : "source_location_id"
+  warehouse_location ||--o{ putaway_task : "target_location_id"
+  uom ||--o{ putaway_task : "uom_id"
+  app_account o|--o{ putaway_task : "assigned_to"
+  app_account ||--o{ putaway_task : "created_by"
+  organization ||--o{ inventory_balance : "owner_id"
+  warehouse ||--o{ inventory_balance : "warehouse_id"
+  warehouse_location ||--o{ inventory_balance : "location_id"
+  item ||--o{ inventory_balance : "item_id"
+  inventory_lot o|--o{ inventory_balance : "lot_id"
+  handling_unit o|--o{ inventory_balance : "handling_unit_id"
+  inventory_status ||--o{ inventory_balance : "inventory_status_id"
+  uom ||--o{ inventory_balance : "uom_id"
+  warehouse_owner ||--o{ inventory_balance : "owner_id, warehouse_id"
+  movement_type ||--o{ inventory_movement : "movement_type_id"
+  organization ||--o{ inventory_movement : "owner_id"
+  warehouse ||--o{ inventory_movement : "warehouse_id"
+  item ||--o{ inventory_movement : "item_id"
+  inventory_lot o|--o{ inventory_movement : "lot_id"
+  serial_number o|--o{ inventory_movement : "serial_id"
+  handling_unit o|--o{ inventory_movement : "handling_unit_id"
+  warehouse_location o|--o{ inventory_movement : "from_location_id"
+  warehouse_location o|--o{ inventory_movement : "to_location_id"
+  inventory_status o|--o{ inventory_movement : "from_status_id"
+  inventory_status o|--o{ inventory_movement : "to_status_id"
+  uom ||--o{ inventory_movement : "uom_id"
+  reason_code o|--o{ inventory_movement : "reason_code_id"
+  app_account ||--o{ inventory_movement : "created_by"
+  warehouse_owner ||--o{ inventory_movement : "owner_id, warehouse_id"
+  quarantine_case o|--o{ quarantine_case : "parent_quarantine_case_id"
+  document_type ||--o{ quarantine_case : "document_type_id"
+  receipt_inventory ||--o{ quarantine_case : "receipt_inventory_id"
+  quality_inspection ||--o{ quarantine_case : "inspection_id"
+  inventory_balance ||--o{ quarantine_case : "quarantine_balance_id"
+  organization ||--o{ quarantine_case : "owner_id"
+  warehouse ||--o{ quarantine_case : "warehouse_id"
+  uom ||--o{ quarantine_case : "uom_id"
+  app_account ||--o{ quarantine_case : "created_by"
+  app_account o|--o{ quarantine_case : "updated_by"
+  document_status ||--o{ quarantine_case : "document_type_id, status_id"
+  warehouse_owner ||--o{ quarantine_case : "owner_id, warehouse_id"
+  quarantine_case ||--o{ quarantine_disposition : "quarantine_case_id"
+  document_type ||--o{ quarantine_disposition : "document_type_id"
+  quarantine_disposition_type ||--o{ quarantine_disposition : "quarantine_disposition_type_id"
+  uom ||--o{ quarantine_disposition : "uom_id"
+  app_account ||--o{ quarantine_disposition : "decided_by"
+  inventory_movement o|--o{ quarantine_disposition : "inventory_movement_id"
+  inventory_balance o|--o{ quarantine_disposition : "resulting_balance_id"
+  app_account ||--o{ quarantine_disposition : "created_by"
+  document_status ||--o{ quarantine_disposition : "document_type_id, status_id"
+  quarantine_disposition ||--o{ rework_task : "quarantine_disposition_id"
+  task_type ||--o{ rework_task : "task_type_id"
+  task_status ||--o{ rework_task : "task_status_id"
+  task_priority ||--o{ rework_task : "task_priority_id"
+  uom ||--o{ rework_task : "uom_id"
+  app_account o|--o{ rework_task : "assigned_to"
+  quality_inspection o|--o{ rework_task : "reinspection_id"
+  app_account ||--o{ rework_task : "created_by"
+  business_partner o|--o{ carrier : "business_partner_id"
+  carrier ||--o{ carrier_service : "carrier_id"
+  carrier ||--o{ carrier_driver : "carrier_id"
+  app_account o|--o{ carrier_driver : "account_id"
+  app_account o|--o{ carrier_driver : "created_by"
+  validation_severity ||--o{ outbound_validation_rule : "validation_severity_id"
+  document_type ||--o{ outbound_order : "document_type_id"
+  organization ||--o{ outbound_order : "owner_id"
+  business_partner ||--o{ outbound_order : "customer_id"
+  warehouse ||--o{ outbound_order : "warehouse_id"
+  business_partner o|--o{ outbound_order : "ship_to_partner_id"
+  app_account o|--o{ outbound_order : "validated_by"
+  app_account ||--o{ outbound_order : "created_by"
+  app_account o|--o{ outbound_order : "updated_by"
+  document_status ||--o{ outbound_order : "document_type_id, status_id"
+  business_partner ||--o{ outbound_order : "owner_id, customer_id"
+  business_partner o|--o{ outbound_order : "owner_id, ship_to_partner_id"
+  warehouse_owner ||--o{ outbound_order : "owner_id, warehouse_id"
+  outbound_order ||--o{ outbound_order_line : "outbound_id"
+  item ||--o{ outbound_order_line : "item_id"
+  uom ||--o{ outbound_order_line : "uom_id"
+  app_account ||--o{ outbound_order_line : "created_by"
+  outbound_order ||--o{ outbound_validation_run : "outbound_id"
+  document_type ||--o{ outbound_validation_run : "document_type_id"
+  app_account o|--o{ outbound_validation_run : "validated_by"
+  app_account ||--o{ outbound_validation_run : "created_by"
+  document_status ||--o{ outbound_validation_run : "document_type_id, status_id"
+  outbound_validation_run ||--o{ outbound_validation_result_detail : "validation_run_id"
+  outbound_validation_rule ||--o{ outbound_validation_result_detail : "outbound_validation_rule_id"
+  document_type ||--o{ outbound_wave : "document_type_id"
+  outbound_wave_type ||--o{ outbound_wave : "outbound_wave_type_id"
+  organization ||--o{ outbound_wave : "owner_id"
+  warehouse ||--o{ outbound_wave : "warehouse_id"
+  picking_strategy o|--o{ outbound_wave : "picking_strategy_id"
+  app_account ||--o{ outbound_wave : "created_by"
+  app_account ||--o{ outbound_wave : "updated_by"
+  document_status ||--o{ outbound_wave : "document_type_id, status_id"
+  warehouse_owner ||--o{ outbound_wave : "owner_id, warehouse_id"
+  outbound_wave ||--o{ outbound_wave_order : "wave_id"
+  outbound_order ||--o{ outbound_wave_order : "outbound_id"
+  app_account ||--o{ outbound_wave_order : "added_by"
+  document_type ||--o{ inventory_reservation : "document_type_id"
+  picking_strategy o|--o{ inventory_reservation : "picking_strategy_id"
+  outbound_order_line ||--o{ inventory_reservation : "outbound_line_id"
+  inventory_balance ||--o{ inventory_reservation : "balance_id"
+  uom ||--o{ inventory_reservation : "uom_id"
+  app_account ||--o{ inventory_reservation : "created_by"
+  document_status ||--o{ inventory_reservation : "document_type_id, status_id"
+  task_type ||--o{ pick_task : "task_type_id"
+  task_status ||--o{ pick_task : "task_status_id"
+  task_priority ||--o{ pick_task : "task_priority_id"
+  outbound_wave ||--o{ pick_task : "wave_id"
+  inventory_reservation ||--o{ pick_task : "reservation_id"
+  outbound_order_line ||--o{ pick_task : "outbound_line_id"
+  warehouse_location ||--o{ pick_task : "source_location_id"
+  warehouse_location o|--o{ pick_task : "target_location_id"
+  uom ||--o{ pick_task : "uom_id"
+  app_account o|--o{ pick_task : "assigned_to"
+  reason_code o|--o{ pick_task : "short_reason_code_id"
+  app_account ||--o{ pick_task : "created_by"
+  pick_task ||--o{ pick_execution : "pick_task_id"
+  inventory_balance ||--o{ pick_execution : "source_balance_id"
+  inventory_balance ||--o{ pick_execution : "staging_balance_id"
+  uom ||--o{ pick_execution : "uom_id"
+  inventory_movement ||--o{ pick_execution : "movement_id"
+  app_account ||--o{ pick_execution : "picked_by"
+  document_type ||--o{ outbound_staging : "document_type_id"
+  outbound_order ||--o{ outbound_staging : "outbound_id"
+  outbound_wave ||--o{ outbound_staging : "wave_id"
+  warehouse ||--o{ outbound_staging : "warehouse_id"
+  warehouse_location ||--o{ outbound_staging : "staging_location_id"
+  app_account o|--o{ outbound_staging : "staged_by"
+  app_account ||--o{ outbound_staging : "created_by"
+  document_status ||--o{ outbound_staging : "document_type_id, status_id"
+  outbound_staging ||--o{ outbound_staging_line : "staging_id"
+  pick_execution ||--o{ outbound_staging_line : "pick_execution_id"
+  inventory_balance ||--o{ outbound_staging_line : "staging_balance_id"
+  uom ||--o{ outbound_staging_line : "uom_id"
+  app_account ||--o{ outbound_staging_line : "created_by"
+  outbound_check o|--o{ outbound_check : "parent_check_id"
+  document_type ||--o{ outbound_check : "document_type_id"
+  outbound_staging ||--o{ outbound_check : "staging_id"
+  app_account o|--o{ outbound_check : "checked_by"
+  app_account ||--o{ outbound_check : "created_by"
+  document_status ||--o{ outbound_check : "document_type_id, status_id"
+  outbound_check ||--o{ outbound_check_line : "outbound_check_id"
+  outbound_staging_line ||--o{ outbound_check_line : "staging_line_id"
+  uom ||--o{ outbound_check_line : "uom_id"
+  outbound_check_result o|--o{ outbound_check_line : "outbound_check_result_id"
+  app_account o|--o{ outbound_check_line : "checked_by"
+  app_account ||--o{ outbound_check_line : "created_by"
+  outbound_check_line ||--o{ outbound_check_exception : "outbound_check_line_id"
+  outbound_check_exception_status ||--o{ outbound_check_exception : "status_id"
+  app_account o|--o{ outbound_check_exception : "resolved_by"
+  app_account ||--o{ outbound_check_exception : "created_by"
+  outbound_check_exception ||--o{ outbound_check_resolution : "outbound_check_exception_id"
+  outbound_check_resolution_type ||--o{ outbound_check_resolution : "outbound_check_resolution_type_id"
+  app_account o|--o{ outbound_check_resolution : "approved_by"
+  app_account ||--o{ outbound_check_resolution : "created_by"
+  outbound_check_resolution ||--o{ outbound_check_resolution_movement : "outbound_check_resolution_id"
+  inventory_movement ||--o{ outbound_check_resolution_movement : "movement_id"
+  outbound_check_resolution ||--o{ outbound_check_resolution_reservation : "outbound_check_resolution_id"
+  inventory_reservation ||--o{ outbound_check_resolution_reservation : "reservation_id"
+  document_type ||--o{ packing : "document_type_id"
+  outbound_order ||--o{ packing : "outbound_id"
+  warehouse ||--o{ packing : "warehouse_id"
+  warehouse_location o|--o{ packing : "packing_location_id"
+  app_account o|--o{ packing : "packed_by"
+  app_account ||--o{ packing : "created_by"
+  document_status ||--o{ packing : "document_type_id, status_id"
+  packing ||--o{ packing_line : "packing_id"
+  pick_task ||--o{ packing_line : "pick_task_id"
+  outbound_check_line ||--o{ packing_line : "outbound_check_line_id"
+  inventory_balance ||--o{ packing_line : "source_balance_id"
+  inventory_balance ||--o{ packing_line : "packing_balance_id"
+  handling_unit o|--o{ packing_line : "handling_unit_id"
+  uom ||--o{ packing_line : "uom_id"
+  inventory_movement ||--o{ packing_line : "movement_id"
+  app_account ||--o{ packing_line : "created_by"
+  document_type ||--o{ shipment : "document_type_id"
+  organization ||--o{ shipment : "owner_id"
+  carrier_service o|--o{ shipment : "carrier_service_id"
+  warehouse ||--o{ shipment : "warehouse_id"
+  app_account o|--o{ shipment : "dispatched_by"
+  app_account ||--o{ shipment : "created_by"
+  document_status ||--o{ shipment : "document_type_id, status_id"
+  warehouse_owner ||--o{ shipment : "owner_id, warehouse_id"
+  shipment ||--o{ shipment_order : "shipment_id"
+  outbound_order ||--o{ shipment_order : "outbound_id"
+  app_account ||--o{ shipment_order : "added_by"
+  app_account o|--o{ shipment_order : "removed_by"
+  shipment ||--o{ shipment_driver : "shipment_id"
+  carrier_driver ||--o{ shipment_driver : "driver_id"
+  app_account ||--o{ shipment_driver : "assigned_by"
+  shipment ||--o{ shipment_line : "shipment_id"
+  packing_line ||--o{ shipment_line : "packing_line_id"
+  inventory_balance ||--o{ shipment_line : "source_balance_id"
+  uom ||--o{ shipment_line : "uom_id"
+  inventory_movement ||--o{ shipment_line : "movement_id"
+  app_account ||--o{ shipment_line : "created_by"
+  shipment ||--o{ shipment_packing : "shipment_id"
+  packing ||--o{ shipment_packing : "packing_id"
+  document_type ||--o{ delivery : "document_type_id"
+  shipment ||--o{ delivery : "shipment_id"
+  outbound_order ||--o{ delivery : "outbound_id"
+  app_account ||--o{ delivery : "created_by"
+  app_account ||--o{ delivery : "updated_by"
+  document_status ||--o{ delivery : "document_type_id, status_id"
+  delivery ||--o{ delivery_line : "delivery_id"
+  shipment_line ||--o{ delivery_line : "shipment_line_id"
+  uom ||--o{ delivery_line : "uom_id"
+  app_account ||--o{ delivery_line : "created_by"
+  delivery ||--o{ delivery_event : "delivery_id"
+  delivery_event_type ||--o{ delivery_event : "delivery_event_type_id"
+  delivery_failure_reason o|--o{ delivery_event : "delivery_failure_reason_id"
+  app_account ||--o{ delivery_event : "recorded_by"
+  delivery_event ||--o{ delivery_event_line : "delivery_event_id"
+  delivery_line ||--o{ delivery_event_line : "delivery_line_id"
+  organization ||--o{ outbound_return_policy : "owner_id"
+  warehouse ||--o{ outbound_return_policy : "warehouse_id"
+  inventory_status ||--o{ outbound_return_policy : "return_inventory_status_id"
+  app_account ||--o{ outbound_return_policy : "created_by"
+  app_account o|--o{ outbound_return_policy : "updated_by"
+  warehouse_owner ||--o{ outbound_return_policy : "owner_id, warehouse_id"
+  warehouse_location ||--o{ outbound_return_policy : "return_location_id, warehouse_id"
+  delivery ||--o{ delivery_return_line : "delivery_id"
+  delivery_line ||--o{ delivery_return_line : "delivery_line_id"
+  warehouse_location ||--o{ delivery_return_line : "return_location_id"
+  inventory_balance ||--o{ delivery_return_line : "returned_balance_id"
+  uom ||--o{ delivery_return_line : "uom_id"
+  inventory_movement ||--o{ delivery_return_line : "movement_id"
+  app_account ||--o{ delivery_return_line : "returned_by"
+  document_type ||--o{ internal_move_order : "document_type_id"
+  internal_move_type ||--o{ internal_move_order : "internal_move_type_id"
+  organization ||--o{ internal_move_order : "owner_id"
+  warehouse ||--o{ internal_move_order : "warehouse_id"
+  reason_code o|--o{ internal_move_order : "reason_code_id"
+  app_account o|--o{ internal_move_order : "approved_by"
+  app_account ||--o{ internal_move_order : "created_by"
+  app_account ||--o{ internal_move_order : "updated_by"
+  document_status ||--o{ internal_move_order : "document_type_id, status_id"
+  warehouse_owner ||--o{ internal_move_order : "owner_id, warehouse_id"
+  internal_move_order ||--o{ internal_move_order_line : "internal_move_id"
+  inventory_balance ||--o{ internal_move_order_line : "source_balance_id"
+  warehouse_location ||--o{ internal_move_order_line : "target_location_id"
+  uom ||--o{ internal_move_order_line : "uom_id"
+  app_account o|--o{ internal_move_order_line : "assigned_to"
+  app_account ||--o{ internal_move_order_line : "created_by"
+  internal_move_order_line ||--o{ internal_move_execution : "internal_move_line_id"
+  inventory_balance ||--o{ internal_move_execution : "source_balance_id"
+  inventory_balance ||--o{ internal_move_execution : "destination_balance_id"
+  inventory_movement ||--o{ internal_move_execution : "movement_id"
+  app_account ||--o{ internal_move_execution : "executed_by"
+  document_type ||--o{ transfer_order : "document_type_id"
+  organization ||--o{ transfer_order : "owner_id"
+  warehouse ||--o{ transfer_order : "source_warehouse_id"
+  warehouse ||--o{ transfer_order : "target_warehouse_id"
+  app_account o|--o{ transfer_order : "approved_by"
+  app_account ||--o{ transfer_order : "created_by"
+  app_account ||--o{ transfer_order : "updated_by"
+  document_status ||--o{ transfer_order : "document_type_id, status_id"
+  warehouse_owner ||--o{ transfer_order : "owner_id, source_warehouse_id"
+  warehouse_owner ||--o{ transfer_order : "owner_id, target_warehouse_id"
+  transfer_order ||--o{ transfer_order_line : "transfer_id"
+  item ||--o{ transfer_order_line : "item_id"
+  uom ||--o{ transfer_order_line : "uom_id"
+  inventory_lot o|--o{ transfer_order_line : "requested_lot_id"
+  app_account ||--o{ transfer_order_line : "created_by"
+  transfer_order ||--o{ transfer_dispatch : "transfer_id"
+  document_type ||--o{ transfer_dispatch : "document_type_id"
+  business_partner o|--o{ transfer_dispatch : "carrier_partner_id"
+  app_account ||--o{ transfer_dispatch : "created_by"
+  document_status ||--o{ transfer_dispatch : "document_type_id, status_id"
+  transfer_dispatch ||--o{ transfer_dispatch_line : "transfer_dispatch_id"
+  transfer_order_line ||--o{ transfer_dispatch_line : "transfer_line_id"
+  inventory_balance ||--o{ transfer_dispatch_line : "source_balance_id"
+  uom ||--o{ transfer_dispatch_line : "uom_id"
+  inventory_movement o|--o{ transfer_dispatch_line : "movement_id"
+  app_account o|--o{ transfer_dispatch_line : "confirmed_by"
+  app_account ||--o{ transfer_dispatch_line : "created_by"
+  transfer_order ||--o{ transfer_receipt : "transfer_id"
+  document_type ||--o{ transfer_receipt : "document_type_id"
+  warehouse ||--o{ transfer_receipt : "warehouse_id"
+  app_account ||--o{ transfer_receipt : "created_by"
+  document_status ||--o{ transfer_receipt : "document_type_id, status_id"
+  transfer_receipt ||--o{ transfer_receipt_line : "transfer_receipt_id"
+  transfer_dispatch_line ||--o{ transfer_receipt_line : "transfer_dispatch_line_id"
+  warehouse_location ||--o{ transfer_receipt_line : "target_location_id"
+  uom ||--o{ transfer_receipt_line : "uom_id"
+  inventory_balance o|--o{ transfer_receipt_line : "destination_balance_id"
+  inventory_movement o|--o{ transfer_receipt_line : "movement_id"
+  app_account o|--o{ transfer_receipt_line : "posted_by"
+  app_account ||--o{ transfer_receipt_line : "created_by"
+  document_type ||--o{ inventory_status_change : "document_type_id"
+  organization ||--o{ inventory_status_change : "owner_id"
+  warehouse ||--o{ inventory_status_change : "warehouse_id"
+  reason_code ||--o{ inventory_status_change : "reason_code_id"
+  app_account o|--o{ inventory_status_change : "approved_by"
+  app_account ||--o{ inventory_status_change : "created_by"
+  app_account ||--o{ inventory_status_change : "updated_by"
+  document_status ||--o{ inventory_status_change : "document_type_id, status_id"
+  warehouse_owner ||--o{ inventory_status_change : "owner_id, warehouse_id"
+  inventory_status_change ||--o{ inventory_status_change_line : "inventory_status_change_id"
+  inventory_balance ||--o{ inventory_status_change_line : "source_balance_id"
+  inventory_status ||--o{ inventory_status_change_line : "target_inventory_status_id"
+  uom ||--o{ inventory_status_change_line : "uom_id"
+  inventory_balance o|--o{ inventory_status_change_line : "destination_balance_id"
+  inventory_movement o|--o{ inventory_status_change_line : "movement_id"
+  app_account o|--o{ inventory_status_change_line : "posted_by"
+  app_account ||--o{ inventory_status_change_line : "created_by"
+  document_type ||--o{ inventory_adjustment : "document_type_id"
+  organization ||--o{ inventory_adjustment : "owner_id"
+  warehouse ||--o{ inventory_adjustment : "warehouse_id"
+  reason_code ||--o{ inventory_adjustment : "reason_code_id"
+  app_account o|--o{ inventory_adjustment : "approved_by"
+  app_account ||--o{ inventory_adjustment : "created_by"
+  app_account ||--o{ inventory_adjustment : "updated_by"
+  document_status ||--o{ inventory_adjustment : "document_type_id, status_id"
+  warehouse_owner ||--o{ inventory_adjustment : "owner_id, warehouse_id"
+  inventory_adjustment ||--o{ inventory_adjustment_line : "inventory_adjustment_id"
+  inventory_adjustment_type ||--o{ inventory_adjustment_line : "inventory_adjustment_type_id"
+  inventory_balance o|--o{ inventory_adjustment_line : "source_balance_id"
+  warehouse_location ||--o{ inventory_adjustment_line : "location_id"
+  item ||--o{ inventory_adjustment_line : "item_id"
+  inventory_lot o|--o{ inventory_adjustment_line : "lot_id"
+  handling_unit o|--o{ inventory_adjustment_line : "handling_unit_id"
+  inventory_status ||--o{ inventory_adjustment_line : "inventory_status_id"
+  uom ||--o{ inventory_adjustment_line : "uom_id"
+  inventory_balance o|--o{ inventory_adjustment_line : "resulting_balance_id"
+  inventory_movement o|--o{ inventory_adjustment_line : "movement_id"
+  app_account o|--o{ inventory_adjustment_line : "posted_by"
+  app_account ||--o{ inventory_adjustment_line : "created_by"
+  document_type ||--o{ stock_count : "document_type_id"
+  stock_count_type ||--o{ stock_count : "stock_count_type_id"
+  organization ||--o{ stock_count : "owner_id"
+  warehouse ||--o{ stock_count : "warehouse_id"
+  reason_code o|--o{ stock_count : "reason_code_id"
+  app_account o|--o{ stock_count : "reviewed_by"
+  app_account o|--o{ stock_count : "posted_by"
+  app_account ||--o{ stock_count : "created_by"
+  app_account ||--o{ stock_count : "updated_by"
+  document_status ||--o{ stock_count : "document_type_id, status_id"
+  warehouse_owner ||--o{ stock_count : "owner_id, warehouse_id"
+  stock_count ||--o{ stock_count_line : "stock_count_id"
+  inventory_balance o|--o{ stock_count_line : "balance_id"
+  warehouse_location ||--o{ stock_count_line : "location_id"
+  item ||--o{ stock_count_line : "item_id"
+  inventory_lot o|--o{ stock_count_line : "lot_id"
+  handling_unit o|--o{ stock_count_line : "handling_unit_id"
+  inventory_status ||--o{ stock_count_line : "inventory_status_id"
+  uom ||--o{ stock_count_line : "uom_id"
+  app_account o|--o{ stock_count_line : "counted_by"
+  inventory_movement o|--o{ stock_count_line : "variance_movement_id"
+  app_account o|--o{ stock_count_line : "posted_by"
+  app_account ||--o{ stock_count_line : "created_by"
+  organization o|--o{ tax_rule : "owner_id"
+  app_module ||--o{ billing_service : "module_code"
+  charge_basis ||--o{ billing_service : "default_charge_basis_id"
+  uom o|--o{ billing_service : "default_uom_id"
+  billing_service ||--o{ billing_service_movement_type : "billing_service_id"
+  movement_type ||--o{ billing_service_movement_type : "movement_type_id"
+  organization ||--o{ billing_account : "owner_id"
+  business_partner o|--o{ billing_account : "bill_to_partner_id"
+  currency ||--o{ billing_account : "currency_id"
+  billing_cycle ||--o{ billing_account : "billing_cycle_id"
+  payment_term ||--o{ billing_account : "payment_term_id"
+  tax_rule o|--o{ billing_account : "default_tax_rule_id"
+  app_account o|--o{ billing_account : "created_by"
+  app_account o|--o{ billing_account : "updated_by"
+  business_partner o|--o{ billing_account : "owner_id, bill_to_partner_id"
+  document_type ||--o{ billing_contract : "document_type_id"
+  billing_account ||--o{ billing_contract : "billing_account_id"
+  organization ||--o{ billing_contract : "owner_id"
+  warehouse o|--o{ billing_contract : "warehouse_id"
+  currency ||--o{ billing_contract : "currency_id"
+  tax_rule o|--o{ billing_contract : "default_tax_rule_id"
+  app_account ||--o{ billing_contract : "created_by"
+  app_account ||--o{ billing_contract : "updated_by"
+  document_status ||--o{ billing_contract : "document_type_id, status_id"
+  billing_account ||--o{ billing_contract : "owner_id, billing_account_id"
+  warehouse_owner o|--o{ billing_contract : "owner_id, warehouse_id"
+  document_type ||--o{ rate_card : "document_type_id"
+  billing_contract ||--o{ rate_card : "billing_contract_id"
+  app_account ||--o{ rate_card : "created_by"
+  app_account ||--o{ rate_card : "updated_by"
+  document_status ||--o{ rate_card : "document_type_id, status_id"
+  rate_card ||--o{ rate_card_line : "rate_card_id"
+  billing_service ||--o{ rate_card_line : "billing_service_id"
+  charge_basis ||--o{ rate_card_line : "charge_basis_id"
+  uom o|--o{ rate_card_line : "uom_id"
+  warehouse o|--o{ rate_card_line : "warehouse_id"
+  item o|--o{ rate_card_line : "item_id"
+  item_category o|--o{ rate_card_line : "category_id"
+  tax_rule o|--o{ rate_card_line : "tax_rule_id"
+  app_account ||--o{ rate_card_line : "created_by"
+  rate_card_line ||--o{ rate_card_tier : "rate_card_line_id"
+  document_type ||--o{ billable_event : "document_type_id"
+  billing_account ||--o{ billable_event : "billing_account_id"
+  billing_contract ||--o{ billable_event : "billing_contract_id"
+  billing_service ||--o{ billable_event : "billing_service_id"
+  organization ||--o{ billable_event : "owner_id"
+  warehouse o|--o{ billable_event : "warehouse_id"
+  item o|--o{ billable_event : "item_id"
+  item_category o|--o{ billable_event : "category_id"
+  handling_unit o|--o{ billable_event : "handling_unit_id"
+  document_type o|--o{ billable_event : "source_document_type_id"
+  uom o|--o{ billable_event : "uom_id"
+  reason_code o|--o{ billable_event : "exclusion_reason_code_id"
+  app_account o|--o{ billable_event : "rated_by"
+  app_account o|--o{ billable_event : "excluded_by"
+  app_account ||--o{ billable_event : "created_by"
+  document_status ||--o{ billable_event : "document_type_id, status_id"
+  document_type ||--o{ billing_run : "document_type_id"
+  billing_account ||--o{ billing_run : "billing_account_id"
+  billing_contract ||--o{ billing_run : "billing_contract_id"
+  currency ||--o{ billing_run : "currency_id"
+  app_account o|--o{ billing_run : "reviewed_by"
+  app_account ||--o{ billing_run : "created_by"
+  document_status ||--o{ billing_run : "document_type_id, status_id"
+  billing_run ||--o{ billing_charge : "billing_run_id"
+  billable_event ||--o{ billing_charge : "billable_event_id"
+  rate_card_line ||--o{ billing_charge : "rate_card_line_id"
+  uom o|--o{ billing_charge : "uom_id"
+  tax_rule o|--o{ billing_charge : "tax_rule_id"
+  currency ||--o{ billing_charge : "currency_id"
+  app_account ||--o{ billing_charge : "created_by"
+  document_type ||--o{ billing_invoice : "document_type_id"
+  billing_run ||--o{ billing_invoice : "billing_run_id"
+  billing_account ||--o{ billing_invoice : "billing_account_id"
+  billing_contract ||--o{ billing_invoice : "billing_contract_id"
+  currency ||--o{ billing_invoice : "currency_id"
+  app_account o|--o{ billing_invoice : "issued_by"
+  app_account ||--o{ billing_invoice : "created_by"
+  app_account ||--o{ billing_invoice : "updated_by"
+  document_status ||--o{ billing_invoice : "document_type_id, status_id"
+  billing_invoice ||--o{ billing_invoice_line : "billing_invoice_id"
+  billing_charge ||--o{ billing_invoice_line : "billing_charge_id"
+  billing_service ||--o{ billing_invoice_line : "billing_service_id"
+  uom o|--o{ billing_invoice_line : "uom_id"
+  tax_rule o|--o{ billing_invoice_line : "tax_rule_id"
+  billing_invoice ||--o{ billing_invoice_adjustment : "billing_invoice_id"
+  billing_adjustment_type ||--o{ billing_invoice_adjustment : "billing_adjustment_type_id"
+  reason_code ||--o{ billing_invoice_adjustment : "reason_code_id"
+  tax_rule o|--o{ billing_invoice_adjustment : "tax_rule_id"
+  app_account ||--o{ billing_invoice_adjustment : "created_by"
+  document_type ||--o{ billing_credit_note : "document_type_id"
+  billing_invoice ||--o{ billing_credit_note : "billing_invoice_id"
+  currency ||--o{ billing_credit_note : "currency_id"
+  reason_code ||--o{ billing_credit_note : "reason_code_id"
+  app_account o|--o{ billing_credit_note : "issued_by"
+  app_account ||--o{ billing_credit_note : "created_by"
+  document_status ||--o{ billing_credit_note : "document_type_id, status_id"
+  billing_credit_note ||--o{ billing_credit_note_line : "credit_note_id"
+  billing_invoice_line o|--o{ billing_credit_note_line : "billing_invoice_line_id"
+  document_type ||--o{ billing_payment : "document_type_id"
+  billing_account ||--o{ billing_payment : "billing_account_id"
+  currency ||--o{ billing_payment : "currency_id"
+  payment_method ||--o{ billing_payment : "payment_method_id"
+  app_account ||--o{ billing_payment : "created_by"
+  document_status ||--o{ billing_payment : "document_type_id, status_id"
+  billing_payment ||--o{ billing_payment_allocation : "payment_id"
+  billing_invoice ||--o{ billing_payment_allocation : "billing_invoice_id"
+  app_account ||--o{ billing_payment_allocation : "allocated_by"
+  movement_type o|--o{ quarantine_disposition_type : "removal_movement_type_id"
+  inventory_balance o|--o{ putaway_task : "source_balance_id"
+  inventory_balance o|--o{ receipt_inventory : "initial_balance_id"

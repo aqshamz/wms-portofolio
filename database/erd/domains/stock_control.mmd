@@ -1,0 +1,353 @@
+%% Stock control ERD
+erDiagram
+  movement_type {
+    uuid movement_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  internal_move_type {
+    uuid internal_move_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean requires_approval "default false"
+    boolean is_active "default true"
+  }
+  inventory_adjustment_type {
+    uuid inventory_adjustment_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    smallint quantity_effect
+    boolean requires_approval "default true"
+    boolean is_active "default true"
+  }
+  stock_count_type {
+    uuid stock_count_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean requires_freeze "default false"
+    boolean is_active "default true"
+  }
+  inventory_balance {
+    varchar_160 balance_id PK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    uuid location_id FK
+    uuid item_id FK
+    varchar_120 lot_id FK
+    varchar_120 handling_unit_id FK
+    uuid inventory_status_id FK
+    numeric_20_6 on_hand_qty "default 0"
+    numeric_20_6 reserved_qty "default 0"
+    uuid uom_id FK
+    bigint version_no "default 1"
+    timestamptz updated_at "default clock_timestamp()"
+  }
+  inventory_movement {
+    varchar_140 movement_id PK
+    uuid movement_type_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    date business_date
+    timestamptz occurred_at "default clock_timestamp()"
+    uuid item_id FK
+    varchar_120 lot_id FK
+    varchar_160 serial_id FK
+    varchar_120 handling_unit_id FK
+    uuid from_location_id FK
+    uuid to_location_id FK
+    uuid from_status_id FK
+    uuid to_status_id FK
+    numeric_20_6 quantity
+    uuid uom_id FK
+    varchar_140 source_document_id
+    varchar_160 source_line_id
+    uuid reason_code_id FK
+    text notes
+    uuid created_by FK
+  }
+  internal_move_order {
+    varchar_120 internal_move_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid internal_move_type_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    date business_date
+    uuid reason_code_id FK
+    timestamptz requested_at "default clock_timestamp()"
+    timestamptz approved_at
+    uuid approved_by FK
+    timestamptz completed_at
+    text notes
+    bigint version_no "default 1"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  internal_move_order_line {
+    varchar_150 internal_move_line_id PK
+    varchar_120 internal_move_id FK
+    integer line_no
+    varchar_160 source_balance_id FK
+    uuid target_location_id FK
+    numeric_20_6 planned_qty
+    numeric_20_6 completed_qty "default 0"
+    uuid uom_id FK
+    uuid assigned_to FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  internal_move_execution {
+    varchar_160 internal_move_execution_id PK
+    varchar_150 internal_move_line_id FK
+    numeric_20_6 quantity
+    varchar_160 source_balance_id FK
+    varchar_160 destination_balance_id FK
+    varchar_140 movement_id FK,UK
+    timestamptz executed_at "default clock_timestamp()"
+    uuid executed_by FK
+  }
+  transfer_order {
+    varchar_120 transfer_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid owner_id FK
+    uuid source_warehouse_id FK
+    uuid target_warehouse_id FK
+    date business_date
+    timestamptz requested_transfer_at
+    timestamptz approved_at
+    uuid approved_by FK
+    timestamptz completed_at
+    text notes
+    bigint version_no "default 1"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  transfer_order_line {
+    varchar_150 transfer_line_id PK
+    varchar_120 transfer_id FK
+    integer line_no
+    uuid item_id FK
+    numeric_20_6 requested_qty
+    numeric_20_6 dispatched_qty "default 0"
+    numeric_20_6 received_qty "default 0"
+    uuid uom_id FK
+    varchar_120 requested_lot_id FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  transfer_dispatch {
+    varchar_120 transfer_dispatch_id PK
+    varchar_120 transfer_id FK
+    uuid document_type_id FK
+    uuid status_id FK
+    date business_date
+    uuid carrier_partner_id FK
+    varchar_150 tracking_number
+    varchar_60 vehicle_number
+    varchar_60 seal_number
+    timestamptz dispatched_at
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  transfer_dispatch_line {
+    varchar_150 transfer_dispatch_line_id PK
+    varchar_120 transfer_dispatch_id FK
+    varchar_150 transfer_line_id FK
+    integer line_no
+    varchar_160 source_balance_id FK
+    numeric_20_6 dispatched_qty
+    numeric_20_6 received_qty "default 0"
+    uuid uom_id FK
+    varchar_140 movement_id FK,UK
+    timestamptz confirmed_at
+    uuid confirmed_by FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  transfer_receipt {
+    varchar_120 transfer_receipt_id PK
+    varchar_120 transfer_id FK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid warehouse_id FK
+    date business_date
+    timestamptz received_at
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  transfer_receipt_line {
+    varchar_150 transfer_receipt_line_id PK
+    varchar_120 transfer_receipt_id FK
+    varchar_150 transfer_dispatch_line_id FK
+    integer line_no
+    uuid target_location_id FK
+    numeric_20_6 received_qty
+    uuid uom_id FK
+    varchar_160 destination_balance_id FK
+    varchar_140 movement_id FK,UK
+    timestamptz posted_at
+    uuid posted_by FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  inventory_status_change {
+    varchar_120 inventory_status_change_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    date business_date
+    uuid reason_code_id FK
+    timestamptz approved_at
+    uuid approved_by FK
+    timestamptz posted_at
+    text notes
+    bigint version_no "default 1"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  inventory_status_change_line {
+    varchar_150 inventory_status_change_line_id PK
+    varchar_120 inventory_status_change_id FK
+    integer line_no
+    varchar_160 source_balance_id FK
+    uuid target_inventory_status_id FK
+    numeric_20_6 quantity
+    uuid uom_id FK
+    varchar_160 destination_balance_id FK
+    varchar_140 movement_id FK,UK
+    timestamptz posted_at
+    uuid posted_by FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  inventory_adjustment {
+    varchar_120 inventory_adjustment_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    date business_date
+    uuid reason_code_id FK
+    timestamptz approved_at
+    uuid approved_by FK
+    timestamptz posted_at
+    text notes
+    bigint version_no "default 1"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  inventory_adjustment_line {
+    varchar_150 inventory_adjustment_line_id PK
+    varchar_120 inventory_adjustment_id FK
+    integer line_no
+    uuid inventory_adjustment_type_id FK
+    varchar_160 source_balance_id FK
+    uuid location_id FK
+    uuid item_id FK
+    varchar_120 lot_id FK
+    varchar_120 handling_unit_id FK
+    uuid inventory_status_id FK
+    numeric_20_6 adjustment_qty
+    uuid uom_id FK
+    varchar_160 resulting_balance_id FK
+    varchar_140 movement_id FK,UK
+    timestamptz posted_at
+    uuid posted_by FK
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  stock_count {
+    varchar_120 stock_count_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid stock_count_type_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    date business_date
+    uuid reason_code_id FK
+    boolean freeze_inventory "default false"
+    timestamptz started_at
+    timestamptz completed_at
+    timestamptz reviewed_at
+    uuid reviewed_by FK
+    timestamptz posted_at
+    uuid posted_by FK
+    text notes
+    bigint version_no "default 1"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  stock_count_line {
+    varchar_150 stock_count_line_id PK
+    varchar_120 stock_count_id FK
+    integer line_no
+    varchar_160 balance_id FK
+    uuid location_id FK
+    uuid item_id FK
+    varchar_120 lot_id FK
+    varchar_120 handling_unit_id FK
+    uuid inventory_status_id FK
+    numeric_20_6 system_qty
+    bigint system_version_no
+    numeric_20_6 counted_qty
+    uuid uom_id FK
+    timestamptz counted_at
+    uuid counted_by FK
+    varchar_140 variance_movement_id FK,UK
+    timestamptz posted_at
+    uuid posted_by FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  inventory_balance ||--o{ internal_move_execution : "destination_balance_id"
+  internal_move_order_line ||--o{ internal_move_execution : "internal_move_line_id"
+  inventory_movement ||--o{ internal_move_execution : "movement_id"
+  inventory_balance ||--o{ internal_move_execution : "source_balance_id"
+  internal_move_order ||--o{ internal_move_order_line : "internal_move_id"
+  inventory_balance ||--o{ internal_move_order_line : "source_balance_id"
+  internal_move_type ||--o{ internal_move_order : "internal_move_type_id"
+  inventory_adjustment ||--o{ inventory_adjustment_line : "inventory_adjustment_id"
+  inventory_adjustment_type ||--o{ inventory_adjustment_line : "inventory_adjustment_type_id"
+  inventory_movement o|--o{ inventory_adjustment_line : "movement_id"
+  inventory_balance o|--o{ inventory_adjustment_line : "resulting_balance_id"
+  inventory_balance o|--o{ inventory_adjustment_line : "source_balance_id"
+  movement_type ||--o{ inventory_movement : "movement_type_id"
+  inventory_balance o|--o{ inventory_status_change_line : "destination_balance_id"
+  inventory_status_change ||--o{ inventory_status_change_line : "inventory_status_change_id"
+  inventory_movement o|--o{ inventory_status_change_line : "movement_id"
+  inventory_balance ||--o{ inventory_status_change_line : "source_balance_id"
+  inventory_balance o|--o{ stock_count_line : "balance_id"
+  stock_count ||--o{ stock_count_line : "stock_count_id"
+  inventory_movement o|--o{ stock_count_line : "variance_movement_id"
+  stock_count_type ||--o{ stock_count : "stock_count_type_id"
+  inventory_movement o|--o{ transfer_dispatch_line : "movement_id"
+  inventory_balance ||--o{ transfer_dispatch_line : "source_balance_id"
+  transfer_dispatch ||--o{ transfer_dispatch_line : "transfer_dispatch_id"
+  transfer_order_line ||--o{ transfer_dispatch_line : "transfer_line_id"
+  transfer_order ||--o{ transfer_dispatch : "transfer_id"
+  transfer_order ||--o{ transfer_order_line : "transfer_id"
+  inventory_balance o|--o{ transfer_receipt_line : "destination_balance_id"
+  inventory_movement o|--o{ transfer_receipt_line : "movement_id"
+  transfer_dispatch_line ||--o{ transfer_receipt_line : "transfer_dispatch_line_id"
+  transfer_receipt ||--o{ transfer_receipt_line : "transfer_receipt_id"
+  transfer_order ||--o{ transfer_receipt : "transfer_id"

@@ -1,0 +1,528 @@
+%% Outbound ERD
+erDiagram
+  carrier {
+    uuid carrier_id PK "default gen_random_uuid()"
+    uuid business_partner_id FK,UK
+    varchar_40 code UK
+    varchar_150 name
+    boolean is_active "default true"
+  }
+  carrier_service {
+    uuid carrier_service_id PK "default gen_random_uuid()"
+    uuid carrier_id FK
+    varchar_40 code
+    varchar_100 name
+    boolean is_active "default true"
+  }
+  carrier_driver {
+    uuid driver_id PK "default gen_random_uuid()"
+    uuid carrier_id FK
+    uuid account_id FK,UK
+    varchar_40 code
+    varchar_150 name
+    varchar_50 phone_number
+    varchar_80 license_number
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  validation_severity {
+    uuid validation_severity_id PK "default gen_random_uuid()"
+    varchar_20 code UK
+    varchar_80 name
+    boolean blocks_processing "default true"
+    boolean is_active "default true"
+  }
+  outbound_validation_rule {
+    uuid outbound_validation_rule_id PK "default gen_random_uuid()"
+    varchar_50 code UK
+    varchar_120 name
+    text description
+    varchar_60 handler_code
+    uuid validation_severity_id FK
+    integer display_order "default 0"
+    boolean is_active "default true"
+  }
+  outbound_check_exception_status {
+    uuid outbound_check_exception_status_id PK "default gen_random_uuid()"
+    varchar_30 code UK
+    varchar_100 name
+    boolean is_final "default false"
+    boolean is_active "default true"
+  }
+  outbound_check_resolution_type {
+    uuid outbound_check_resolution_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_120 name
+    text description
+    boolean counts_as_stock_correction "default false"
+    boolean counts_as_replacement "default false"
+    boolean counts_as_short_acceptance "default false"
+    boolean requires_approval "default false"
+    boolean is_active "default true"
+  }
+  outbound_wave_type {
+    uuid outbound_wave_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  outbound_check_result {
+    uuid outbound_check_result_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_pass "default false"
+    boolean requires_note "default false"
+    boolean is_active "default true"
+  }
+  delivery_event_type {
+    uuid delivery_event_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean marks_delivered "default false"
+    boolean marks_failed "default false"
+    boolean marks_returned "default false"
+    boolean is_active "default true"
+  }
+  delivery_failure_reason {
+    uuid delivery_failure_reason_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  outbound_order {
+    varchar_120 outbound_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid owner_id FK
+    uuid customer_id FK
+    uuid warehouse_id FK
+    date business_date
+    timestamptz requested_ship_at
+    varchar_120 external_reference
+    varchar_120 customer_order_no
+    varchar_120 client_delivery_order_no
+    uuid ship_to_partner_id FK
+    varchar_150 ship_to_name
+    varchar_255 ship_to_address_1
+    varchar_255 ship_to_address_2
+    varchar_100 ship_to_city
+    varchar_100 ship_to_province
+    varchar_20 ship_to_postal_code
+    varchar_2 ship_to_country_code
+    text notes
+    timestamptz validated_at
+    uuid validated_by FK
+    timestamptz allocated_at
+    timestamptz completed_at
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+    integer version_no "default 1"
+  }
+  outbound_order_line {
+    varchar_150 outbound_line_id PK
+    varchar_120 outbound_id FK
+    integer line_no
+    uuid item_id FK
+    numeric_20_6 ordered_qty
+    numeric_20_6 allocated_qty "default 0"
+    numeric_20_6 picked_qty "default 0"
+    numeric_20_6 checked_qty "default 0"
+    numeric_20_6 packed_qty "default 0"
+    numeric_20_6 shipped_qty "default 0"
+    numeric_20_6 delivered_qty "default 0"
+    numeric_20_6 rejected_qty "default 0"
+    numeric_20_6 short_accepted_qty "default 0"
+    uuid uom_id FK
+    varchar_100 requested_lot_no
+    varchar_100 customer_line_reference
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  outbound_validation_run {
+    varchar_140 validation_run_id PK
+    varchar_120 outbound_id FK
+    uuid document_type_id FK
+    uuid status_id FK
+    timestamptz validated_at
+    uuid validated_by FK
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  outbound_validation_result_detail {
+    varchar_170 validation_result_id PK
+    varchar_140 validation_run_id FK
+    uuid outbound_validation_rule_id FK
+    boolean passed
+    text result_message
+    timestamptz created_at "default clock_timestamp()"
+  }
+  outbound_wave {
+    varchar_120 wave_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid outbound_wave_type_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    uuid picking_strategy_id FK
+    date business_date
+    timestamptz planned_release_at
+    timestamptz released_at
+    timestamptz completed_at
+    text notes
+    bigint version_no "default 1"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  outbound_wave_order {
+    varchar_120 wave_id PK,FK
+    varchar_120 outbound_id PK,FK
+    timestamptz added_at "default clock_timestamp()"
+    uuid added_by FK
+  }
+  inventory_reservation {
+    varchar_140 reservation_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid picking_strategy_id FK
+    varchar_150 outbound_line_id FK
+    varchar_160 balance_id FK
+    numeric_20_6 reserved_qty
+    numeric_20_6 picked_qty "default 0"
+    uuid uom_id FK
+    timestamptz reserved_at "default clock_timestamp()"
+    timestamptz released_at
+    uuid created_by FK
+  }
+  pick_task {
+    varchar_140 pick_task_id PK
+    uuid task_type_id FK
+    uuid task_status_id FK
+    uuid task_priority_id FK
+    varchar_120 wave_id FK
+    varchar_140 reservation_id FK,UK
+    varchar_150 outbound_line_id FK
+    uuid source_location_id FK
+    uuid target_location_id FK
+    numeric_20_6 planned_qty
+    numeric_20_6 picked_qty "default 0"
+    uuid uom_id FK
+    uuid assigned_to FK
+    timestamptz started_at
+    timestamptz completed_at
+    numeric_20_6 short_qty "default 0"
+    uuid short_reason_code_id FK
+    text result_notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  pick_execution {
+    varchar_170 pick_execution_id PK
+    varchar_140 pick_task_id FK
+    varchar_160 source_balance_id FK
+    varchar_160 staging_balance_id FK
+    numeric_20_6 picked_qty
+    uuid uom_id FK
+    varchar_140 movement_id FK,UK
+    timestamptz picked_at "default clock_timestamp()"
+    uuid picked_by FK
+  }
+  outbound_staging {
+    varchar_120 staging_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    varchar_120 outbound_id FK
+    varchar_120 wave_id FK
+    uuid warehouse_id FK
+    uuid staging_location_id FK
+    timestamptz staged_at
+    uuid staged_by FK
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  outbound_staging_line {
+    varchar_160 staging_line_id PK
+    varchar_120 staging_id FK
+    varchar_170 pick_execution_id FK,UK
+    varchar_160 staging_balance_id FK
+    numeric_20_6 staged_qty
+    numeric_20_6 removed_qty "default 0"
+    uuid uom_id FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  outbound_check {
+    varchar_120 outbound_check_id PK
+    varchar_120 parent_check_id FK
+    uuid document_type_id FK
+    uuid status_id FK
+    varchar_120 staging_id FK
+    timestamptz checked_at
+    uuid checked_by FK
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  outbound_check_line {
+    varchar_160 outbound_check_line_id PK
+    varchar_120 outbound_check_id FK
+    varchar_160 staging_line_id FK
+    integer line_no
+    numeric_20_6 expected_qty
+    numeric_20_6 checked_qty
+    numeric_20_6 exception_qty "default 0"
+    uuid uom_id FK
+    uuid outbound_check_result_id FK
+    text notes
+    timestamptz checked_at
+    uuid checked_by FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  outbound_check_exception {
+    varchar_170 outbound_check_exception_id PK
+    varchar_160 outbound_check_line_id FK,UK
+    uuid status_id FK
+    numeric_20_6 exception_qty
+    timestamptz opened_at "default clock_timestamp()"
+    timestamptz resolved_at
+    uuid resolved_by FK
+    text notes
+    uuid created_by FK
+  }
+  outbound_check_resolution {
+    varchar_190 outbound_check_resolution_id PK
+    varchar_170 outbound_check_exception_id FK
+    uuid outbound_check_resolution_type_id FK
+    numeric_20_6 resolved_qty
+    text notes
+    timestamptz approved_at
+    uuid approved_by FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  outbound_check_resolution_movement {
+    varchar_190 outbound_check_resolution_id PK,FK
+    varchar_140 movement_id PK,FK,UK
+  }
+  outbound_check_resolution_reservation {
+    varchar_190 outbound_check_resolution_id PK,FK
+    varchar_140 reservation_id PK,FK,UK
+  }
+  packing {
+    varchar_120 packing_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    varchar_120 outbound_id FK,UK
+    uuid warehouse_id FK
+    uuid packing_location_id FK
+    timestamptz packed_at
+    uuid packed_by FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  packing_line {
+    varchar_150 packing_line_id PK
+    varchar_120 packing_id FK
+    varchar_140 pick_task_id FK
+    varchar_160 outbound_check_line_id FK,UK
+    varchar_160 source_balance_id FK
+    varchar_160 packing_balance_id FK
+    varchar_120 handling_unit_id FK
+    numeric_20_6 packed_qty
+    uuid uom_id FK
+    varchar_140 movement_id FK,UK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  shipment {
+    varchar_120 shipment_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid owner_id FK
+    uuid carrier_service_id FK
+    uuid warehouse_id FK
+    date business_date
+    varchar_100 route_reference
+    varchar_150 tracking_number
+    varchar_60 vehicle_number
+    varchar_60 seal_number
+    timestamptz shipped_at
+    uuid dispatched_by FK
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  shipment_order {
+    varchar_120 shipment_id PK,FK
+    varchar_120 outbound_id PK,FK
+    timestamptz added_at "default clock_timestamp()"
+    uuid added_by FK
+    timestamptz removed_at
+    uuid removed_by FK
+  }
+  shipment_driver {
+    varchar_120 shipment_id PK,FK
+    uuid driver_id PK,FK
+    boolean is_primary "default false"
+    timestamptz assigned_at "default clock_timestamp()"
+    uuid assigned_by FK
+  }
+  shipment_line {
+    varchar_160 shipment_line_id PK
+    varchar_120 shipment_id FK
+    varchar_150 packing_line_id FK,UK
+    varchar_160 source_balance_id FK
+    numeric_20_6 shipped_qty
+    uuid uom_id FK
+    varchar_140 movement_id FK,UK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  shipment_packing {
+    varchar_120 shipment_id PK,FK
+    varchar_120 packing_id PK,FK
+  }
+  delivery {
+    varchar_120 delivery_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    varchar_120 shipment_id FK
+    varchar_120 outbound_id FK
+    date business_date
+    timestamptz planned_delivery_at
+    timestamptz arrived_at
+    timestamptz delivered_at
+    varchar_150 recipient_name
+    varchar_100 recipient_reference
+    varchar_200 proof_reference
+    text proof_uri
+    numeric_10_7 latitude
+    numeric_10_7 longitude
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  delivery_line {
+    varchar_160 delivery_line_id PK
+    varchar_120 delivery_id FK
+    varchar_160 shipment_line_id FK,UK
+    numeric_20_6 planned_qty
+    numeric_20_6 delivered_qty "default 0"
+    numeric_20_6 returned_qty "default 0"
+    uuid uom_id FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  delivery_event {
+    varchar_160 delivery_event_id PK
+    varchar_120 delivery_id FK
+    uuid delivery_event_type_id FK
+    timestamptz event_at
+    uuid delivery_failure_reason_id FK
+    varchar_150 recipient_name
+    varchar_100 recipient_reference
+    varchar_200 proof_reference
+    text proof_uri
+    text notes
+    numeric_10_7 latitude
+    numeric_10_7 longitude
+    uuid recorded_by FK
+    timestamptz created_at "default clock_timestamp()"
+  }
+  delivery_event_line {
+    varchar_160 delivery_event_id PK,FK
+    varchar_160 delivery_line_id PK,FK
+    numeric_20_6 delivered_qty
+  }
+  outbound_return_policy {
+    uuid owner_id PK,FK
+    uuid warehouse_id PK,FK
+    uuid return_location_id FK
+    uuid return_inventory_status_id FK
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  delivery_return_line {
+    varchar_170 delivery_return_line_id PK
+    varchar_120 delivery_id FK
+    varchar_160 delivery_line_id FK
+    uuid return_location_id FK
+    varchar_160 returned_balance_id FK
+    numeric_20_6 returned_qty
+    uuid uom_id FK
+    varchar_140 movement_id FK,UK
+    timestamptz returned_at
+    uuid returned_by FK
+  }
+  carrier ||--o{ carrier_driver : "carrier_id"
+  carrier ||--o{ carrier_service : "carrier_id"
+  delivery_event ||--o{ delivery_event_line : "delivery_event_id"
+  delivery_line ||--o{ delivery_event_line : "delivery_line_id"
+  delivery_event_type ||--o{ delivery_event : "delivery_event_type_id"
+  delivery_failure_reason o|--o{ delivery_event : "delivery_failure_reason_id"
+  delivery ||--o{ delivery_event : "delivery_id"
+  delivery ||--o{ delivery_line : "delivery_id"
+  shipment_line ||--o{ delivery_line : "shipment_line_id"
+  delivery ||--o{ delivery_return_line : "delivery_id"
+  delivery_line ||--o{ delivery_return_line : "delivery_line_id"
+  outbound_order ||--o{ delivery : "outbound_id"
+  shipment ||--o{ delivery : "shipment_id"
+  outbound_order_line ||--o{ inventory_reservation : "outbound_line_id"
+  outbound_check_line ||--o{ outbound_check_exception : "outbound_check_line_id"
+  outbound_check_exception_status ||--o{ outbound_check_exception : "status_id"
+  outbound_check ||--o{ outbound_check_line : "outbound_check_id"
+  outbound_check_result o|--o{ outbound_check_line : "outbound_check_result_id"
+  outbound_staging_line ||--o{ outbound_check_line : "staging_line_id"
+  outbound_check_resolution ||--o{ outbound_check_resolution_movement : "outbound_check_resolution_id"
+  outbound_check_resolution ||--o{ outbound_check_resolution_reservation : "outbound_check_resolution_id"
+  inventory_reservation ||--o{ outbound_check_resolution_reservation : "reservation_id"
+  outbound_check_exception ||--o{ outbound_check_resolution : "outbound_check_exception_id"
+  outbound_check_resolution_type ||--o{ outbound_check_resolution : "outbound_check_resolution_type_id"
+  outbound_check o|--o{ outbound_check : "parent_check_id"
+  outbound_staging ||--o{ outbound_check : "staging_id"
+  outbound_order ||--o{ outbound_order_line : "outbound_id"
+  pick_execution ||--o{ outbound_staging_line : "pick_execution_id"
+  outbound_staging ||--o{ outbound_staging_line : "staging_id"
+  outbound_order ||--o{ outbound_staging : "outbound_id"
+  outbound_wave ||--o{ outbound_staging : "wave_id"
+  outbound_validation_rule ||--o{ outbound_validation_result_detail : "outbound_validation_rule_id"
+  outbound_validation_run ||--o{ outbound_validation_result_detail : "validation_run_id"
+  validation_severity ||--o{ outbound_validation_rule : "validation_severity_id"
+  outbound_order ||--o{ outbound_validation_run : "outbound_id"
+  outbound_order ||--o{ outbound_wave_order : "outbound_id"
+  outbound_wave ||--o{ outbound_wave_order : "wave_id"
+  outbound_wave_type ||--o{ outbound_wave : "outbound_wave_type_id"
+  outbound_check_line ||--o{ packing_line : "outbound_check_line_id"
+  packing ||--o{ packing_line : "packing_id"
+  pick_task ||--o{ packing_line : "pick_task_id"
+  outbound_order ||--o{ packing : "outbound_id"
+  pick_task ||--o{ pick_execution : "pick_task_id"
+  outbound_order_line ||--o{ pick_task : "outbound_line_id"
+  inventory_reservation ||--o{ pick_task : "reservation_id"
+  outbound_wave ||--o{ pick_task : "wave_id"
+  carrier_driver ||--o{ shipment_driver : "driver_id"
+  shipment ||--o{ shipment_driver : "shipment_id"
+  packing_line ||--o{ shipment_line : "packing_line_id"
+  shipment ||--o{ shipment_line : "shipment_id"
+  outbound_order ||--o{ shipment_order : "outbound_id"
+  shipment ||--o{ shipment_order : "shipment_id"
+  packing ||--o{ shipment_packing : "packing_id"
+  shipment ||--o{ shipment_packing : "shipment_id"
+  carrier_service o|--o{ shipment : "carrier_service_id"

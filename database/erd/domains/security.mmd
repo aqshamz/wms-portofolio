@@ -1,0 +1,131 @@
+%% Security & access ERD
+erDiagram
+  account_status {
+    uuid account_status_id PK "default gen_random_uuid()"
+    varchar_30 code UK
+    varchar_100 name
+    text description
+    boolean allows_login "default false"
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+  }
+  authentication_policy {
+    uuid authentication_policy_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    integer max_failed_attempts
+    integer lockout_seconds
+    integer session_ttl_seconds
+    boolean is_default "default false"
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+  }
+  session_revocation_reason {
+    uuid session_revocation_reason_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  app_module {
+    uuid module_id PK "default gen_random_uuid()"
+    varchar_50 code UK
+    varchar_100 name
+    integer display_order "default 0"
+    boolean is_active "default true"
+  }
+  app_account {
+    uuid account_id PK "default gen_random_uuid()"
+    varchar_100 username UK
+    varchar_254 email UK
+    varchar_150 display_name
+    text password_hash
+    varchar_255 external_subject UK
+    uuid account_status_id FK
+    uuid authentication_policy_id FK
+    varchar_50 preferred_timezone
+    integer failed_login_count "default 0"
+    timestamptz locked_until
+    timestamptz last_login_at
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+    integer version_no "default 1"
+  }
+  app_session {
+    varchar_120 session_id PK
+    uuid account_id FK
+    varchar_128 token_hash UK
+    timestamptz issued_at "default clock_timestamp()"
+    timestamptz expires_at
+    timestamptz last_seen_at "default clock_timestamp()"
+    timestamptz revoked_at
+    uuid session_revocation_reason_id FK
+    inet ip_address
+    text user_agent
+  }
+  app_role {
+    uuid role_id PK "default gen_random_uuid()"
+    varchar_50 code UK
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  app_permission {
+    uuid permission_id PK "default gen_random_uuid()"
+    varchar_100 code UK
+    varchar_150 name
+    varchar_50 module_code FK
+    text description
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+  }
+  app_menu {
+    uuid menu_id PK "default gen_random_uuid()"
+    uuid parent_menu_id FK
+    varchar_50 code UK
+    varchar_100 label
+    varchar_255 route
+    varchar_100 icon_name
+    integer display_order "default 0"
+    boolean require_all_permissions "default false"
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+  }
+  account_role {
+    uuid account_id PK,FK
+    uuid role_id PK,FK
+    timestamptz valid_from "default clock_timestamp()"
+    timestamptz valid_until
+    uuid assigned_by FK
+  }
+  role_permission {
+    uuid role_id PK,FK
+    uuid permission_id PK,FK
+    uuid granted_by FK
+    timestamptz granted_at "default clock_timestamp()"
+  }
+  menu_permission {
+    uuid menu_id PK,FK
+    uuid permission_id PK,FK
+  }
+  app_account ||--o{ account_role : "account_id"
+  app_account o|--o{ account_role : "assigned_by"
+  app_role ||--o{ account_role : "role_id"
+  account_status ||--o{ app_account : "account_status_id"
+  authentication_policy o|--o{ app_account : "authentication_policy_id"
+  app_account o|--o{ app_account : "created_by"
+  app_account o|--o{ app_account : "updated_by"
+  app_menu o|--o{ app_menu : "parent_menu_id"
+  app_module ||--o{ app_permission : "module_code"
+  app_account o|--o{ app_role : "created_by"
+  app_account ||--o{ app_session : "account_id"
+  session_revocation_reason o|--o{ app_session : "session_revocation_reason_id"
+  app_menu ||--o{ menu_permission : "menu_id"
+  app_permission ||--o{ menu_permission : "permission_id"
+  app_account o|--o{ role_permission : "granted_by"
+  app_permission ||--o{ role_permission : "permission_id"
+  app_role ||--o{ role_permission : "role_id"

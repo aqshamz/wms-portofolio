@@ -1,0 +1,260 @@
+%% Master data ERD
+erDiagram
+  organization {
+    uuid organization_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_150 name
+    varchar_200 legal_name
+    varchar_100 tax_number
+    varchar_50 timezone_name
+    varchar_255 address_line_1
+    varchar_255 address_line_2
+    varchar_100 city
+    varchar_100 province
+    varchar_20 postal_code
+    varchar_2 country_code
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  warehouse {
+    uuid warehouse_id PK "default gen_random_uuid()"
+    uuid operator_id FK
+    varchar_40 code
+    varchar_150 name
+    varchar_50 timezone_name
+    varchar_255 address_line_1
+    varchar_255 address_line_2
+    varchar_100 city
+    varchar_100 province
+    varchar_20 postal_code
+    varchar_2 country_code
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  warehouse_owner {
+    uuid warehouse_id PK,FK
+    uuid owner_id PK,FK
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  location_type {
+    uuid location_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean allows_receiving "default false"
+    boolean allows_storage "default false"
+    boolean allows_picking "default false"
+    boolean allows_shipping "default false"
+    boolean is_active "default true"
+  }
+  warehouse_zone {
+    uuid zone_id PK "default gen_random_uuid()"
+    uuid warehouse_id FK
+    varchar_40 code
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  warehouse_location {
+    uuid location_id PK "default gen_random_uuid()"
+    uuid warehouse_id FK
+    uuid zone_id FK
+    uuid location_type_id FK
+    varchar_60 code
+    varchar_100 barcode
+    varchar_20 aisle
+    varchar_20 bay
+    varchar_20 level_no
+    varchar_20 position_no
+    integer pick_sequence "default 0"
+    numeric_20_6 max_weight
+    numeric_20_6 max_volume
+    boolean is_pick_face "default false"
+    boolean is_locked "default false"
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  account_owner_access {
+    uuid account_id PK,FK
+    uuid owner_id PK,FK
+    uuid granted_by FK
+    timestamptz granted_at "default clock_timestamp()"
+  }
+  account_warehouse_access {
+    uuid account_id PK,FK
+    uuid warehouse_id PK,FK
+    uuid granted_by FK
+    timestamptz granted_at "default clock_timestamp()"
+  }
+  partner_type {
+    uuid partner_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  business_partner {
+    uuid partner_id PK "default gen_random_uuid()"
+    uuid owner_id FK
+    varchar_40 code
+    varchar_150 name
+    varchar_200 legal_name
+    varchar_100 tax_number
+    varchar_254 email
+    varchar_50 phone
+    varchar_255 address_line_1
+    varchar_255 address_line_2
+    varchar_100 city
+    varchar_100 province
+    varchar_20 postal_code
+    varchar_2 country_code
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  business_partner_type {
+    uuid partner_id PK,FK
+    uuid partner_type_id PK,FK
+  }
+  uom {
+    uuid uom_id PK "default gen_random_uuid()"
+    varchar_20 code UK
+    varchar_100 name
+    smallint decimal_scale "default 0"
+    boolean is_active "default true"
+  }
+  item_category {
+    uuid category_id PK "default gen_random_uuid()"
+    uuid owner_id FK
+    uuid parent_category_id FK
+    varchar_40 code
+    varchar_100 name
+    boolean is_active "default true"
+  }
+  item {
+    uuid item_id PK "default gen_random_uuid()"
+    uuid owner_id FK
+    uuid category_id FK
+    varchar_60 code
+    varchar_200 name
+    text description
+    uuid base_uom_id FK
+    numeric_20_6 weight
+    numeric_20_6 volume
+    boolean lot_controlled "default false"
+    boolean serial_controlled "default false"
+    integer shelf_life_days
+    integer minimum_receive_days
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  item_uom {
+    uuid item_uom_id PK "default gen_random_uuid()"
+    uuid item_id FK
+    uuid uom_id FK
+    numeric_20_6 conversion_to_base
+    numeric_20_6 length
+    numeric_20_6 width
+    numeric_20_6 height
+    numeric_20_6 weight
+    boolean is_receiving_uom "default true"
+    boolean is_picking_uom "default true"
+    boolean is_active "default true"
+  }
+  item_barcode {
+    uuid item_barcode_id PK "default gen_random_uuid()"
+    uuid item_id FK
+    uuid uom_id FK
+    varchar_100 barcode UK
+    boolean is_primary "default false"
+    boolean is_active "default true"
+  }
+  inventory_status {
+    uuid inventory_status_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_allocatable "default false"
+    boolean is_pickable "default false"
+    boolean is_active "default true"
+  }
+  quality_status {
+    uuid quality_status_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  inspection_result {
+    uuid inspection_result_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_accepted "default false"
+    boolean is_active "default true"
+  }
+  quarantine_disposition_type {
+    uuid quarantine_disposition_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean releases_to_available "default false"
+    boolean requires_reinspection "default false"
+    boolean removes_inventory "default false"
+    uuid removal_movement_type_id FK
+    boolean is_active "default true"
+  }
+  reason_code {
+    uuid reason_code_id PK "default gen_random_uuid()"
+    varchar_50 module_code FK
+    varchar_40 code
+    varchar_100 name
+    text description
+    boolean requires_note "default false"
+    boolean is_active "default true"
+  }
+  handling_unit_type {
+    uuid handling_unit_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    numeric_20_6 max_weight
+    numeric_20_6 max_volume
+    boolean is_active "default true"
+  }
+  organization ||--o{ account_owner_access : "owner_id"
+  warehouse ||--o{ account_warehouse_access : "warehouse_id"
+  business_partner ||--o{ business_partner_type : "partner_id"
+  partner_type ||--o{ business_partner_type : "partner_type_id"
+  organization ||--o{ business_partner : "owner_id"
+  item ||--o{ item_barcode : "item_id"
+  uom o|--o{ item_barcode : "uom_id"
+  organization ||--o{ item_category : "owner_id"
+  item_category o|--o{ item_category : "owner_id, parent_category_id"
+  item ||--o{ item_uom : "item_id"
+  uom ||--o{ item_uom : "uom_id"
+  uom ||--o{ item : "base_uom_id"
+  organization ||--o{ item : "owner_id"
+  item_category o|--o{ item : "owner_id, category_id"
+  location_type ||--o{ warehouse_location : "location_type_id"
+  warehouse ||--o{ warehouse_location : "warehouse_id"
+  warehouse_zone ||--o{ warehouse_location : "zone_id, warehouse_id"
+  organization ||--o{ warehouse_owner : "owner_id"
+  warehouse ||--o{ warehouse_owner : "warehouse_id"
+  warehouse ||--o{ warehouse_zone : "warehouse_id"
+  organization ||--o{ warehouse : "operator_id"

@@ -1,0 +1,384 @@
+%% Billing ERD
+erDiagram
+  currency {
+    uuid currency_id PK "default gen_random_uuid()"
+    varchar_3 code UK
+    varchar_100 name
+    smallint decimal_scale "default 2"
+    boolean is_active "default true"
+  }
+  billing_cycle {
+    uuid billing_cycle_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    integer period_days
+    integer period_months
+    boolean is_on_demand "default false"
+    boolean is_active "default true"
+  }
+  payment_term {
+    uuid payment_term_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    integer due_days
+    boolean is_active "default true"
+  }
+  charge_basis {
+    uuid charge_basis_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean requires_uom "default true"
+    boolean use_event_quantity "default true"
+    boolean is_active "default true"
+  }
+  tax_rule {
+    uuid tax_rule_id PK "default gen_random_uuid()"
+    uuid owner_id FK
+    varchar_40 code
+    varchar_120 name
+    numeric_9_6 rate_percent
+    boolean is_inclusive "default false"
+    date effective_from
+    date effective_until
+    boolean is_active "default true"
+  }
+  billing_service {
+    uuid billing_service_id PK "default gen_random_uuid()"
+    varchar_50 code UK
+    varchar_120 name
+    varchar_50 module_code FK
+    text description
+    uuid default_charge_basis_id FK
+    uuid default_uom_id FK
+    boolean is_active "default true"
+  }
+  billing_service_movement_type {
+    uuid billing_service_id PK,FK
+    uuid movement_type_id PK,FK,UK
+    boolean is_active "default true"
+  }
+  billing_adjustment_type {
+    uuid billing_adjustment_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    smallint amount_effect
+    boolean is_active "default true"
+  }
+  payment_method {
+    uuid payment_method_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    boolean requires_reference "default true"
+    boolean is_active "default true"
+  }
+  billing_account {
+    uuid billing_account_id PK "default gen_random_uuid()"
+    uuid owner_id FK
+    varchar_40 code
+    varchar_150 name
+    uuid bill_to_partner_id FK
+    uuid currency_id FK
+    uuid billing_cycle_id FK
+    uuid payment_term_id FK
+    uuid default_tax_rule_id FK
+    varchar_200 bill_to_name
+    varchar_100 bill_to_tax_number
+    varchar_255 bill_to_address_1
+    varchar_255 bill_to_address_2
+    varchar_100 bill_to_city
+    varchar_100 bill_to_province
+    varchar_20 bill_to_postal_code
+    varchar_2 bill_to_country_code
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  billing_contract {
+    varchar_120 billing_contract_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid billing_account_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    uuid currency_id FK
+    uuid default_tax_rule_id FK
+    varchar_100 contract_number
+    date effective_from
+    date effective_until
+    boolean auto_renew "default false"
+    text notes
+    bigint version_no "default 1"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  rate_card {
+    varchar_120 rate_card_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    varchar_120 billing_contract_id FK
+    varchar_40 version_label
+    date effective_from
+    date effective_until
+    text notes
+    bigint version_no "default 1"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  rate_card_line {
+    varchar_150 rate_card_line_id PK
+    varchar_120 rate_card_id FK
+    integer line_no
+    uuid billing_service_id FK
+    uuid charge_basis_id FK
+    uuid uom_id FK
+    uuid warehouse_id FK
+    uuid item_id FK
+    uuid category_id FK
+    numeric_20_6 unit_rate
+    numeric_20_6 included_quantity "default 0"
+    numeric_20_4 minimum_charge "default 0"
+    numeric_20_4 maximum_charge
+    numeric_20_6 rounding_increment
+    integer priority_no "default 100"
+    uuid tax_rule_id FK
+    boolean is_active "default true"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  rate_card_tier {
+    varchar_170 rate_card_tier_id PK
+    varchar_150 rate_card_line_id FK
+    integer tier_no
+    numeric_20_6 from_quantity
+    numeric_20_6 until_quantity
+    numeric_20_6 unit_rate
+  }
+  billable_event {
+    varchar_140 billable_event_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid billing_account_id FK
+    varchar_120 billing_contract_id FK
+    uuid billing_service_id FK
+    uuid owner_id FK
+    uuid warehouse_id FK
+    uuid item_id FK
+    uuid category_id FK
+    varchar_120 handling_unit_id FK
+    date business_date
+    timestamptz occurred_at
+    uuid source_document_type_id FK
+    varchar_140 source_document_id
+    varchar_170 source_line_id
+    varchar_80 event_key "default 'DEFAULT'"
+    numeric_20_6 quantity
+    uuid uom_id FK
+    jsonb attributes "default '{}'::jsonb"
+    uuid exclusion_reason_code_id FK
+    timestamptz rated_at
+    uuid rated_by FK
+    timestamptz excluded_at
+    uuid excluded_by FK
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  billing_run {
+    varchar_120 billing_run_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid billing_account_id FK
+    varchar_120 billing_contract_id FK
+    uuid currency_id FK
+    date period_from
+    date period_until
+    timestamptz calculated_at
+    timestamptz reviewed_at
+    uuid reviewed_by FK
+    numeric_20_4 net_amount "default 0"
+    numeric_20_4 tax_amount "default 0"
+    numeric_20_4 gross_amount "default 0"
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  billing_charge {
+    varchar_150 billing_charge_id PK
+    varchar_120 billing_run_id FK
+    varchar_140 billable_event_id FK,UK
+    varchar_150 rate_card_line_id FK
+    numeric_20_6 billed_quantity
+    uuid uom_id FK
+    numeric_20_6 unit_rate
+    numeric_20_4 net_amount
+    uuid tax_rule_id FK
+    numeric_9_6 tax_rate_percent "default 0"
+    numeric_20_4 tax_amount "default 0"
+    numeric_20_4 gross_amount
+    uuid currency_id FK
+    timestamptz calculated_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  billing_invoice {
+    varchar_120 billing_invoice_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    varchar_120 billing_run_id FK,UK
+    uuid billing_account_id FK
+    varchar_120 billing_contract_id FK
+    uuid currency_id FK
+    date invoice_date
+    date due_date
+    varchar_200 bill_to_name
+    varchar_100 bill_to_tax_number
+    text bill_to_address
+    numeric_20_4 net_amount "default 0"
+    numeric_20_4 adjustment_amount "default 0"
+    numeric_20_4 tax_amount "default 0"
+    numeric_20_4 gross_amount "default 0"
+    numeric_20_4 credited_amount "default 0"
+    numeric_20_4 paid_amount "default 0"
+    numeric_20_4 balance_due "default 0"
+    timestamptz issued_at
+    uuid issued_by FK
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+    timestamptz updated_at "default clock_timestamp()"
+    uuid updated_by FK
+  }
+  billing_invoice_line {
+    varchar_150 billing_invoice_line_id PK
+    varchar_120 billing_invoice_id FK
+    integer line_no
+    varchar_150 billing_charge_id FK,UK
+    uuid billing_service_id FK
+    varchar_255 description
+    numeric_20_6 quantity
+    uuid uom_id FK
+    numeric_20_6 unit_rate
+    numeric_20_4 net_amount
+    uuid tax_rule_id FK
+    numeric_9_6 tax_rate_percent "default 0"
+    numeric_20_4 tax_amount "default 0"
+    numeric_20_4 gross_amount
+  }
+  billing_invoice_adjustment {
+    varchar_150 invoice_adjustment_id PK
+    varchar_120 billing_invoice_id FK
+    integer line_no
+    uuid billing_adjustment_type_id FK
+    uuid reason_code_id FK
+    varchar_255 description
+    numeric_20_4 amount
+    uuid tax_rule_id FK
+    numeric_9_6 tax_rate_percent "default 0"
+    numeric_20_4 tax_amount "default 0"
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  billing_credit_note {
+    varchar_120 credit_note_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    varchar_120 billing_invoice_id FK
+    uuid currency_id FK
+    date credit_date
+    uuid reason_code_id FK
+    numeric_20_4 net_amount "default 0"
+    numeric_20_4 tax_amount "default 0"
+    numeric_20_4 gross_amount "default 0"
+    timestamptz issued_at
+    uuid issued_by FK
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  billing_credit_note_line {
+    varchar_150 credit_note_line_id PK
+    varchar_120 credit_note_id FK
+    varchar_150 billing_invoice_line_id FK
+    integer line_no
+    varchar_255 description
+    numeric_20_4 net_amount
+    numeric_9_6 tax_rate_percent "default 0"
+    numeric_20_4 tax_amount "default 0"
+    numeric_20_4 gross_amount
+  }
+  billing_payment {
+    varchar_120 payment_id PK
+    uuid document_type_id FK
+    uuid status_id FK
+    uuid billing_account_id FK
+    uuid currency_id FK
+    uuid payment_method_id FK
+    date payment_date
+    numeric_20_4 amount
+    numeric_20_4 unapplied_amount
+    varchar_150 external_reference
+    text notes
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  billing_payment_allocation {
+    varchar_150 payment_allocation_id PK
+    varchar_120 payment_id FK
+    integer allocation_no
+    varchar_120 billing_invoice_id FK
+    numeric_20_4 allocated_amount
+    timestamptz allocated_at "default clock_timestamp()"
+    uuid allocated_by FK
+  }
+  billing_account ||--o{ billable_event : "billing_account_id"
+  billing_contract ||--o{ billable_event : "billing_contract_id"
+  billing_service ||--o{ billable_event : "billing_service_id"
+  billing_cycle ||--o{ billing_account : "billing_cycle_id"
+  currency ||--o{ billing_account : "currency_id"
+  tax_rule o|--o{ billing_account : "default_tax_rule_id"
+  payment_term ||--o{ billing_account : "payment_term_id"
+  billable_event ||--o{ billing_charge : "billable_event_id"
+  billing_run ||--o{ billing_charge : "billing_run_id"
+  currency ||--o{ billing_charge : "currency_id"
+  rate_card_line ||--o{ billing_charge : "rate_card_line_id"
+  tax_rule o|--o{ billing_charge : "tax_rule_id"
+  billing_account ||--o{ billing_contract : "billing_account_id"
+  currency ||--o{ billing_contract : "currency_id"
+  tax_rule o|--o{ billing_contract : "default_tax_rule_id"
+  billing_account ||--o{ billing_contract : "owner_id, billing_account_id"
+  billing_invoice_line o|--o{ billing_credit_note_line : "billing_invoice_line_id"
+  billing_credit_note ||--o{ billing_credit_note_line : "credit_note_id"
+  billing_invoice ||--o{ billing_credit_note : "billing_invoice_id"
+  currency ||--o{ billing_credit_note : "currency_id"
+  billing_adjustment_type ||--o{ billing_invoice_adjustment : "billing_adjustment_type_id"
+  billing_invoice ||--o{ billing_invoice_adjustment : "billing_invoice_id"
+  tax_rule o|--o{ billing_invoice_adjustment : "tax_rule_id"
+  billing_charge ||--o{ billing_invoice_line : "billing_charge_id"
+  billing_invoice ||--o{ billing_invoice_line : "billing_invoice_id"
+  billing_service ||--o{ billing_invoice_line : "billing_service_id"
+  tax_rule o|--o{ billing_invoice_line : "tax_rule_id"
+  billing_account ||--o{ billing_invoice : "billing_account_id"
+  billing_contract ||--o{ billing_invoice : "billing_contract_id"
+  billing_run ||--o{ billing_invoice : "billing_run_id"
+  currency ||--o{ billing_invoice : "currency_id"
+  billing_invoice ||--o{ billing_payment_allocation : "billing_invoice_id"
+  billing_payment ||--o{ billing_payment_allocation : "payment_id"
+  billing_account ||--o{ billing_payment : "billing_account_id"
+  currency ||--o{ billing_payment : "currency_id"
+  payment_method ||--o{ billing_payment : "payment_method_id"
+  billing_account ||--o{ billing_run : "billing_account_id"
+  billing_contract ||--o{ billing_run : "billing_contract_id"
+  currency ||--o{ billing_run : "currency_id"
+  billing_service ||--o{ billing_service_movement_type : "billing_service_id"
+  charge_basis ||--o{ billing_service : "default_charge_basis_id"
+  billing_service ||--o{ rate_card_line : "billing_service_id"
+  charge_basis ||--o{ rate_card_line : "charge_basis_id"
+  rate_card ||--o{ rate_card_line : "rate_card_id"
+  tax_rule o|--o{ rate_card_line : "tax_rule_id"
+  rate_card_line ||--o{ rate_card_tier : "rate_card_line_id"
+  billing_contract ||--o{ rate_card : "billing_contract_id"

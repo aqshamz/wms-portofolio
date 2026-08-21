@@ -1,0 +1,135 @@
+%% Workflow & configuration ERD
+erDiagram
+  document_type {
+    uuid document_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    varchar_50 module_code FK
+    text description
+    boolean is_active "default true"
+  }
+  document_status {
+    uuid status_id PK "default gen_random_uuid()"
+    uuid document_type_id FK
+    varchar_40 code
+    varchar_100 name
+    text description
+    boolean is_initial "default false"
+    boolean is_final "default false"
+    boolean is_cancelled "default false"
+    integer display_order "default 0"
+    boolean is_active "default true"
+  }
+  document_status_transition {
+    uuid transition_id PK "default gen_random_uuid()"
+    uuid document_type_id FK
+    uuid from_status_id FK
+    uuid to_status_id FK
+    uuid required_permission_id FK
+    boolean is_active "default true"
+  }
+  task_type {
+    uuid task_type_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  task_status {
+    uuid task_status_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    boolean is_initial "default false"
+    boolean is_final "default false"
+    boolean is_cancelled "default false"
+    boolean is_active "default true"
+  }
+  task_status_transition {
+    uuid task_status_transition_id PK "default gen_random_uuid()"
+    uuid from_status_id FK
+    uuid to_status_id FK
+    uuid required_permission_id FK
+    boolean is_active "default true"
+  }
+  task_priority {
+    uuid task_priority_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    integer priority_value UK
+    boolean is_active "default true"
+  }
+  putaway_strategy {
+    uuid putaway_strategy_id PK "default gen_random_uuid()"
+    uuid owner_id FK
+    uuid warehouse_id FK
+    varchar_40 code
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  putaway_strategy_rule {
+    uuid rule_id PK "default gen_random_uuid()"
+    uuid putaway_strategy_id FK
+    integer sequence_no
+    uuid category_id FK
+    uuid location_type_id FK
+    uuid zone_id FK
+    numeric_7_4 minimum_empty_percent
+    boolean is_active "default true"
+  }
+  picking_strategy {
+    uuid picking_strategy_id PK "default gen_random_uuid()"
+    uuid owner_id FK
+    uuid warehouse_id FK
+    varchar_40 code
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  picking_sort_method {
+    uuid picking_sort_method_id PK "default gen_random_uuid()"
+    varchar_40 code UK
+    varchar_100 name
+    text description
+    boolean is_active "default true"
+  }
+  picking_strategy_rule {
+    uuid rule_id PK "default gen_random_uuid()"
+    uuid picking_strategy_id FK
+    integer sequence_no
+    uuid inventory_status_id FK
+    uuid zone_id FK
+    uuid picking_sort_method_id FK
+    boolean is_active "default true"
+  }
+  document_number_rule {
+    uuid document_number_rule_id PK "default gen_random_uuid()"
+    uuid document_type_id FK
+    varchar_20 prefix
+    varchar_3 separator "default '-'"
+    smallint sequence_length "default 6"
+    boolean include_partner_code "default true"
+    boolean include_warehouse_code "default true"
+    boolean is_active "default true"
+    date effective_from "default current_date"
+    date effective_until
+    timestamptz created_at "default clock_timestamp()"
+    uuid created_by FK
+  }
+  document_daily_counter {
+    uuid document_type_id PK,FK
+    date business_date PK
+    bigint last_number
+    timestamptz updated_at "default clock_timestamp()"
+  }
+  document_type ||--o{ document_daily_counter : "document_type_id"
+  document_type ||--o{ document_number_rule : "document_type_id"
+  document_type ||--o{ document_status_transition : "document_type_id"
+  document_status ||--o{ document_status_transition : "document_type_id, from_status_id"
+  document_status ||--o{ document_status_transition : "document_type_id, to_status_id"
+  document_type ||--o{ document_status : "document_type_id"
+  picking_sort_method ||--o{ picking_strategy_rule : "picking_sort_method_id"
+  picking_strategy ||--o{ picking_strategy_rule : "picking_strategy_id"
+  putaway_strategy ||--o{ putaway_strategy_rule : "putaway_strategy_id"
+  task_status ||--o{ task_status_transition : "from_status_id"
+  task_status ||--o{ task_status_transition : "to_status_id"
