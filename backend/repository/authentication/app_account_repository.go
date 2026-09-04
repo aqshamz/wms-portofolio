@@ -61,6 +61,12 @@ func (r *AppAccountRepository) FindByUsername(ctx context.Context, username stri
 	return account, err
 }
 
+func (r *AppAccountRepository) FindByID(ctx context.Context, id string) (model.AppAccount, error) {
+	var account model.AppAccount
+	err := r.db.WithContext(ctx).Where("account_id = ?", id).Take(&account).Error
+	return account, err
+}
+
 func (r *AppAccountRepository) Create(ctx context.Context, account *model.AppAccount) error {
 	return r.db.WithContext(ctx).Create(account).Error
 }

@@ -6,10 +6,13 @@ import (
 
 	"wms-api/config"
 	authcontroller "wms-api/controller/authentication"
+	mastercontroller "wms-api/controller/master"
 	"wms-api/middleware"
 	authrepository "wms-api/repository/authentication"
+	masterrepository "wms-api/repository/master"
 	"wms-api/routes"
 	authservice "wms-api/services/authentication"
+	masterservice "wms-api/services/master"
 )
 
 func main() {
@@ -26,8 +29,30 @@ func main() {
 	if err := authrepository.Migrate(db); err != nil {
 		log.Fatalf("migrate authentication tables: %v", err)
 	}
+	if err := masterrepository.Migrate(db); err != nil {
+		log.Fatalf("migrate master tables: %v", err)
+	}
 
 	statusRepository := authrepository.NewAccountStatusRepository(db)
+	if err := masterrepository.MigrateCatalog(db); err != nil {
+		log.Fatalf("migrate catalog tables: %v", err)
+	}
+	catalogService := masterservice.NewCatalogService(masterrepository.NewCatalogRepositories(db))
+	if err := catalogService.SeedCatalog(context.Background()); err != nil {
+		log.Fatalf("seed catalog references: %v", err)
+	}
+	catalogController := mastercontroller.NewCatalogController(catalogService)
+	if err := masterrepository.MigrateOperational(db); err != nil {
+		log.Fatalf("migrate operational configuration: %v", err)
+	}
+	operationalService, err := masterservice.NewOperationalService(masterrepository.NewOperationalRepositories(db), cfg.Database.Timezone)
+	if err != nil {
+		log.Fatalf("configure operational timezone: %v", err)
+	}
+	if err := operationalService.SeedOperational(context.Background()); err != nil {
+		log.Fatalf("seed operational configuration: %v", err)
+	}
+	operationalController := mastercontroller.NewOperationalController(operationalService)
 	policyRepository := authrepository.NewAuthenticationPolicyRepository(db)
 	reasonRepository := authrepository.NewSessionRevocationReasonRepository(db)
 	accountRepository := authrepository.NewAppAccountRepository(db)
@@ -46,10 +71,47 @@ func main() {
 	authenticationService := authservice.NewService(accountRepository, sessionRepository)
 	authenticationController := authcontroller.NewController(authenticationService)
 	authenticationMiddleware := middleware.NewAuthentication(authenticationService)
+	organizationRepository := masterrepository.NewOrganizationRepository(db)
+	warehouseRepository := masterrepository.NewWarehouseRepository(db)
+	warehouseOwnerRepository := masterrepository.NewWarehouseOwnerRepository(db)
+	locationTypeRepository := masterrepository.NewLocationTypeRepository(db)
+	warehouseZoneRepository := masterrepository.NewWarehouseZoneRepository(db)
+	warehouseLocationRepository := masterrepository.NewWarehouseLocationRepository(db)
+	accountOwnerAccessRepository := masterrepository.NewAccountOwnerAccessRepository(db)
+	accountWarehouseAccessRepository := masterrepository.NewAccountWarehouseAccessRepository(db)
+	organizationService := masterservice.NewOrganizationService(organizationRepository)
+	warehouseService := masterservice.NewWarehouseService(warehouseRepository, organizationRepository)
+	warehouseStructureService := masterservice.NewWarehouseStructureService(
+		warehouseRepository,
+		organizationRepository,
+		warehouseOwnerRepository,
+		locationTypeRepository,
+		warehouseZoneRepository,
+		warehouseLocationRepository,
+	)
+	if err := warehouseStructureService.SeedLocationTypes(context.Background()); err != nil {
+		log.Fatalf("seed location types: %v", err)
+	}
+	accessScopeService := masterservice.NewAccessScopeService(
+		accountRepository,
+		organizationRepository,
+		warehouseRepository,
+		accountOwnerAccessRepository,
+		accountWarehouseAccessRepository,
+	)
+	masterController := mastercontroller.NewController(
+		organizationService,
+		warehouseService,
+		warehouseStructureService,
+		accessScopeService,
+	)
 
 	router := routes.New(db, routes.Dependencies{
 		AuthenticationController: authenticationController,
 		AuthenticationMiddleware: authenticationMiddleware,
+		MasterController:         masterController,
+		CatalogController:        catalogController,
+		OperationalController:    operationalController,
 	})
 	log.Printf("WMS API listening on %s", cfg.App.Address())
 	if err := router.Run(cfg.App.Address()); err != nil {

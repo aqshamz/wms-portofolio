@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	authcontroller "wms-api/controller/authentication"
+	mastercontroller "wms-api/controller/master"
 	"wms-api/middleware"
 	"wms-api/utils"
 )
@@ -13,6 +14,9 @@ import (
 type Dependencies struct {
 	AuthenticationController *authcontroller.Controller
 	AuthenticationMiddleware *middleware.Authentication
+	MasterController         *mastercontroller.Controller
+	CatalogController        *mastercontroller.CatalogController
+	OperationalController    *mastercontroller.OperationalController
 }
 
 func New(db *gorm.DB, dependencies Dependencies) *gin.Engine {
@@ -40,7 +44,13 @@ func New(db *gorm.DB, dependencies Dependencies) *gin.Engine {
 		dependencies.AuthenticationController,
 		dependencies.AuthenticationMiddleware.RequireSession(),
 	)
-	registerMasterRoutes(api)
+	registerMasterRoutes(
+		api,
+		dependencies.MasterController,
+		dependencies.AuthenticationMiddleware.RequireSession(),
+	)
+	registerCatalogRoutes(api, dependencies.CatalogController, dependencies.AuthenticationMiddleware.RequireSession())
+	registerOperationalRoutes(api, dependencies.OperationalController, dependencies.AuthenticationMiddleware.RequireSession())
 	registerInventoryRoutes(api)
 	registerInboundRoutes(api)
 	registerStockControlRoutes(api)
@@ -49,7 +59,6 @@ func New(db *gorm.DB, dependencies Dependencies) *gin.Engine {
 	return router
 }
 
-func registerMasterRoutes(_ *gin.RouterGroup)       {}
 func registerInventoryRoutes(_ *gin.RouterGroup)    {}
 func registerInboundRoutes(_ *gin.RouterGroup)      {}
 func registerStockControlRoutes(_ *gin.RouterGroup) {}
