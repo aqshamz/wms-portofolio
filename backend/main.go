@@ -6,13 +6,19 @@ import (
 
 	"wms-api/config"
 	authcontroller "wms-api/controller/authentication"
+	inventorycontroller "wms-api/controller/inventory"
 	mastercontroller "wms-api/controller/master"
+	stockcontrolcontroller "wms-api/controller/stock_control"
 	"wms-api/middleware"
 	authrepository "wms-api/repository/authentication"
+	inventoryrepository "wms-api/repository/inventory"
 	masterrepository "wms-api/repository/master"
+	stockcontrolrepository "wms-api/repository/stock_control"
 	"wms-api/routes"
 	authservice "wms-api/services/authentication"
+	inventoryservice "wms-api/services/inventory"
 	masterservice "wms-api/services/master"
+	stockcontrolservice "wms-api/services/stock_control"
 )
 
 func main() {
@@ -53,6 +59,14 @@ func main() {
 		log.Fatalf("seed operational configuration: %v", err)
 	}
 	operationalController := mastercontroller.NewOperationalController(operationalService)
+	if err := inventoryrepository.Migrate(db); err != nil {
+		log.Fatalf("migrate inventory identity: %v", err)
+	}
+	if err := stockcontrolrepository.Migrate(db); err != nil {
+		log.Fatalf("migrate stock control: %v", err)
+	}
+	inventoryController := inventorycontroller.NewController(inventoryservice.NewService(inventoryrepository.NewRepositories(db)))
+	stockControlController := stockcontrolcontroller.NewController(stockcontrolservice.NewService(stockcontrolrepository.NewRepositories(db)))
 	policyRepository := authrepository.NewAuthenticationPolicyRepository(db)
 	reasonRepository := authrepository.NewSessionRevocationReasonRepository(db)
 	accountRepository := authrepository.NewAppAccountRepository(db)
@@ -112,6 +126,8 @@ func main() {
 		MasterController:         masterController,
 		CatalogController:        catalogController,
 		OperationalController:    operationalController,
+		InventoryController:      inventoryController,
+		StockControlController:   stockControlController,
 	})
 	log.Printf("WMS API listening on %s", cfg.App.Address())
 	if err := router.Run(cfg.App.Address()); err != nil {

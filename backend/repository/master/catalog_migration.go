@@ -54,6 +54,6 @@ func MigrateCatalog(db *gorm.DB) error {
 				return err
 			}
 		}
-		return nil
+		return MigrateHandlingUnitTypes(tx)
 	})
 }

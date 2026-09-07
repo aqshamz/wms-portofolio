@@ -15,6 +15,7 @@ type CatalogRepositories struct {
 	InventoryStatus     *InventoryStatusRepository
 	QualityStatus       *QualityStatusRepository
 	InspectionResult    *InspectionResultRepository
+	HandlingUnitType    *HandlingUnitTypeRepository
 }
 
 func NewCatalogRepositories(db *gorm.DB) *CatalogRepositories {
@@ -30,5 +31,6 @@ func NewCatalogRepositories(db *gorm.DB) *CatalogRepositories {
 		InventoryStatus:     NewInventoryStatusRepository(db),
 		QualityStatus:       NewQualityStatusRepository(db),
 		InspectionResult:    NewInspectionResultRepository(db),
+		HandlingUnitType:    NewHandlingUnitTypeRepository(db),
 	}
 }

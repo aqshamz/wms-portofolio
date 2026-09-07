@@ -201,3 +201,33 @@ example, real local UUIDs, setup order, and API requests to explore the data.
 With the development API running, use `scripts/seed-study-data.ps1` to create
 missing `STUDY_` records without resetting existing entries. This opt-in script
 is not run on application startup and creates no inventory transactions.
+Then run `scripts/seed-study-inventory.ps1` for idempotent lots, a pallet, serials,
+opening balances and RECEIVE movements. See
+[Study inventory data](docs/study-inventory-data.md).
+
+### Inventory identity
+
+Lots, serial identities and handling units now support create/list/get under
+`/api/v1/inventory`, with session guards, scope validation and database constraints.
+Handling-unit types support master CRUD under `/api/v1/master/handling-unit-types`.
+See [Inventory identity API and testing examples](docs/inventory-identity-api.md).
+Identity creation does not receive stock or change quantities. Movement, QC,
+container changes and individual serial current state remain separate work.
+
+### Inventory core
+
+Current balances, immutable movements and serial current-state pointers now form
+the shared inventory posting foundation. HTTP exposes authenticated inquiry only;
+domain services use an atomic, idempotent internal posting method. See
+[Inventory core architecture and inquiry API](docs/inventory-core-api.md).
+Generic balance/movement mutation is intentionally not exposed. Reservations and
+document-backed stock-control workflows remain separate orchestration layers.
+
+### Stock control
+
+Authenticated immediate commands now cover internal moves, status changes,
+adjustments, single-balance count reconciliation, and atomic inter-warehouse
+transfer. They require optimistic balance versions and create idempotent core
+movements. See [Stock-control API](docs/stock-control-api.md). These are posting
+commands; maker/checker and dispatch/in-transit/receipt document workflows remain
+distinct future orchestration over the same core.

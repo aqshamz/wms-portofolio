@@ -56,6 +56,6 @@ func (s *CatalogService) SeedCatalog(ctx context.Context) error {
 		}); err != nil {
 			return err
 		}
-		return nil
+		return repos.HandlingUnitType.SeedDefaults(ctx)
 	})
 }

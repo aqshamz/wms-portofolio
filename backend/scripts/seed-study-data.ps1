@@ -1,5 +1,6 @@
 # Development-only, additive API seed. Run with the backend already running.
 # Never updates/deletes records, grants access, or creates inventory transactions.
+# Run seed-study-inventory.ps1 afterwards to add idempotent opening inventory.
 [CmdletBinding()]
 param(
     [string]$BaseUrl = 'http://localhost:8080',
@@ -149,6 +150,13 @@ try {
     $warehouseId = $warehouse.warehouse_id
     Ensure-Record "warehouses/$warehouseId/owners" @{ owner_id = $ownerId } @('owner_id') | Out-Null
 
+    $transferWarehouse = Ensure-Record 'warehouses' @{ code = 'STUDY_WH_2'; name = 'Study - Surabaya Warehouse'; operator_id = $operatorId; timezone_name = 'Asia/Jakarta'; city = 'Surabaya'; country_code = 'ID' } -Links @{ operator_id = $operatorId }
+    $transferWarehouseId = $transferWarehouse.warehouse_id
+    Ensure-Record "warehouses/$transferWarehouseId/owners" @{ owner_id = $ownerId } @('owner_id') | Out-Null
+    $transferZone = Ensure-Record "warehouses/$transferWarehouseId/zones" @{ code = 'STUDY_STORAGE'; name = 'Study - Transfer Storage' }
+    $transferLinks = @{ zone_id = $transferZone.zone_id; location_type_id = $locationTypes.STORAGE.location_type_id }
+    $transferLocation = Ensure-Record "warehouses/$transferWarehouseId/locations" @{ code = 'STUDY_BULK_01'; zone_id = $transferLinks.zone_id; location_type_id = $transferLinks.location_type_id; is_pick_face = $false; pick_sequence = 10 } -Links $transferLinks
+
     $zones = @{}
     foreach ($code in @('INBOUND', 'STORAGE', 'OUTBOUND')) {
         $zones[$code] = Ensure-Record "warehouses/$warehouseId/zones" @{ code = "STUDY_$code"; name = "Study - $code" }
@@ -181,6 +189,14 @@ try {
         }
         $items += Invoke-Api GET "master/items/$($item.item_id)"
     }
+    $equipmentCategory = Ensure-Record "item-categories?owner_id=$ownerId" @{ owner_id = $ownerId; code = 'STUDY_EQUIPMENT'; name = 'Study - Equipment' } -Links @{ owner_id = $ownerId }
+    # A scanner created from the older identity guide may have no category.
+    # Reuse it when its owner/UOM/control flags are compatible; fresh datasets
+    # place it in STUDY_EQUIPMENT.
+    $scannerLinks = @{ owner_id = $ownerId; base_uom_id = $ea.uom_id; serial_controlled = $true; lot_controlled = $false }
+    $scanner = Ensure-Record "items?owner_id=$ownerId" @{ owner_id = $ownerId; category_id = $equipmentCategory.category_id; base_uom_id = $ea.uom_id; code = 'STUDY_SCANNER'; name = 'Study - Handheld Scanner'; serial_controlled = $true; lot_controlled = $false } -Links $scannerLinks
+    Ensure-Record "items/$($scanner.item_id)/barcodes" @{ uom_id = $ea.uom_id; barcode = 'STUDY-SCANNER-EA'; is_primary = $true } @('barcode') -Links @{ uom_id = $ea.uom_id } | Out-Null
+    $items += Invoke-Api GET "master/items/$($scanner.item_id)"
 
     $scope = @{ owner_id = $ownerId; warehouse_id = $warehouseId }
     $picking = Ensure-Record "picking-strategies?owner_id=$ownerId&warehouse_id=$warehouseId" @{ owner_id = $ownerId; warehouse_id = $warehouseId; code = 'STUDY_FEFO'; name = 'Study - First Expiry First Out' } -Links $scope
@@ -220,8 +236,9 @@ try {
     [pscustomobject]@{
         created = $script:created; reused = $script:reused
         operator = $operator; owner = $owner; warehouse = $warehouse
+        transfer_warehouse = $transferWarehouse; transfer_location = $transferLocation
         zones = $zones; locations = $locations; partners = $partners
-        category = $category; items = $items
+        category = $category; categories = @($category, $equipmentCategory); items = $items
         picking_strategy = $picking; putaway_strategy = $putaway
         document_type = $document; document_statuses = $statuses; number_rules = $numberRules; task_type = $task
     }

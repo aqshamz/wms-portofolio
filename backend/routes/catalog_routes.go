@@ -8,6 +8,11 @@ import (
 func registerCatalogRoutes(api *gin.RouterGroup, controller *controller.CatalogController, requireSession gin.HandlerFunc) {
 	master := api.Group("/master")
 	master.Use(requireSession)
+	master.POST("/handling-unit-types", controller.CreateHandlingUnitType)
+	master.GET("/handling-unit-types", controller.ListHandlingUnitType)
+	master.GET("/handling-unit-types/:id", controller.GetHandlingUnitType)
+	master.PUT("/handling-unit-types/:id", controller.UpdateHandlingUnitType)
+	master.PATCH("/handling-unit-types/:id/deactivate", controller.DeactivateHandlingUnitType)
 
 	master.POST("/partner-types", controller.CreatePartnerType)
 	master.GET("/partner-types", controller.ListPartnerType)

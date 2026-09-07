@@ -15,8 +15,8 @@ func TestAllCatalogRoutesRequireSession(t *testing.T) {
 	router := gin.New()
 	registerCatalogRoutes(router.Group("/api/v1"), controller.NewCatalogController(nil), middleware.NewAuthentication(nil).RequireSession())
 	registered := router.Routes()
-	if len(registered) != 52 {
-		t.Fatalf("registered %d catalog routes, expected 52", len(registered))
+	if len(registered) != 57 {
+		t.Fatalf("registered %d catalog routes, expected 57", len(registered))
 	}
 	for _, route := range registered {
 		t.Run(route.Method+" "+route.Path, func(t *testing.T) {

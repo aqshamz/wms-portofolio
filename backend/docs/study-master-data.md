@@ -6,13 +6,15 @@ Existing records were left untouched. A second run created zero new records.
 
 ## The example business
 
-`STUDY_OP` operates `STUDY_WH` in Jakarta. `STUDY_OWNER` is its client and owns
-the coffee inventory. The warehouse-owner association allows that client's
-goods to be stored in this warehouse. Both operator and owner are organizations;
+`STUDY_OP` operates `STUDY_WH` in Jakarta and `STUDY_WH_2` in Surabaya.
+`STUDY_OWNER` is its client and owns the coffee inventory and serialized study
+scanners. The warehouse-owner associations allow that client's goods to be
+stored in both warehouses. Both operator and owner are organizations;
 their roles come from these relationships, not a separate organization type.
 
 The client buys from `STUDY_SUPPLIER` and sells to `STUDY_CUSTOMER`. Both business
-partners and both coffee items belong to **STUDY_OWNER**, not the operator.
+partners, both coffee items and the scanner item belong to **STUDY_OWNER**, not
+the operator.
 
 Set up your own data in this order:
 
@@ -174,6 +176,10 @@ execution flow. No inventory identities, lots, balances, receipts, tasks, or
 movements were inserted. No document ID was allocated and no daily counter was
 consumed by this setup. ID generation is a consuming POST, not a preview; see
 the operational API guide before testing it.
+
+Opening inventory is intentionally a separate opt-in step. See
+[Study inventory data](study-inventory-data.md) and run
+`scripts/seed-study-inventory.ps1` after this master script.
 
 The current master APIs validate bearer sessions but do not yet enforce role
 permissions or account owner/warehouse scope authorization.
