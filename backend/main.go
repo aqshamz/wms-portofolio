@@ -6,18 +6,24 @@ import (
 
 	"wms-api/config"
 	authcontroller "wms-api/controller/authentication"
+	inboundcontroller "wms-api/controller/inbound"
 	inventorycontroller "wms-api/controller/inventory"
 	mastercontroller "wms-api/controller/master"
+	outboundcontroller "wms-api/controller/outbound"
 	stockcontrolcontroller "wms-api/controller/stock_control"
 	"wms-api/middleware"
 	authrepository "wms-api/repository/authentication"
+	inboundrepository "wms-api/repository/inbound"
 	inventoryrepository "wms-api/repository/inventory"
 	masterrepository "wms-api/repository/master"
+	outboundrepository "wms-api/repository/outbound"
 	stockcontrolrepository "wms-api/repository/stock_control"
 	"wms-api/routes"
 	authservice "wms-api/services/authentication"
+	inboundservice "wms-api/services/inbound"
 	inventoryservice "wms-api/services/inventory"
 	masterservice "wms-api/services/master"
+	outboundservice "wms-api/services/outbound"
 	stockcontrolservice "wms-api/services/stock_control"
 )
 
@@ -65,8 +71,30 @@ func main() {
 	if err := stockcontrolrepository.Migrate(db); err != nil {
 		log.Fatalf("migrate stock control: %v", err)
 	}
+	if err := inboundrepository.Migrate(db); err != nil {
+		log.Fatalf("migrate inbound tables: %v", err)
+	}
+	if err := inboundrepository.SeedReferenceData(db); err != nil {
+		log.Fatalf("seed inbound references: %v", err)
+	}
+	if err := outboundrepository.Migrate(db); err != nil {
+		log.Fatalf("migrate outbound tables: %v", err)
+	}
+	if err := outboundrepository.SeedReferenceData(db); err != nil {
+		log.Fatalf("seed outbound references: %v", err)
+	}
 	inventoryController := inventorycontroller.NewController(inventoryservice.NewService(inventoryrepository.NewRepositories(db)))
 	stockControlController := stockcontrolcontroller.NewController(stockcontrolservice.NewService(stockcontrolrepository.NewRepositories(db)))
+	inboundService, err := inboundservice.NewService(inboundrepository.NewRepositories(db), cfg.Database.Timezone)
+	if err != nil {
+		log.Fatalf("configure inbound timezone: %v", err)
+	}
+	inboundController := inboundcontroller.NewController(inboundService)
+	outboundService, err := outboundservice.NewService(outboundrepository.NewRepositories(db), cfg.Database.Timezone)
+	if err != nil {
+		log.Fatalf("configure outbound timezone: %v", err)
+	}
+	outboundController := outboundcontroller.NewController(outboundService)
 	policyRepository := authrepository.NewAuthenticationPolicyRepository(db)
 	reasonRepository := authrepository.NewSessionRevocationReasonRepository(db)
 	accountRepository := authrepository.NewAppAccountRepository(db)
@@ -127,6 +155,8 @@ func main() {
 		CatalogController:        catalogController,
 		OperationalController:    operationalController,
 		InventoryController:      inventoryController,
+		InboundController:        inboundController,
+		OutboundController:       outboundController,
 		StockControlController:   stockControlController,
 	})
 	log.Printf("WMS API listening on %s", cfg.App.Address())

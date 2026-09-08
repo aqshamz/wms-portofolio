@@ -77,6 +77,8 @@ type OperationalRepositories struct {
 	TaskStatus               *TaskStatusRepository
 	TaskStatusTransition     *TaskStatusTransitionRepository
 	TaskPriority             *TaskPriorityRepository
+	ReasonCode               *ReasonCodeRepository
+	ValidationSeverity       *ValidationSeverityRepository
 	PickingSortMethod        *PickingSortMethodRepository
 	PickingStrategy          *PickingStrategyRepository
 	PickingStrategyRule      *PickingStrategyRuleRepository
@@ -103,6 +105,8 @@ func NewOperationalRepositories(db *gorm.DB) *OperationalRepositories {
 		TaskStatus:               NewTaskStatusRepository(db),
 		TaskStatusTransition:     NewTaskStatusTransitionRepository(db),
 		TaskPriority:             NewTaskPriorityRepository(db),
+		ReasonCode:               NewReasonCodeRepository(db),
+		ValidationSeverity:       NewValidationSeverityRepository(db),
 		PickingSortMethod:        NewPickingSortMethodRepository(db),
 		PickingStrategy:          NewPickingStrategyRepository(db),
 		PickingStrategyRule:      NewPickingStrategyRuleRepository(db),

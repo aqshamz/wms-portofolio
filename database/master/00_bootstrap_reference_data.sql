@@ -104,6 +104,7 @@ INSERT INTO inventory_status (
 )
 VALUES
     ('QC_PENDING', 'QC pending', 'Stock received and waiting for quality inspection.', false, false),
+    ('PUTAWAY_PENDING', 'Putaway pending', 'Quality-approved stock waiting for physical putaway.', false, false),
     ('AVAILABLE',  'Available',  'Stock available for allocation and picking.', true,  true),
     ('HOLD',       'Hold',       'Stock held from allocation.',                 false, false),
     ('QUARANTINE', 'Quarantine', 'Stock awaiting inspection or disposition.',   false, false),
@@ -156,7 +157,9 @@ VALUES
     ('STATUS_CHANGE',    'Status change',    'Inventory status changed.'),
     ('COUNT_CORRECTION', 'Count correction', 'Inventory corrected from a stock count.'),
     ('RETURN_TO_VENDOR', 'Return to vendor', 'Rejected inventory returned to a vendor or factory.'),
-    ('DISPOSE',          'Dispose',          'Rejected inventory removed through disposal.')
+    ('DISPOSE',          'Dispose',          'Rejected inventory removed through disposal.'),
+    ('RECEIPT_REVERSAL', 'Receipt reversal', 'Untouched received inventory removed by an authorized receipt reversal.'),
+    ('PUTAWAY_REVERSAL', 'Putaway reversal', 'Completed putaway returned to QC for controlled correction.')
 ON CONFLICT (code) DO NOTHING;
 
 INSERT INTO movement_type (code, name, description)
@@ -452,7 +455,8 @@ VALUES
     ('ASSIGNED',    'Assigned',    false, false, false),
     ('IN_PROGRESS', 'In progress', false, false, false),
     ('COMPLETED',   'Completed',   false, true,  false),
-    ('CANCELLED',   'Cancelled',   false, true,  true)
+    ('CANCELLED',   'Cancelled',   false, true,  true),
+    ('REVERSED',    'Reversed',    false, true,  false)
 ON CONFLICT (code) DO NOTHING;
 
 INSERT INTO task_priority (code, name, priority_value)
@@ -614,14 +618,17 @@ WITH statuses(
         ('PURCHASE_ORDER','APPROVED',           'Approved',           false, false, false, 20),
         ('PURCHASE_ORDER','PARTIALLY_RECEIVED', 'Partially received', false, false, false, 30),
         ('PURCHASE_ORDER','RECEIVED',           'Received',           false, true,  false, 40),
+        ('PURCHASE_ORDER','CLOSED',             'Closed short',       false, true,  false, 50),
         ('PURCHASE_ORDER','CANCELLED',          'Cancelled',          false, true,  true,  90),
         ('INBOUND',     'DRAFT',              'Draft',              true,  false, false, 10),
         ('INBOUND',     'RELEASED',           'Released',           false, false, false, 20),
         ('INBOUND',     'PARTIALLY_RECEIVED', 'Partially received', false, false, false, 30),
         ('INBOUND',     'RECEIVED',           'Received',           false, true,  false, 40),
+        ('INBOUND',     'CLOSED',             'Closed short',       false, true,  false, 50),
         ('INBOUND',     'CANCELLED',          'Cancelled',          false, true,  true,  90),
         ('RECEIPT',     'OPEN',               'Open',               true,  false, false, 10),
         ('RECEIPT',     'COMPLETED',          'Completed',          false, true,  false, 20),
+        ('RECEIPT',     'REVERSED',           'Reversed',           false, true,  false, 30),
         ('RECEIPT',     'CANCELLED',          'Cancelled',          false, true,  true,  90),
         ('OUTBOUND',    'DRAFT',              'Draft',              true,  false, false, 10),
         ('OUTBOUND',    'VALIDATED',          'Validated',          false, false, false, 15),
@@ -775,6 +782,8 @@ WITH transitions(document_type_code, from_code, to_code) AS (
         ('PURCHASE_ORDER','APPROVED',           'RECEIVED'),
         ('PURCHASE_ORDER','APPROVED',           'CANCELLED'),
         ('PURCHASE_ORDER','PARTIALLY_RECEIVED', 'RECEIVED'),
+        ('PURCHASE_ORDER','APPROVED',           'CLOSED'),
+        ('PURCHASE_ORDER','PARTIALLY_RECEIVED', 'CLOSED'),
         ('INBOUND',     'DRAFT',              'RELEASED'),
         ('INBOUND',     'DRAFT',              'CANCELLED'),
         ('INBOUND',     'RELEASED',           'PARTIALLY_RECEIVED'),
@@ -782,6 +791,8 @@ WITH transitions(document_type_code, from_code, to_code) AS (
         ('INBOUND',     'RELEASED',           'CANCELLED'),
         ('INBOUND',     'PARTIALLY_RECEIVED', 'RECEIVED'),
         ('INBOUND',     'PARTIALLY_RECEIVED', 'CANCELLED'),
+        ('INBOUND',     'RELEASED',           'CLOSED'),
+        ('INBOUND',     'PARTIALLY_RECEIVED', 'CLOSED'),
         ('RECEIPT',     'OPEN',               'COMPLETED'),
         ('RECEIPT',     'OPEN',               'CANCELLED'),
         ('OUTBOUND',    'DRAFT',              'VALIDATED'),

@@ -16,6 +16,8 @@ func defaultMovementTypes() []model.MovementType {
 		{Code: "TRANSFER_IN", Name: "Transfer in"}, {Code: "ADJUSTMENT", Name: "Adjustment"},
 		{Code: "STATUS_CHANGE", Name: "Status change"}, {Code: "COUNT_CORRECTION", Name: "Count correction"},
 		{Code: "RETURN_TO_VENDOR", Name: "Return to vendor"}, {Code: "DISPOSE", Name: "Dispose"},
+		{Code: "RECEIPT_REVERSAL", Name: "Receipt reversal"},
+		{Code: "PUTAWAY_REVERSAL", Name: "Putaway reversal"},
 		{Code: "DELIVERY_RETURN", Name: "Delivery return"},
 		{Code: "OUTBOUND_CHECK_CORRECTION", Name: "Outbound check correction"},
 	}

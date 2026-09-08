@@ -21,6 +21,7 @@ type PostingRequest struct {
 	SourceLineID               *string
 	ReasonCodeID               *string
 	Notes                      *string
+	RelocateHandlingUnit       bool
 }
 type BalanceDimension struct {
 	LocationID        string

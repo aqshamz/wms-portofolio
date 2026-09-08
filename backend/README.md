@@ -231,3 +231,38 @@ transfer. They require optimistic balance versions and create idempotent core
 movements. See [Stock-control API](docs/stock-control-api.md). These are posting
 commands; maker/checker and dispatch/in-transit/receipt document workflows remain
 distinct future orchestration over the same core.
+
+### Inbound part 1
+
+Purchase orders, inbound orders/ASNs, and receiving are implemented through the
+point where accepted stock is posted as `QC_PENDING`. The flow supports partial
+planning and receipt, dock rejection, lot/serial/HU identity, receiving-UOM
+conversion, optimistic document versions, atomic completion, and idempotent
+inventory posting. See [Inbound part 1 API](docs/inbound-part-1-api.md).
+
+### Inbound part 2
+
+Quality inspection now splits received stock into `PUTAWAY_PENDING` and/or
+`QUARANTINE`. Authenticated putaway tasks move passed inventory into configured
+storage as `AVAILABLE`; quarantine dispositions support accept-to-storage,
+return-to-vendor, and disposal with partial-case tracking. See
+[Inbound part 2 API](docs/inbound-part-2-api.md).
+
+### Inbound part 3
+
+The inbound lifecycle is completed with configurable PO-line receiving
+tolerances, multiple-receipt variance tracking, short closure, safe document
+cancellation, untouched-receipt reversal, putaway assignment/retargeting,
+putaway cancellation and reversal, and quarantine rework with child
+reinspection lineage. Every exception and reversal remains auditable in the
+inventory ledger and inbound exception inquiry. See
+[Inbound part 3 API](docs/inbound-part-3-api.md).
+
+### Outbound part 1
+
+Client delivery orders now support recorded validation, release, FEFO/FIFO
+allocation, inventory reservations, multi-order waves, pick-task execution,
+short-pick closure, idempotent `PICK` movements, and staging confirmation. Stock
+is reserved without changing on-hand quantity and is moved only by physical pick
+confirmation. See [Outbound part 1 API](docs/outbound-part-1-api.md). Verification,
+packing, shipment, and delivery remain in outbound part 2.

@@ -340,6 +340,26 @@ func testIdentity(t *testing.T, fresh bool) {
 	if hus.TotalItems != 1 || hus.Items[0].ID != child.ID {
 		t.Fatal("HU parent filter")
 	}
+	// Document workflows may relocate a whole, unreserved leaf HU atomically.
+	relocationTarget := master.WarehouseLocation{WarehouseID: warehouse.ID, ZoneID: zone.ID, LocationTypeID: locationType.ID, Code: "C"}
+	ok(t, tx.Create(&relocationTarget).Error)
+	relocationRequest := dto.CreateHandlingUnitRequest{OwnerID: owner.ID, WarehouseID: warehouse.ID, HandlingUnitTypeID: pallet, CurrentLocationID: &location.ID, Barcode: "MOVE-" + suffix}
+	relocationHU, err := s.CreateHandlingUnit(ctx, relocationRequest, account.ID)
+	ok(t, err)
+	receivedHU, err := s.PostMovement(ctx, dto.PostingRequest{OperationKey: "hu-receive-" + suffix, MovementTypeCode: "RECEIVE", OwnerID: owner.ID, WarehouseID: warehouse.ID, BusinessDate: "2026-09-07", ItemID: commodity.ID, HandlingUnitID: &relocationHU.ID, To: &dto.BalanceDimension{LocationID: location.ID, InventoryStatusID: available.ID}, Quantity: "2", SourceDocumentID: "HU-TEST"}, account.ID)
+	ok(t, err)
+	_, err = s.PostMovement(ctx, dto.PostingRequest{OperationKey: "hu-unauthorized-" + suffix, MovementTypeCode: "PUTAWAY", OwnerID: owner.ID, WarehouseID: warehouse.ID, BusinessDate: "2026-09-07", ItemID: commodity.ID, HandlingUnitID: &relocationHU.ID, From: &dto.BalanceDimension{LocationID: location.ID, InventoryStatusID: available.ID}, To: &dto.BalanceDimension{LocationID: relocationTarget.ID, InventoryStatusID: available.ID}, Quantity: "2", ExpectedSourceVersion: &receivedHU.ToBalance.VersionNo, SourceDocumentID: "HU-TEST"}, account.ID)
+	want(t, err, ErrInvalidInput)
+	relocatedHU, err := s.PostMovement(ctx, dto.PostingRequest{OperationKey: "hu-move-" + suffix, MovementTypeCode: "PUTAWAY", OwnerID: owner.ID, WarehouseID: warehouse.ID, BusinessDate: "2026-09-07", ItemID: commodity.ID, HandlingUnitID: &relocationHU.ID, From: &dto.BalanceDimension{LocationID: location.ID, InventoryStatusID: available.ID}, To: &dto.BalanceDimension{LocationID: relocationTarget.ID, InventoryStatusID: available.ID}, Quantity: "2", ExpectedSourceVersion: &receivedHU.ToBalance.VersionNo, SourceDocumentID: "HU-TEST", RelocateHandlingUnit: true}, account.ID)
+	ok(t, err)
+	if relocatedHU.ToBalance == nil || relocatedHU.ToBalance.OnHandQty != "2.000000" {
+		t.Fatal("HU relocation balance")
+	}
+	relocationHURead, err := s.GetHandlingUnit(ctx, relocationHU.ID)
+	ok(t, err)
+	if relocationHURead.CurrentLocationID == nil || *relocationHURead.CurrentLocationID != relocationTarget.ID {
+		t.Fatal("HU location was not relocated with inventory")
+	}
 	// Legacy imports may contain cycles. Reject them without hanging.
 	ok(t, tx.Model(&model.HandlingUnit{}).Where("handling_unit_id = ?", hu.ID).Update("parent_handling_unit_id", child.ID).Error)
 	_, err = s.CreateHandlingUnit(ctx, childRequest, account.ID)

@@ -1,0 +1,53 @@
+package routes
+
+import (
+	controller "wms-api/controller/inbound"
+
+	"github.com/gin-gonic/gin"
+)
+
+func registerInboundRoutes(api *gin.RouterGroup, controller *controller.Controller, requireSession gin.HandlerFunc) {
+	group := api.Group("/inbound")
+	group.Use(requireSession)
+	group.POST("/purchase-orders", controller.CreatePurchaseOrder)
+	group.GET("/purchase-orders", controller.ListPurchaseOrders)
+	group.GET("/purchase-orders/:id", controller.GetPurchaseOrder)
+	group.POST("/purchase-orders/:id/approve", controller.ApprovePurchaseOrder)
+	group.POST("/purchase-orders/:id/close", controller.ClosePurchaseOrder)
+	group.POST("/purchase-orders/:id/cancel", controller.CancelPurchaseOrder)
+	group.POST("/orders", controller.CreateInboundOrder)
+	group.GET("/orders", controller.ListInboundOrders)
+	group.GET("/orders/:id", controller.GetInboundOrder)
+	group.POST("/orders/:id/release", controller.ReleaseInboundOrder)
+	group.POST("/orders/:id/close", controller.CloseInboundOrder)
+	group.POST("/orders/:id/cancel", controller.CancelInboundOrder)
+	group.POST("/receipts", controller.CreateReceipt)
+	group.GET("/receipts", controller.ListReceipts)
+	group.GET("/receipts/:id", controller.GetReceipt)
+	group.POST("/receipts/:id/complete", controller.CompleteReceipt)
+	group.POST("/receipts/:id/cancel", controller.CancelReceipt)
+	group.POST("/receipts/:id/reverse", controller.ReverseReceipt)
+	group.POST("/quality-inspections", controller.CreateQualityInspection)
+	group.GET("/quality-inspections", controller.ListQualityInspections)
+	group.GET("/quality-inspections/:id", controller.GetQualityInspection)
+	group.POST("/quality-inspections/:id/complete", controller.CompleteQualityInspection)
+	group.POST("/quality-inspections/:id/cancel", controller.CancelQualityInspection)
+	group.GET("/putaway-tasks", controller.ListPutawayTasks)
+	group.GET("/putaway-tasks/:id", controller.GetPutawayTask)
+	group.POST("/putaway-tasks/:id/start", controller.StartPutawayTask)
+	group.POST("/putaway-tasks/:id/complete", controller.CompletePutawayTask)
+	group.POST("/putaway-tasks/:id/assign", controller.AssignPutawayTask)
+	group.POST("/putaway-tasks/:id/retarget", controller.RetargetPutawayTask)
+	group.POST("/putaway-tasks/:id/cancel", controller.CancelPutawayTask)
+	group.POST("/putaway-tasks/:id/reverse", controller.ReversePutawayTask)
+	group.GET("/quarantine-disposition-types", controller.ListQuarantineDispositionTypes)
+	group.GET("/quarantine-cases", controller.ListQuarantineCases)
+	group.GET("/quarantine-cases/:id", controller.GetQuarantineCase)
+	group.POST("/quarantine-cases/:id/dispositions", controller.CreateQuarantineDisposition)
+	group.GET("/exceptions", controller.ListInboundExceptions)
+	group.GET("/exceptions/:id", controller.GetInboundException)
+	group.GET("/rework-tasks", controller.ListReworkTasks)
+	group.GET("/rework-tasks/:id", controller.GetReworkTask)
+	group.POST("/rework-tasks/:id/start", controller.StartReworkTask)
+	group.POST("/rework-tasks/:id/complete", controller.CompleteReworkTask)
+}

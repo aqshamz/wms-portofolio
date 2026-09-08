@@ -173,8 +173,14 @@ try {
     }
 
     $partners = @{}
-    foreach ($spec in @(@('SUPPLIER', $supplierType), @('CUSTOMER', $customerType))) {
-        $partner = Ensure-Record "business-partners?owner_id=$ownerId" @{ owner_id = $ownerId; code = "STUDY_$($spec[0])"; name = "Study - Coffee $($spec[0])"; country_code = 'ID' } -Links @{ owner_id = $ownerId }
+    foreach ($spec in @(@('SUPPLIER', $supplierType), @('CUSTOMER', $customerType), @('STORE', $customerType))) {
+        $partnerBody = @{ owner_id = $ownerId; code = "STUDY_$($spec[0])"; name = "Study - Coffee $($spec[0])"; country_code = 'ID' }
+        if ($spec[0] -eq 'STORE') {
+            $partnerBody.address_line_1 = 'Jl. Study Warehouse No. 1'
+            $partnerBody.city = 'Jakarta'
+            $partnerBody.postal_code = '10110'
+        }
+        $partner = Ensure-Record "business-partners?owner_id=$ownerId" $partnerBody -Links @{ owner_id = $ownerId }
         Ensure-Record "business-partners/$($partner.partner_id)/types" @{ partner_type_id = $spec[1].partner_type_id } @('partner_type_id') | Out-Null
         $partners[$spec[0]] = $partner
     }

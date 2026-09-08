@@ -64,6 +64,23 @@ func (r *InventoryBalanceRepository) SetOnHand(ctx context.Context, id, quantity
 	return nil
 }
 
+func (r *InventoryBalanceRepository) SetQuantities(ctx context.Context, id, onHand, reserved string) error {
+	result := r.db.WithContext(ctx).Model(&model.InventoryBalance{}).Where("balance_id=?", id).Updates(map[string]interface{}{"on_hand_qty": onHand, "reserved_qty": reserved, "version_no": gorm.Expr("version_no+1"), "updated_at": gorm.Expr("clock_timestamp()")})
+	if result.Error != nil {
+		return Error(result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *InventoryBalanceRepository) CountPositiveForHandlingUnit(ctx context.Context, handlingUnitID string) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.InventoryBalance{}).Where("handling_unit_id=? AND on_hand_qty>0", handlingUnitID).Count(&count).Error
+	return count, Error(err)
+}
+
 const balanceSelect = `b.balance_id,b.owner_id,b.warehouse_id,b.location_id,l.code location_code,b.item_id,
  i.code item_code,i.name item_name,b.lot_id,lot.lot_number,b.handling_unit_id,b.inventory_status_id,
  s.code inventory_status_code,b.on_hand_qty,b.reserved_qty,(b.on_hand_qty-b.reserved_qty) available_qty,

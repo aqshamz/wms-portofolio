@@ -1,5 +1,13 @@
 # Study Guide 03: Inventory Identity
 
+Implementation update (2026-09-04): identity registration APIs are now available;
+see [backend API examples](../../../backend/docs/inventory-identity-api.md).
+The owner/item and HU parent/location composite-FK gaps described below have
+been addressed for the identity tables in the backend migration and current
+DDL. The balance, serial-current-state and movement concerns remain future work.
+The human-readable date/sequence IDs below are conceptual examples; the current
+API generates random prefixed internal IDs without consuming document counters.
+
 Inventory identity answers a deceptively simple question:
 
 > Exactly which stock are we talking about?
@@ -453,4 +461,3 @@ For this WMS, the recommended approach is:
 - [ ] Explain current balance versus immutable movement history.
 - [ ] Decide whether individual serial tracking is required.
 - [ ] Review and resolve the five DDL consistency gaps above.
-

@@ -7,7 +7,7 @@ import (
 
 func MigrateOperational(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.AutoMigrate(&model.AppModule{}, &model.AppPermission{}, &model.DocumentType{}, &model.DocumentStatus{}, &model.DocumentStatusTransition{}, &model.DocumentNumberRule{}, &model.DocumentDailyCounter{}, &model.TaskType{}, &model.TaskStatus{}, &model.TaskStatusTransition{}, &model.TaskPriority{}, &model.PickingSortMethod{}, &model.PickingStrategy{}, &model.PickingStrategyRule{}, &model.PutawayStrategy{}, &model.PutawayStrategyRule{}); err != nil {
+		if err := tx.AutoMigrate(&model.AppModule{}, &model.AppPermission{}, &model.DocumentType{}, &model.DocumentStatus{}, &model.DocumentStatusTransition{}, &model.DocumentNumberRule{}, &model.DocumentDailyCounter{}, &model.TaskType{}, &model.TaskStatus{}, &model.TaskStatusTransition{}, &model.TaskPriority{}, &model.PickingSortMethod{}, &model.PickingStrategy{}, &model.PickingStrategyRule{}, &model.PutawayStrategy{}, &model.PutawayStrategyRule{}, &model.ValidationSeverity{}); err != nil {
 			return err
 		}
 		statements := []string{
@@ -21,6 +21,7 @@ func MigrateOperational(db *gorm.DB) error {
 			`CREATE UNIQUE INDEX IF NOT EXISTS uq_ops_task_type_code ON task_type (code)`,
 			`CREATE UNIQUE INDEX IF NOT EXISTS uq_ops_task_status_code ON task_status (code)`,
 			`CREATE UNIQUE INDEX IF NOT EXISTS uq_ops_task_priority_code ON task_priority (code)`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS uq_ops_validation_severity_code ON validation_severity (code)`,
 			`CREATE UNIQUE INDEX IF NOT EXISTS uq_ops_picking_sort_method_code ON picking_sort_method (code)`,
 			`CREATE UNIQUE INDEX IF NOT EXISTS uq_ops_picking_strategy_owner_id_warehouse_id_code ON picking_strategy (owner_id,warehouse_id,code) NULLS NOT DISTINCT`,
 			`DO $$ BEGIN ALTER TABLE picking_strategy_rule ADD CONSTRAINT fk_ops_picking_strategy_rule_picking_strategy_id FOREIGN KEY (picking_strategy_id) REFERENCES picking_strategy (picking_strategy_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,

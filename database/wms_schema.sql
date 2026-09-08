@@ -482,7 +482,11 @@ CREATE TABLE handling_unit_type (
     name                  varchar(100) NOT NULL,
     max_weight            numeric(20,6),
     max_volume            numeric(20,6),
-    is_active             boolean NOT NULL DEFAULT true
+    is_active             boolean NOT NULL DEFAULT true,
+    CONSTRAINT ck_hu_type_capacity CHECK (
+        (max_weight IS NULL OR max_weight >= 0) AND
+        (max_volume IS NULL OR max_volume >= 0)
+    )
 );
 
 -- -----------------------------------------------------------------------------
@@ -765,6 +769,10 @@ CREATE TABLE inventory_lot (
     created_at      timestamptz NOT NULL DEFAULT clock_timestamp(),
     created_by      uuid REFERENCES app_account(account_id),
     UNIQUE (owner_id, item_id, lot_number),
+    UNIQUE (lot_id, owner_id, item_id),
+    CONSTRAINT fk_identity_inventory_lot_item FOREIGN KEY (owner_id, item_id)
+        REFERENCES item(owner_id, item_id),
+    CONSTRAINT ck_identity_lot_number_nonempty CHECK (length(btrim(lot_number)) > 0),
     CONSTRAINT ck_lot_dates CHECK (
         expiry_date IS NULL OR manufacture_date IS NULL OR expiry_date >= manufacture_date
     )
@@ -777,7 +785,11 @@ CREATE TABLE serial_number (
     serial_no       varchar(120) NOT NULL,
     created_at      timestamptz NOT NULL DEFAULT clock_timestamp(),
     created_by      uuid REFERENCES app_account(account_id),
-    UNIQUE (owner_id, item_id, serial_no)
+    UNIQUE (owner_id, item_id, serial_no),
+    UNIQUE (serial_id, owner_id, item_id),
+    CONSTRAINT fk_identity_serial_number_item FOREIGN KEY (owner_id, item_id)
+        REFERENCES item(owner_id, item_id),
+    CONSTRAINT ck_identity_serial_no_nonempty CHECK (length(btrim(serial_no)) > 0)
 );
 
 CREATE TABLE handling_unit (
@@ -794,6 +806,12 @@ CREATE TABLE handling_unit (
     CONSTRAINT ck_hu_not_own_parent CHECK (
         parent_handling_unit_id IS NULL OR parent_handling_unit_id <> handling_unit_id
     ),
+    UNIQUE (handling_unit_id, owner_id, warehouse_id),
+    CONSTRAINT fk_identity_hu_parent FOREIGN KEY (parent_handling_unit_id, owner_id, warehouse_id)
+        REFERENCES handling_unit(handling_unit_id, owner_id, warehouse_id),
+    CONSTRAINT fk_identity_hu_location FOREIGN KEY (current_location_id, warehouse_id)
+        REFERENCES warehouse_location(location_id, warehouse_id),
+    CONSTRAINT ck_identity_barcode_nonempty CHECK (length(btrim(barcode)) > 0),
     FOREIGN KEY (owner_id, warehouse_id)
         REFERENCES warehouse_owner(owner_id, warehouse_id)
 );
@@ -837,6 +855,8 @@ CREATE TABLE purchase_order_line (
     line_no                integer NOT NULL,
     item_id                uuid NOT NULL,
     ordered_qty            numeric(20,6) NOT NULL,
+    over_receipt_tolerance_pct numeric(7,4) NOT NULL DEFAULT 0,
+    under_receipt_tolerance_pct numeric(7,4) NOT NULL DEFAULT 0,
     uom_id                 uuid NOT NULL REFERENCES uom(uom_id),
     vendor_item_code       varchar(100),
     expected_lot_no        varchar(100),
@@ -851,7 +871,11 @@ CREATE TABLE purchase_order_line (
     FOREIGN KEY (owner_id, item_id)
         REFERENCES item(owner_id, item_id),
     CONSTRAINT ck_purchase_order_line_no CHECK (line_no > 0),
-    CONSTRAINT ck_purchase_order_line_qty CHECK (ordered_qty > 0)
+    CONSTRAINT ck_purchase_order_line_qty CHECK (
+        ordered_qty > 0
+        AND over_receipt_tolerance_pct BETWEEN 0 AND 100
+        AND under_receipt_tolerance_pct BETWEEN 0 AND 100
+    )
 );
 
 CREATE TABLE inbound_order (
@@ -915,10 +939,14 @@ CREATE TABLE receipt (
     notes            text,
     created_at       timestamptz NOT NULL DEFAULT clock_timestamp(),
     created_by       uuid NOT NULL REFERENCES app_account(account_id),
+    updated_at       timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_by       uuid REFERENCES app_account(account_id),
+    version_no       integer NOT NULL DEFAULT 1,
     FOREIGN KEY (document_type_id, status_id)
         REFERENCES document_status(document_type_id, status_id),
     FOREIGN KEY (owner_id, warehouse_id)
-        REFERENCES warehouse_owner(owner_id, warehouse_id)
+        REFERENCES warehouse_owner(owner_id, warehouse_id),
+    CONSTRAINT ck_receipt_version CHECK (version_no > 0)
 );
 
 CREATE TABLE receipt_line (
@@ -929,6 +957,8 @@ CREATE TABLE receipt_line (
     item_id          uuid NOT NULL REFERENCES item(item_id),
     received_qty     numeric(20,6) NOT NULL,
     rejected_qty     numeric(20,6) NOT NULL DEFAULT 0,
+    exception_notes  text,
+    exception_type_code varchar(40),
     uom_id           uuid NOT NULL REFERENCES uom(uom_id),
     created_at       timestamptz NOT NULL DEFAULT clock_timestamp(),
     created_by       uuid NOT NULL REFERENCES app_account(account_id),
@@ -970,6 +1000,7 @@ CREATE TABLE quality_inspection (
     inspection_id       varchar(120) PRIMARY KEY,
     receipt_inventory_id varchar(160) NOT NULL REFERENCES receipt_inventory(receipt_inventory_id),
     parent_inspection_id varchar(120) REFERENCES quality_inspection(inspection_id),
+    source_balance_id   varchar(160),
     quality_status_id   uuid NOT NULL REFERENCES quality_status(quality_status_id),
     inspection_result_id uuid REFERENCES inspection_result(inspection_result_id),
     inspected_qty       numeric(20,6) NOT NULL,
@@ -977,13 +1008,20 @@ CREATE TABLE quality_inspection (
     failed_qty          numeric(20,6) NOT NULL DEFAULT 0,
     inspected_at        timestamptz,
     inspected_by        uuid REFERENCES app_account(account_id),
+    cancelled_at        timestamptz,
+    cancelled_by        uuid REFERENCES app_account(account_id),
+    cancellation_reason text,
     notes               text,
     created_at          timestamptz NOT NULL DEFAULT clock_timestamp(),
     created_by          uuid NOT NULL REFERENCES app_account(account_id),
+    updated_at          timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_by          uuid REFERENCES app_account(account_id),
+    version_no          integer NOT NULL DEFAULT 1,
     CONSTRAINT ck_inspection_quantities CHECK (
         inspected_qty > 0 AND passed_qty >= 0 AND failed_qty >= 0
         AND passed_qty + failed_qty <= inspected_qty
-    )
+    ),
+    CONSTRAINT ck_quality_inspection_version CHECK (version_no > 0)
 );
 
 CREATE TABLE putaway_task (
@@ -992,7 +1030,8 @@ CREATE TABLE putaway_task (
     task_status_id    uuid NOT NULL REFERENCES task_status(task_status_id),
     task_priority_id  uuid NOT NULL REFERENCES task_priority(task_priority_id),
     receipt_inventory_id varchar(160) NOT NULL REFERENCES receipt_inventory(receipt_inventory_id),
-    source_balance_id varchar(160),
+    inspection_id     varchar(120) NOT NULL UNIQUE REFERENCES quality_inspection(inspection_id),
+    source_balance_id varchar(160) NOT NULL,
     owner_id          uuid NOT NULL REFERENCES organization(organization_id),
     warehouse_id      uuid NOT NULL REFERENCES warehouse(warehouse_id),
     item_id           uuid NOT NULL REFERENCES item(item_id),
@@ -1006,11 +1045,22 @@ CREATE TABLE putaway_task (
     assigned_to       uuid REFERENCES app_account(account_id),
     started_at        timestamptz,
     completed_at      timestamptz,
+    inventory_movement_id varchar(140),
+    resulting_balance_id varchar(160),
+    reversal_movement_id varchar(140),
+    reversed_at         timestamptz,
+    reversed_by         uuid REFERENCES app_account(account_id),
+    reversal_reason     text,
+    replacement_inspection_id varchar(120) REFERENCES quality_inspection(inspection_id),
     created_at        timestamptz NOT NULL DEFAULT clock_timestamp(),
     created_by        uuid NOT NULL REFERENCES app_account(account_id),
+    updated_at        timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_by        uuid REFERENCES app_account(account_id),
+    version_no        integer NOT NULL DEFAULT 1,
     CONSTRAINT ck_putaway_qty CHECK (
         planned_qty > 0 AND completed_qty >= 0 AND completed_qty <= planned_qty
-    )
+    ),
+    CONSTRAINT ck_putaway_task_version CHECK (version_no > 0)
 );
 
 -- -----------------------------------------------------------------------------
@@ -1076,8 +1126,17 @@ CREATE TABLE inventory_balance (
         owner_id, warehouse_id, location_id, item_id,
         lot_id, handling_unit_id, inventory_status_id
     ),
+    UNIQUE (balance_id, owner_id, item_id),
     FOREIGN KEY (owner_id, warehouse_id)
         REFERENCES warehouse_owner(owner_id, warehouse_id),
+    FOREIGN KEY (owner_id, item_id)
+        REFERENCES item(owner_id, item_id),
+    FOREIGN KEY (location_id, warehouse_id)
+        REFERENCES warehouse_location(location_id, warehouse_id),
+    FOREIGN KEY (lot_id, owner_id, item_id)
+        REFERENCES inventory_lot(lot_id, owner_id, item_id),
+    FOREIGN KEY (handling_unit_id, owner_id, warehouse_id)
+        REFERENCES handling_unit(handling_unit_id, owner_id, warehouse_id),
     CONSTRAINT ck_inventory_balance_qty CHECK (
         on_hand_qty >= 0 AND reserved_qty >= 0 AND reserved_qty <= on_hand_qty
     ),
@@ -1103,11 +1162,25 @@ CREATE TABLE inventory_movement (
     uom_id             uuid NOT NULL REFERENCES uom(uom_id),
     source_document_id varchar(140) NOT NULL,
     source_line_id     varchar(160),
+    operation_key       varchar(160),
+    operation_fingerprint varchar(64),
     reason_code_id     uuid REFERENCES reason_code(reason_code_id),
     notes               text,
     created_by          uuid NOT NULL REFERENCES app_account(account_id),
     FOREIGN KEY (owner_id, warehouse_id)
         REFERENCES warehouse_owner(owner_id, warehouse_id),
+    FOREIGN KEY (owner_id, item_id)
+        REFERENCES item(owner_id, item_id),
+    FOREIGN KEY (lot_id, owner_id, item_id)
+        REFERENCES inventory_lot(lot_id, owner_id, item_id),
+    FOREIGN KEY (serial_id, owner_id, item_id)
+        REFERENCES serial_number(serial_id, owner_id, item_id),
+    FOREIGN KEY (handling_unit_id, owner_id, warehouse_id)
+        REFERENCES handling_unit(handling_unit_id, owner_id, warehouse_id),
+    FOREIGN KEY (from_location_id, warehouse_id)
+        REFERENCES warehouse_location(location_id, warehouse_id),
+    FOREIGN KEY (to_location_id, warehouse_id)
+        REFERENCES warehouse_location(location_id, warehouse_id),
     CONSTRAINT ck_movement_qty CHECK (quantity > 0),
     CONSTRAINT ck_movement_has_effect CHECK (
         from_location_id IS DISTINCT FROM to_location_id OR
@@ -1115,13 +1188,45 @@ CREATE TABLE inventory_movement (
     )
 );
 
+-- One authoritative pointer per serialized unit. Current location, lot,
+-- handling unit, status and UOM are derived by joining its inventory balance.
+CREATE TABLE serial_inventory (
+    serial_id          varchar(160) PRIMARY KEY,
+    balance_id         varchar(160) NOT NULL,
+    owner_id           uuid NOT NULL,
+    item_id            uuid NOT NULL,
+    version_no         bigint NOT NULL DEFAULT 1,
+    updated_at         timestamptz NOT NULL DEFAULT clock_timestamp(),
+    FOREIGN KEY (serial_id, owner_id, item_id)
+        REFERENCES serial_number(serial_id, owner_id, item_id),
+    FOREIGN KEY (balance_id, owner_id, item_id)
+        REFERENCES inventory_balance(balance_id, owner_id, item_id),
+    CONSTRAINT ck_serial_inventory_version CHECK (version_no > 0)
+);
+
 ALTER TABLE putaway_task
     ADD CONSTRAINT fk_putaway_source_balance
     FOREIGN KEY (source_balance_id) REFERENCES inventory_balance(balance_id);
 
+ALTER TABLE putaway_task
+    ADD CONSTRAINT fk_putaway_inventory_movement
+    FOREIGN KEY (inventory_movement_id) REFERENCES inventory_movement(movement_id);
+
+ALTER TABLE putaway_task
+    ADD CONSTRAINT fk_putaway_resulting_balance
+    FOREIGN KEY (resulting_balance_id) REFERENCES inventory_balance(balance_id);
+
+ALTER TABLE putaway_task
+    ADD CONSTRAINT fk_putaway_reversal_movement
+    FOREIGN KEY (reversal_movement_id) REFERENCES inventory_movement(movement_id);
+
 ALTER TABLE receipt_inventory
     ADD CONSTRAINT fk_receipt_inventory_initial_balance
     FOREIGN KEY (initial_balance_id) REFERENCES inventory_balance(balance_id);
+
+ALTER TABLE quality_inspection
+    ADD CONSTRAINT fk_quality_inspection_source_balance
+    FOREIGN KEY (source_balance_id) REFERENCES inventory_balance(balance_id);
 
 CREATE TABLE quarantine_case (
     quarantine_case_id varchar(140) PRIMARY KEY,
@@ -1167,6 +1272,7 @@ CREATE TABLE quarantine_disposition (
     processed_at              timestamptz,
     inventory_movement_id     varchar(140) REFERENCES inventory_movement(movement_id),
     resulting_balance_id      varchar(160) REFERENCES inventory_balance(balance_id),
+    target_location_id        uuid REFERENCES warehouse_location(location_id),
     created_at                timestamptz NOT NULL DEFAULT clock_timestamp(),
     created_by                uuid NOT NULL REFERENCES app_account(account_id),
     UNIQUE (inventory_movement_id),
@@ -1184,6 +1290,7 @@ CREATE TABLE rework_task (
     task_type_id        uuid NOT NULL REFERENCES task_type(task_type_id),
     task_status_id      uuid NOT NULL REFERENCES task_status(task_status_id),
     task_priority_id    uuid NOT NULL REFERENCES task_priority(task_priority_id),
+    source_balance_id   varchar(160) NOT NULL REFERENCES inventory_balance(balance_id),
     planned_qty         numeric(20,6) NOT NULL,
     completed_qty       numeric(20,6) NOT NULL DEFAULT 0,
     uom_id              uuid NOT NULL REFERENCES uom(uom_id),
@@ -1195,11 +1302,37 @@ CREATE TABLE rework_task (
     reinspection_id     varchar(120) UNIQUE REFERENCES quality_inspection(inspection_id),
     created_at          timestamptz NOT NULL DEFAULT clock_timestamp(),
     created_by          uuid NOT NULL REFERENCES app_account(account_id),
+	updated_at         timestamptz NOT NULL DEFAULT clock_timestamp(),
+	updated_by         uuid REFERENCES app_account(account_id),
+	version_no         integer NOT NULL DEFAULT 1,
     CONSTRAINT ck_rework_qty CHECK (
         planned_qty > 0 AND completed_qty >= 0 AND completed_qty <= planned_qty
     ),
     CONSTRAINT ck_rework_period CHECK (
         completed_at IS NULL OR started_at IS NULL OR completed_at >= started_at
+    ),
+    CONSTRAINT ck_rework_version CHECK (version_no > 0)
+);
+
+CREATE TABLE inbound_exception (
+    inbound_exception_id varchar(140) PRIMARY KEY,
+    owner_id             uuid NOT NULL REFERENCES organization(organization_id),
+    warehouse_id         uuid NOT NULL REFERENCES warehouse(warehouse_id),
+    source_document_id   varchar(140) NOT NULL,
+    source_line_id       varchar(160),
+    exception_type_code  varchar(40) NOT NULL,
+    expected_qty         numeric(20,6),
+    actual_qty           numeric(20,6),
+    variance_qty         numeric(20,6),
+    notes                text,
+    created_at           timestamptz NOT NULL DEFAULT clock_timestamp(),
+    created_by           uuid NOT NULL REFERENCES app_account(account_id),
+    CONSTRAINT ck_inbound_exception_type CHECK (
+        exception_type_code IN (
+            'OVER_RECEIPT', 'UNDER_RECEIPT', 'REJECTED_AT_DOCK',
+            'DAMAGED', 'WRONG_ITEM',
+            'CANCELLATION', 'REVERSAL'
+        )
     )
 );
 
@@ -2714,6 +2847,10 @@ CREATE INDEX ix_receipt_inventory_line
     ON receipt_inventory(receipt_line_id, item_id);
 CREATE INDEX ix_quality_inspection_receipt_inventory
     ON quality_inspection(receipt_inventory_id, created_at DESC);
+CREATE UNIQUE INDEX uq_quality_inspection_root_receipt_inventory
+    ON quality_inspection(receipt_inventory_id) WHERE parent_inspection_id IS NULL;
+CREATE UNIQUE INDEX uq_putaway_task_inventory_movement
+    ON putaway_task(inventory_movement_id) WHERE inventory_movement_id IS NOT NULL;
 CREATE INDEX ix_putaway_assignee_status ON putaway_task(assigned_to, task_status_id);
 
 CREATE INDEX ix_balance_lookup
@@ -2723,6 +2860,9 @@ CREATE INDEX ix_movement_item_time ON inventory_movement(owner_id, item_id, occu
 CREATE INDEX ix_movement_warehouse_date_type
     ON inventory_movement(owner_id, warehouse_id, business_date DESC, movement_type_id);
 CREATE INDEX ix_movement_source ON inventory_movement(source_document_id, source_line_id);
+CREATE UNIQUE INDEX uq_inventory_movement_operation_key
+    ON inventory_movement(operation_key) WHERE operation_key IS NOT NULL;
+CREATE INDEX ix_serial_inventory_balance ON serial_inventory(balance_id);
 CREATE INDEX ix_quarantine_owner_status
     ON quarantine_case(owner_id, warehouse_id, status_id, opened_at DESC);
 CREATE INDEX ix_quarantine_disposition_case

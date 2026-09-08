@@ -33,6 +33,7 @@ func (s *CatalogService) SeedCatalog(ctx context.Context) error {
 		}
 		if err := repos.InventoryStatus.Seed(ctx, []model.InventoryStatus{
 			{Code: "QC_PENDING", Name: "QC pending", IsActive: true, IsAllocatable: false, IsPickable: false},
+			{Code: "PUTAWAY_PENDING", Name: "Putaway pending", IsActive: true, IsAllocatable: false, IsPickable: false},
 			{Code: "AVAILABLE", Name: "Available", IsActive: true, IsAllocatable: true, IsPickable: true},
 			{Code: "HOLD", Name: "Hold", IsActive: true, IsAllocatable: false, IsPickable: false},
 			{Code: "QUARANTINE", Name: "Quarantine", IsActive: true, IsAllocatable: false, IsPickable: false},

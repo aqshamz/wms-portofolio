@@ -245,23 +245,31 @@ func (s *Service) PostMovement(ctx context.Context, q dto.PostingRequest, actor 
 				return invalid("lot does not match owner and item")
 			}
 		}
+		var relocateHandlingUnit bool
 		if q.HandlingUnitID != nil {
-			hu, err := r.HandlingUnit.GetShared(ctx, *q.HandlingUnitID)
+			hu, err := r.HandlingUnit.Lock(ctx, *q.HandlingUnitID)
 			if err != nil {
 				return reference(err, "handling unit")
 			}
 			if hu.OwnerID != q.OwnerID || hu.WarehouseID != q.WarehouseID {
 				return invalid("handling unit does not match owner and warehouse")
 			}
-			relevant := q.To
-			if relevant == nil {
-				relevant = q.From
-			}
-			if hu.CurrentLocationID == nil || *hu.CurrentLocationID != relevant.LocationID {
-				return invalid("handling unit current location does not match posting")
-			}
-			if q.From != nil && q.To != nil && q.From.LocationID != q.To.LocationID {
-				return invalid("generic posting cannot relocate a handling unit")
+			relocateHandlingUnit = q.From != nil && q.To != nil && q.From.LocationID != q.To.LocationID
+			if relocateHandlingUnit {
+				if !q.RelocateHandlingUnit {
+					return invalid("posting is not authorized to relocate a handling unit")
+				}
+				if hu.CurrentLocationID == nil || *hu.CurrentLocationID != q.From.LocationID {
+					return invalid("handling unit is not at the source location")
+				}
+			} else {
+				relevant := q.To
+				if relevant == nil {
+					relevant = q.From
+				}
+				if hu.CurrentLocationID == nil || *hu.CurrentLocationID != relevant.LocationID {
+					return invalid("handling unit current location does not match posting")
+				}
 			}
 			if hu.IsClosed && q.From == nil {
 				return invalid("cannot receive into a closed handling unit")
@@ -278,6 +286,19 @@ func (s *Service) PostMovement(ctx context.Context, q dto.PostingRequest, actor 
 			}
 			onHand, _ := rat(value.OnHandQty)
 			reserved, _ := rat(value.ReservedQty)
+			if relocateHandlingUnit {
+				positiveBalances, countErr := r.Balance.CountPositiveForHandlingUnit(ctx, *q.HandlingUnitID)
+				if countErr != nil {
+					return countErr
+				}
+				children, childErr := r.HandlingUnit.CountChildren(ctx, *q.HandlingUnitID)
+				if childErr != nil {
+					return childErr
+				}
+				if positiveBalances != 1 || children != 0 || reserved.Sign() != 0 || onHand.Cmp(number) != 0 {
+					return invalid("handling-unit relocation requires one unreserved full balance and no child handling units")
+				}
+			}
 			remaining := new(big.Rat).Sub(onHand, number)
 			if remaining.Sign() < 0 || remaining.Cmp(reserved) < 0 {
 				return invalid("insufficient unreserved source quantity")
@@ -361,6 +382,11 @@ func (s *Service) PostMovement(ctx context.Context, q dto.PostingRequest, actor 
 			}
 		} else if len(q.SerialIDs) != 0 {
 			return invalid("serial_ids require a serial-controlled item")
+		}
+		if relocateHandlingUnit {
+			if err := r.HandlingUnit.Relocate(ctx, *q.HandlingUnitID, q.From.LocationID, q.To.LocationID); err != nil {
+				return err
+			}
 		}
 		if err := r.Movement.Create(ctx, &movement); err != nil {
 			return err
