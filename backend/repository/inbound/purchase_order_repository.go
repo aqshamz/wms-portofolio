@@ -12,6 +12,7 @@ import (
 type PurchaseOrderRow struct {
 	model.PurchaseOrder
 	StatusCode, OwnerCode, VendorCode, VendorName, WarehouseCode string
+	SuccessorPurchaseOrderID                                     *string
 }
 
 type PurchaseOrderRepository struct{ db *gorm.DB }
@@ -24,6 +25,22 @@ func (r *PurchaseOrderRepository) Create(ctx context.Context, value *model.Purch
 	return Error(r.db.WithContext(ctx).Create(value).Error)
 }
 
+func (r *PurchaseOrderRepository) UpdateDraft(ctx context.Context, id, actor string, version int64, values map[string]interface{}) error {
+	values["updated_by"] = actor
+	values["updated_at"] = gorm.Expr("clock_timestamp()")
+	values["version_no"] = gorm.Expr("version_no+1")
+	result := r.db.WithContext(ctx).Model(&model.PurchaseOrder{}).
+		Where("purchase_order_id=? AND version_no=? AND status_id IN (SELECT status_id FROM document_status WHERE document_type_id=purchase_order.document_type_id AND code='DRAFT')", id, version).
+		Updates(values)
+	if result.Error != nil {
+		return Error(result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return ErrConcurrentWrite
+	}
+	return nil
+}
+
 func (r *PurchaseOrderRepository) Lock(ctx context.Context, id string) (model.PurchaseOrder, error) {
 	var value model.PurchaseOrder
 	err := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("purchase_order_id = ?", id).Take(&value).Error
@@ -31,7 +48,7 @@ func (r *PurchaseOrderRepository) Lock(ctx context.Context, id string) (model.Pu
 }
 
 func purchaseOrderQuery(db *gorm.DB) *gorm.DB {
-	return db.Table("purchase_order po").Select("po.*, status.code status_code, owner.code owner_code, vendor.code vendor_code, vendor.name vendor_name, warehouse.code warehouse_code").
+	return db.Table("purchase_order po").Select("po.*, status.code status_code, owner.code owner_code, vendor.code vendor_code, vendor.name vendor_name, warehouse.code warehouse_code, (SELECT successor.purchase_order_id FROM purchase_order successor WHERE successor.supersedes_purchase_order_id=po.purchase_order_id LIMIT 1) successor_purchase_order_id").
 		Joins("JOIN document_status status ON status.status_id=po.status_id").
 		Joins("JOIN organization owner ON owner.organization_id=po.owner_id").
 		Joins("JOIN business_partner vendor ON vendor.partner_id=po.vendor_id").
@@ -84,4 +101,10 @@ func (r *PurchaseOrderRepository) CountNonFinalInboundOrders(ctx context.Context
 		Where(`EXISTS (SELECT 1 FROM inbound_order_line line JOIN purchase_order_line po_line ON po_line.purchase_order_line_id=line.purchase_order_line_id WHERE line.inbound_id=inbound.inbound_id AND po_line.purchase_order_id=?)`, id).
 		Where("NOT status.is_final").Count(&count).Error
 	return count, Error(err)
+}
+
+func (r *PurchaseOrderRepository) HasSuccessor(ctx context.Context, id string) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.PurchaseOrder{}).Where("supersedes_purchase_order_id=?", id).Count(&count).Error
+	return count > 0, Error(err)
 }

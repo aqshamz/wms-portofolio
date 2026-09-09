@@ -86,6 +86,8 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	inboundOK(t, tx.Create(&accountStatus).Error)
 	account := authmodel.AppAccount{Username: "inbound_" + suffix, DisplayName: "Inbound test", AccountStatusID: accountStatus.ID, ExternalSubject: inboundPointer("inbound_" + suffix)}
 	inboundOK(t, tx.Create(&account).Error)
+	deniedAccount := authmodel.AppAccount{Username: "inbound_denied_" + suffix, DisplayName: "Inbound denied", AccountStatusID: accountStatus.ID, ExternalSubject: inboundPointer("inbound_denied_" + suffix)}
+	inboundOK(t, tx.Create(&deniedAccount).Error)
 	owner := mastermodel.Organization{Code: "IBO_" + suffix, Name: "Inbound owner", TimezoneName: "Asia/Jakarta"}
 	inboundOK(t, tx.Create(&owner).Error)
 	warehouse := mastermodel.Warehouse{OperatorID: owner.ID, Code: "IBW_" + suffix, Name: "Inbound warehouse", TimezoneName: "Asia/Jakarta"}
@@ -130,6 +132,16 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	expiryText := expiry.AddDate(1, 0, 0).Format("2006-01-02")
 	service, err := NewService(repository.NewRepositories(tx), "Asia/Jakarta")
 	inboundOK(t, err)
+	allowed, err := service.CanAccess(ctx, account.ID, owner.ID, warehouse.ID)
+	inboundOK(t, err)
+	if !allowed {
+		t.Fatal("granted inbound scope was denied")
+	}
+	allowed, err = service.CanAccess(ctx, deniedAccount.ID, owner.ID, warehouse.ID)
+	inboundOK(t, err)
+	if allowed {
+		t.Fatal("ungranted inbound scope was allowed")
+	}
 	po, err := service.CreatePurchaseOrder(ctx, dto.CreatePurchaseOrderRequest{
 		OwnerID: owner.ID, VendorID: vendor.ID, WarehouseID: warehouse.ID, BusinessDate: businessDate,
 		PurchaseOrderNo: "CLIENT-PO-" + suffix, OrderedAt: orderedAt,
@@ -142,23 +154,42 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	if po.StatusCode != "DRAFT" || po.VersionNo != 1 || len(po.Lines) != 2 {
 		t.Fatalf("unexpected purchase order: %+v", po)
 	}
+	scopeOwner, scopeWarehouse, err := service.ResourceScope(ctx, "purchase-orders", po.ID)
+	inboundOK(t, err)
+	if scopeOwner != owner.ID || scopeWarehouse != warehouse.ID {
+		t.Fatalf("wrong purchase-order scope: %s %s", scopeOwner, scopeWarehouse)
+	}
+	po, err = service.UpdatePurchaseOrder(ctx, po.ID, dto.UpdatePurchaseOrderRequest{ExpectedVersion: po.VersionNo, PurchaseOrderNo: "CLIENT-PO-EDITED-" + suffix, OrderedAt: orderedAt, Notes: inboundPointer("draft edited")}, account.ID)
+	inboundOK(t, err)
+	po, err = service.AddPurchaseOrderLine(ctx, po.ID, dto.AddPurchaseOrderLineRequest{ExpectedVersion: po.VersionNo, PurchaseOrderLineRequest: dto.PurchaseOrderLineRequest{ItemID: item.ID, OrderedQty: "1", UOMID: each.ID}}, account.ID)
+	inboundOK(t, err)
+	addedPOLine := po.Lines[len(po.Lines)-1]
+	po, err = service.UpdatePurchaseOrderLine(ctx, po.ID, addedPOLine.ID, dto.UpdatePurchaseOrderLineRequest{ExpectedVersion: po.VersionNo, OrderedQty: "2"}, account.ID)
+	inboundOK(t, err)
+	po, err = service.DeletePurchaseOrderLine(ctx, po.ID, addedPOLine.ID, po.VersionNo, account.ID)
+	inboundOK(t, err)
+	_, err = service.UpdatePurchaseOrder(ctx, po.ID, dto.UpdatePurchaseOrderRequest{ExpectedVersion: 1, PurchaseOrderNo: "STALE-" + suffix, OrderedAt: orderedAt}, account.ID)
+	inboundWant(t, err, repository.ErrConcurrentWrite)
 	po, err = service.ApprovePurchaseOrder(ctx, po.ID, dto.TransitionRequest{ExpectedVersion: po.VersionNo}, account.ID)
 	inboundOK(t, err)
-	if po.StatusCode != "APPROVED" || po.VersionNo != 2 {
+	if po.StatusCode != "APPROVED" || po.VersionNo != 6 {
 		t.Fatalf("purchase order was not approved: %+v", po)
 	}
 
 	inboundOrder, err := service.CreateInboundOrder(ctx, dto.CreateInboundOrderRequest{
 		PurchaseOrderID: po.ID, BusinessDate: businessDate,
-		Lines: []dto.InboundOrderLineRequest{
-			{PurchaseOrderLineID: po.Lines[0].ID, ExpectedQty: "10"},
-			{PurchaseOrderLineID: po.Lines[1].ID, ExpectedQty: "2"},
-		},
+		Lines: []dto.InboundOrderLineRequest{{PurchaseOrderLineID: po.Lines[0].ID, ExpectedQty: "10"}},
 	}, account.ID)
+	inboundOK(t, err)
+	inboundOrder, err = service.UpdateInboundOrder(ctx, inboundOrder.ID, dto.UpdateInboundOrderRequest{ExpectedVersion: inboundOrder.VersionNo, ExternalReference: inboundPointer("EDITED-" + suffix), Notes: inboundPointer("draft edited")}, account.ID)
+	inboundOK(t, err)
+	inboundOrder, err = service.AddInboundOrderLine(ctx, inboundOrder.ID, dto.AddInboundOrderLineRequest{ExpectedVersion: inboundOrder.VersionNo, InboundOrderLineRequest: dto.InboundOrderLineRequest{PurchaseOrderLineID: po.Lines[1].ID, ExpectedQty: "2"}}, account.ID)
+	inboundOK(t, err)
+	inboundOrder, err = service.UpdateInboundOrderLine(ctx, inboundOrder.ID, inboundOrder.Lines[0].ID, dto.UpdateInboundOrderLineRequest{ExpectedVersion: inboundOrder.VersionNo, ExpectedQty: "10", Notes: inboundPointer("line edited")}, account.ID)
 	inboundOK(t, err)
 	inboundOrder, err = service.ReleaseInboundOrder(ctx, inboundOrder.ID, dto.TransitionRequest{ExpectedVersion: inboundOrder.VersionNo}, account.ID)
 	inboundOK(t, err)
-	if inboundOrder.StatusCode != "RELEASED" || inboundOrder.VersionNo != 2 {
+	if inboundOrder.StatusCode != "RELEASED" || inboundOrder.VersionNo != 5 {
 		t.Fatalf("inbound order was not released: %+v", inboundOrder)
 	}
 
@@ -185,6 +216,14 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	if receipt.StatusCode != "OPEN" || len(receipt.Lines) != 2 || receipt.Lines[0].AcceptedQty != "8.000000" || receipt.Lines[1].AcceptedQty != "0.000000" {
 		t.Fatalf("unexpected open receipt: %+v", receipt)
 	}
+	receipt, err = service.UpdateReceipt(ctx, receipt.ID, dto.UpdateReceiptRequest{ExpectedVersion: receipt.VersionNo, ReceivedAt: businessDate + "T09:05:00+07:00", DockLocationID: dock.ID, VehicleNumber: inboundPointer("EDITED-TRUCK"), Lines: []dto.ReceiptLineRequest{
+		{InboundLineID: inboundOrder.Lines[0].ID, ReceivedQty: "10", RejectedQty: "2", ExceptionNotes: inboundPointer("Two damaged units rejected at dock"), ExceptionTypeCode: inboundPointer("DAMAGED"), Batches: []dto.ReceiptBatchRequest{{SourceQty: "8", ReceivedLocationID: qc.ID, Lot: &dto.ReceiptLotRequest{LotNumber: "LOT-" + suffix, ExpiryDate: &expiryText}}}},
+		{InboundLineID: inboundOrder.Lines[1].ID, ReceivedQty: "2", RejectedQty: "2", ExceptionNotes: inboundPointer("Entire line is the wrong supplied item"), ExceptionTypeCode: inboundPointer("WRONG_ITEM")},
+	}}, account.ID)
+	inboundOK(t, err)
+	if receipt.VersionNo != 2 || receipt.VehicleNumber == nil || *receipt.VehicleNumber != "EDITED-TRUCK" {
+		t.Fatalf("receipt draft edit failed: %+v", receipt)
+	}
 	var before int64
 	inboundOK(t, tx.Model(&inventorymodel.InventoryMovement{}).Where("source_document_id = ?", receipt.ID).Count(&before).Error)
 	if before != 0 || receipt.Lines[0].Batches[0].InitialBalanceID != nil {
@@ -193,7 +232,7 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 
 	receipt, err = service.CompleteReceipt(ctx, receipt.ID, dto.TransitionRequest{ExpectedVersion: receipt.VersionNo}, account.ID)
 	inboundOK(t, err)
-	if receipt.StatusCode != "COMPLETED" || receipt.VersionNo != 2 || receipt.Lines[0].Batches[0].InitialBalanceID == nil {
+	if receipt.StatusCode != "COMPLETED" || receipt.VersionNo != 3 || receipt.Lines[0].Batches[0].InitialBalanceID == nil {
 		t.Fatalf("receipt was not completed: %+v", receipt)
 	}
 	var movements []inventorymodel.InventoryMovement
@@ -423,6 +462,15 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	if draftPO.StatusCode != "CANCELLED" {
 		t.Fatalf("purchase order cancellation failed: %+v", draftPO)
 	}
+	_, err = service.UpdatePurchaseOrder(ctx, draftPO.ID, dto.UpdatePurchaseOrderRequest{ExpectedVersion: draftPO.VersionNo, PurchaseOrderNo: "CANNOT-EDIT-" + suffix, OrderedAt: orderedAt}, account.ID)
+	inboundWant(t, err, ErrInvalidState)
+	draftPOSuccessor, err := service.CreatePurchaseOrder(ctx, dto.CreatePurchaseOrderRequest{OwnerID: owner.ID, VendorID: vendor.ID, WarehouseID: warehouse.ID, BusinessDate: businessDate, PurchaseOrderNo: "REPLACEMENT-PO-" + suffix, OrderedAt: orderedAt, SupersedesPurchaseOrderID: &draftPO.ID, Lines: []dto.PurchaseOrderLineRequest{{ItemID: item.ID, OrderedQty: "1", UOMID: each.ID}}}, account.ID)
+	inboundOK(t, err)
+	if draftPOSuccessor.SupersedesPurchaseOrderID == nil || *draftPOSuccessor.SupersedesPurchaseOrderID != draftPO.ID {
+		t.Fatalf("purchase-order replacement link missing: %+v", draftPOSuccessor)
+	}
+	_, err = service.CreatePurchaseOrder(ctx, dto.CreatePurchaseOrderRequest{OwnerID: owner.ID, VendorID: vendor.ID, WarehouseID: warehouse.ID, BusinessDate: businessDate, PurchaseOrderNo: "DUPLICATE-REPLACEMENT-PO-" + suffix, OrderedAt: orderedAt, SupersedesPurchaseOrderID: &draftPO.ID, Lines: []dto.PurchaseOrderLineRequest{{ItemID: item.ID, OrderedQty: "1", UOMID: each.ID}}}, account.ID)
+	inboundWant(t, err, ErrInvalidState)
 	cancelFlowPO, err := service.CreatePurchaseOrder(ctx, dto.CreatePurchaseOrderRequest{OwnerID: owner.ID, VendorID: vendor.ID, WarehouseID: warehouse.ID, BusinessDate: businessDate, PurchaseOrderNo: "CANCEL-FLOW-PO-" + suffix, OrderedAt: orderedAt, Lines: []dto.PurchaseOrderLineRequest{{ItemID: item.ID, OrderedQty: "1", UOMID: each.ID}}}, account.ID)
 	inboundOK(t, err)
 	cancelFlowPO, err = service.ApprovePurchaseOrder(ctx, cancelFlowPO.ID, dto.TransitionRequest{ExpectedVersion: cancelFlowPO.VersionNo}, account.ID)
@@ -438,11 +486,25 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	if cancelFlowReceipt.StatusCode != "CANCELLED" {
 		t.Fatalf("receipt cancellation failed: %+v", cancelFlowReceipt)
 	}
+	replacementReceipt, err := service.CreateReceipt(ctx, dto.CreateReceiptRequest{InboundID: cancelFlowInbound.ID, BusinessDate: businessDate, ReceivedAt: businessDate + "T15:05:00+07:00", DockLocationID: dock.ID, SupersedesReceiptID: &cancelFlowReceipt.ID, Lines: []dto.ReceiptLineRequest{{InboundLineID: cancelFlowInbound.Lines[0].ID, ReceivedQty: "1", RejectedQty: "0", Batches: []dto.ReceiptBatchRequest{{SourceQty: "1", ReceivedLocationID: qc.ID, Lot: &dto.ReceiptLotRequest{LotNumber: "CANCEL-LOT-" + suffix, ExpiryDate: &expiryText}}}}}}, account.ID)
+	inboundOK(t, err)
+	if replacementReceipt.SupersedesReceiptID == nil || *replacementReceipt.SupersedesReceiptID != cancelFlowReceipt.ID {
+		t.Fatalf("receipt replacement link missing: %+v", replacementReceipt)
+	}
+	replacementReceipt, err = service.CancelReceipt(ctx, replacementReceipt.ID, dto.ExceptionTransitionRequest{ExpectedVersion: replacementReceipt.VersionNo, Reason: "Replacement receipt no longer required"}, account.ID)
+	inboundOK(t, err)
 	cancelFlowInbound, err = service.CancelInboundOrder(ctx, cancelFlowInbound.ID, dto.ExceptionTransitionRequest{ExpectedVersion: cancelFlowInbound.VersionNo, Reason: "No valid delivery remains"}, account.ID)
 	inboundOK(t, err)
 	if cancelFlowInbound.StatusCode != "CANCELLED" {
 		t.Fatalf("inbound cancellation failed: %+v", cancelFlowInbound)
 	}
+	replacementInbound, err := service.CreateInboundOrder(ctx, dto.CreateInboundOrderRequest{PurchaseOrderID: cancelFlowPO.ID, BusinessDate: businessDate, SupersedesInboundID: &cancelFlowInbound.ID, Lines: []dto.InboundOrderLineRequest{{PurchaseOrderLineID: cancelFlowPO.Lines[0].ID, ExpectedQty: "1"}}}, account.ID)
+	inboundOK(t, err)
+	if replacementInbound.SupersedesInboundID == nil || *replacementInbound.SupersedesInboundID != cancelFlowInbound.ID {
+		t.Fatalf("inbound replacement link missing: %+v", replacementInbound)
+	}
+	replacementInbound, err = service.CancelInboundOrder(ctx, replacementInbound.ID, dto.ExceptionTransitionRequest{ExpectedVersion: replacementInbound.VersionNo, Reason: "Replacement inbound no longer required"}, account.ID)
+	inboundOK(t, err)
 	cancelFlowPO, err = service.CancelPurchaseOrder(ctx, cancelFlowPO.ID, dto.ExceptionTransitionRequest{ExpectedVersion: cancelFlowPO.VersionNo, Reason: "Owner cancelled order"}, account.ID)
 	inboundOK(t, err)
 	if cancelFlowPO.StatusCode != "CANCELLED" {

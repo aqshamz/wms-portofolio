@@ -7,6 +7,15 @@ JSON routes also require `Content-Type: application/json`.
 ## Added routes
 
 ```text
+PUT  /api/v1/inbound/purchase-orders/:id
+POST /api/v1/inbound/purchase-orders/:id/lines
+PUT  /api/v1/inbound/purchase-orders/:id/lines/:line_id
+DELETE /api/v1/inbound/purchase-orders/:id/lines/:line_id
+PUT  /api/v1/inbound/orders/:id
+POST /api/v1/inbound/orders/:id/lines
+PUT  /api/v1/inbound/orders/:id/lines/:line_id
+DELETE /api/v1/inbound/orders/:id/lines/:line_id
+PUT  /api/v1/inbound/receipts/:id
 POST /api/v1/inbound/purchase-orders/:id/close
 POST /api/v1/inbound/purchase-orders/:id/cancel
 POST /api/v1/inbound/orders/:id/close
@@ -26,8 +35,9 @@ POST /api/v1/inbound/rework-tasks/:id/start
 POST /api/v1/inbound/rework-tasks/:id/complete
 ```
 
-The original 24 routes remain available, for 41 authenticated inbound routes
-in total.
+There are 50 authenticated and owner/warehouse-scoped inbound routes in total.
+The quarantine disposition-type lookup is global reference data and only
+requires authentication.
 
 ## Receiving tolerances
 
@@ -102,6 +112,12 @@ The close and cancel endpoints use the same request:
   inventory movement is posted.
 
 Every cancellation creates a `CANCELLATION` exception record.
+
+Cancelled records cannot be edited or reopened. A corrected document is
+created normally with `supersedes_purchase_order_id`, `supersedes_inbound_id`,
+or `supersedes_receipt_id`. The API validates matching business scope and
+source relationships, limits a cancelled document to one direct successor,
+and returns predecessor and successor IDs for audit navigation.
 
 ## Receipt reversal
 

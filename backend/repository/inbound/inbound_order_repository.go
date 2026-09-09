@@ -12,6 +12,7 @@ import (
 type InboundOrderRow struct {
 	model.InboundOrder
 	StatusCode, OwnerCode, VendorCode, VendorName, WarehouseCode string
+	SuccessorInboundID                                           *string
 }
 
 type InboundOrderRepository struct{ db *gorm.DB }
@@ -22,13 +23,28 @@ func NewInboundOrderRepository(db *gorm.DB) *InboundOrderRepository {
 func (r *InboundOrderRepository) Create(ctx context.Context, value *model.InboundOrder) error {
 	return Error(r.db.WithContext(ctx).Create(value).Error)
 }
+func (r *InboundOrderRepository) UpdateDraft(ctx context.Context, id, actor string, version int64, values map[string]interface{}) error {
+	values["updated_by"] = actor
+	values["updated_at"] = gorm.Expr("clock_timestamp()")
+	values["version_no"] = gorm.Expr("version_no+1")
+	result := r.db.WithContext(ctx).Model(&model.InboundOrder{}).
+		Where("inbound_id=? AND version_no=? AND status_id IN (SELECT status_id FROM document_status WHERE document_type_id=inbound_order.document_type_id AND code='DRAFT')", id, version).
+		Updates(values)
+	if result.Error != nil {
+		return Error(result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return ErrConcurrentWrite
+	}
+	return nil
+}
 func (r *InboundOrderRepository) Lock(ctx context.Context, id string) (model.InboundOrder, error) {
 	var value model.InboundOrder
 	err := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("inbound_id=?", id).Take(&value).Error
 	return value, Error(err)
 }
 func inboundOrderQuery(db *gorm.DB) *gorm.DB {
-	return db.Table("inbound_order inbound").Select("inbound.*,status.code status_code,owner.code owner_code,vendor.code vendor_code,vendor.name vendor_name,warehouse.code warehouse_code").
+	return db.Table("inbound_order inbound").Select("inbound.*,status.code status_code,owner.code owner_code,vendor.code vendor_code,vendor.name vendor_name,warehouse.code warehouse_code,(SELECT successor.inbound_id FROM inbound_order successor WHERE successor.supersedes_inbound_id=inbound.inbound_id LIMIT 1) successor_inbound_id").
 		Joins("JOIN document_status status ON status.status_id=inbound.status_id").Joins("JOIN organization owner ON owner.organization_id=inbound.owner_id").
 		Joins("JOIN business_partner vendor ON vendor.partner_id=inbound.vendor_id").Joins("JOIN warehouse ON warehouse.warehouse_id=inbound.warehouse_id")
 }
@@ -77,4 +93,22 @@ func (r *InboundOrderRepository) CountReceiptsWithStatus(ctx context.Context, id
 	}
 	err := query.Count(&count).Error
 	return count, Error(err)
+}
+
+func (r *InboundOrderRepository) HasSuccessor(ctx context.Context, id string) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.InboundOrder{}).Where("supersedes_inbound_id=?", id).Count(&count).Error
+	return count > 0, Error(err)
+}
+
+func (r *InboundOrderRepository) SourcePurchaseOrderID(ctx context.Context, id string) (string, error) {
+	var value string
+	err := r.db.WithContext(ctx).Table("inbound_order_line line").Select("po_line.purchase_order_id").Joins("JOIN purchase_order_line po_line ON po_line.purchase_order_line_id=line.purchase_order_line_id").Where("line.inbound_id=?", id).Group("po_line.purchase_order_id").Limit(1).Scan(&value).Error
+	if err != nil {
+		return "", Error(err)
+	}
+	if value == "" {
+		return "", ErrNotFound
+	}
+	return value, nil
 }

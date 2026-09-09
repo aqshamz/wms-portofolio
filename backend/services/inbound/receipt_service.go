@@ -141,6 +141,10 @@ func (s *Service) CreateReceipt(ctx context.Context, request dto.CreateReceiptRe
 	if err != nil {
 		return dto.ReceiptResponse{}, err
 	}
+	supersedes, err := optional(request.SupersedesReceiptID, 120, "supersedes_receipt_id")
+	if err != nil || (supersedes != nil && !inboundID(*supersedes, 120)) {
+		return dto.ReceiptResponse{}, invalid("invalid supersedes_receipt_id")
+	}
 	seenLines := make(map[string]bool, len(request.Lines))
 	var receiptID string
 	err = s.transaction(ctx, func(local *Service) error {
@@ -177,7 +181,20 @@ func (s *Service) CreateReceipt(ctx context.Context, request dto.CreateReceiptRe
 		}
 		headerInboundID := inbound.ID
 		dockID := dock.ID
-		header := model.Receipt{ID: receiptID, DocumentTypeID: kind.ID, StatusID: initial.ID, InboundID: &headerInboundID, OwnerID: inbound.OwnerID, WarehouseID: inbound.WarehouseID, BusinessDate: businessDate, ReceivedAt: receivedAt, DockLocationID: &dockID, VehicleNumber: vehicle, SealNumber: seal, DeliveryNoteNo: deliveryNote, Notes: notes, CreatedBy: actor, UpdatedBy: &actor, VersionNo: 1}
+		if supersedes != nil {
+			prior, lookupErr := local.repositories.Receipt.Get(ctx, *supersedes)
+			if lookupErr != nil || prior.StatusCode != "CANCELLED" || prior.InboundID == nil || *prior.InboundID != inbound.ID || prior.OwnerID != inbound.OwnerID || prior.WarehouseID != inbound.WarehouseID {
+				return invalid("superseded receipt must be a cancelled receipt for the same inbound order")
+			}
+			hasSuccessor, lookupErr := local.repositories.Receipt.HasSuccessor(ctx, *supersedes)
+			if lookupErr != nil {
+				return lookupErr
+			}
+			if hasSuccessor {
+				return state("cancelled receipt already has a successor")
+			}
+		}
+		header := model.Receipt{ID: receiptID, DocumentTypeID: kind.ID, StatusID: initial.ID, InboundID: &headerInboundID, OwnerID: inbound.OwnerID, WarehouseID: inbound.WarehouseID, BusinessDate: businessDate, ReceivedAt: receivedAt, DockLocationID: &dockID, VehicleNumber: vehicle, SealNumber: seal, DeliveryNoteNo: deliveryNote, Notes: notes, SupersedesReceiptID: supersedes, CreatedBy: actor, UpdatedBy: &actor, VersionNo: 1}
 		if err := local.repositories.Receipt.Create(ctx, &header); err != nil {
 			return err
 		}

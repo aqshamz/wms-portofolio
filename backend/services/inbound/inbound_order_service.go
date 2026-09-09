@@ -38,6 +38,10 @@ func (s *Service) CreateInboundOrder(ctx context.Context, request dto.CreateInbo
 	if err != nil {
 		return dto.InboundOrderResponse{}, err
 	}
+	supersedes, err := optional(request.SupersedesInboundID, 120, "supersedes_inbound_id")
+	if err != nil || (supersedes != nil && !inboundID(*supersedes, 120)) {
+		return dto.InboundOrderResponse{}, invalid("invalid supersedes_inbound_id")
+	}
 	seen := make(map[string]bool, len(request.Lines))
 	var documentID string
 	err = s.transaction(ctx, func(local *Service) error {
@@ -64,7 +68,24 @@ func (s *Service) CreateInboundOrder(ctx context.Context, request dto.CreateInbo
 		if err != nil {
 			return err
 		}
-		header := model.InboundOrder{ID: documentID, DocumentTypeID: kind.ID, StatusID: initial.ID, OwnerID: po.OwnerID, VendorID: po.VendorID, WarehouseID: po.WarehouseID, BusinessDate: businessDate, ExpectedArrivalAt: expectedArrival, ExternalReference: externalReference, SupplierReference: supplierReference, Notes: notes, CreatedBy: actor, UpdatedBy: &actor, VersionNo: 1}
+		if supersedes != nil {
+			prior, lookupErr := local.repositories.InboundOrder.Get(ctx, *supersedes)
+			if lookupErr != nil || prior.StatusCode != "CANCELLED" || prior.OwnerID != po.OwnerID || prior.VendorID != po.VendorID || prior.WarehouseID != po.WarehouseID {
+				return invalid("superseded inbound order must be a cancelled document for the same owner, vendor, and warehouse")
+			}
+			priorPOID, lookupErr := local.repositories.InboundOrder.SourcePurchaseOrderID(ctx, *supersedes)
+			if lookupErr != nil || priorPOID != po.ID {
+				return invalid("superseded inbound order must belong to the same purchase order")
+			}
+			hasSuccessor, lookupErr := local.repositories.InboundOrder.HasSuccessor(ctx, *supersedes)
+			if lookupErr != nil {
+				return lookupErr
+			}
+			if hasSuccessor {
+				return state("cancelled inbound order already has a successor")
+			}
+		}
+		header := model.InboundOrder{ID: documentID, DocumentTypeID: kind.ID, StatusID: initial.ID, OwnerID: po.OwnerID, VendorID: po.VendorID, WarehouseID: po.WarehouseID, BusinessDate: businessDate, ExpectedArrivalAt: expectedArrival, ExternalReference: externalReference, SupplierReference: supplierReference, Notes: notes, SupersedesInboundID: supersedes, CreatedBy: actor, UpdatedBy: &actor, VersionNo: 1}
 		if err := local.repositories.InboundOrder.Create(ctx, &header); err != nil {
 			return err
 		}

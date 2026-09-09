@@ -40,6 +40,10 @@ func (s *Service) CreatePurchaseOrder(ctx context.Context, request dto.CreatePur
 	if err != nil {
 		return dto.PurchaseOrderResponse{}, err
 	}
+	supersedes, err := optional(request.SupersedesPurchaseOrderID, 120, "supersedes_purchase_order_id")
+	if err != nil || (supersedes != nil && !inboundID(*supersedes, 120)) {
+		return dto.PurchaseOrderResponse{}, invalid("invalid supersedes_purchase_order_id")
+	}
 	if len(request.Lines) == 0 || len(request.Lines) > 500 {
 		return dto.PurchaseOrderResponse{}, invalid("lines must contain 1..500 entries")
 	}
@@ -86,7 +90,20 @@ func (s *Service) CreatePurchaseOrder(ctx context.Context, request dto.CreatePur
 		if err != nil {
 			return err
 		}
-		header := model.PurchaseOrder{ID: documentID, DocumentTypeID: kind.ID, StatusID: initial.ID, OwnerID: request.OwnerID, VendorID: request.VendorID, WarehouseID: request.WarehouseID, BusinessDate: businessDate, PurchaseOrderNo: poNumber, OrderedAt: orderedAt, ExpectedArrivalAt: expectedArrival, Notes: notes, CreatedBy: actor, UpdatedBy: &actor, VersionNo: 1}
+		if supersedes != nil {
+			prior, lookupErr := local.repositories.PurchaseOrder.Get(ctx, *supersedes)
+			if lookupErr != nil || prior.StatusCode != "CANCELLED" || prior.OwnerID != request.OwnerID || prior.VendorID != request.VendorID || prior.WarehouseID != request.WarehouseID {
+				return invalid("superseded purchase order must be a cancelled document for the same owner, vendor, and warehouse")
+			}
+			hasSuccessor, lookupErr := local.repositories.PurchaseOrder.HasSuccessor(ctx, *supersedes)
+			if lookupErr != nil {
+				return lookupErr
+			}
+			if hasSuccessor {
+				return state("cancelled purchase order already has a successor")
+			}
+		}
+		header := model.PurchaseOrder{ID: documentID, DocumentTypeID: kind.ID, StatusID: initial.ID, OwnerID: request.OwnerID, VendorID: request.VendorID, WarehouseID: request.WarehouseID, BusinessDate: businessDate, PurchaseOrderNo: poNumber, OrderedAt: orderedAt, ExpectedArrivalAt: expectedArrival, Notes: notes, SupersedesPurchaseOrderID: supersedes, CreatedBy: actor, UpdatedBy: &actor, VersionNo: 1}
 		if err := local.repositories.PurchaseOrder.Create(ctx, &header); err != nil {
 			return err
 		}

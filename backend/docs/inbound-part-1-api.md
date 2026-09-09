@@ -33,9 +33,10 @@ putaway, and negative outcomes.
 - A completion retry on an already completed receipt is safe and does not
   create duplicate movements.
 - State changes require `expected_version`; stale writes return HTTP `409`.
-- All routes require a valid, non-revoked Bearer session. Role permissions and
-  owner/warehouse account-scope enforcement are still a later authorization
-  layer, consistent with the existing master and inventory APIs.
+- All routes require a valid, non-revoked Bearer session. Owner-scoped routes
+  also require both account-owner and account-warehouse access plus an active
+  warehouse-owner relationship. List requests therefore require both
+  `owner_id` and `warehouse_id`.
 
 ## Routes
 
@@ -43,22 +44,58 @@ putaway, and negative outcomes.
 POST /api/v1/inbound/purchase-orders
 GET  /api/v1/inbound/purchase-orders?owner_id=<uuid>&warehouse_id=<uuid>&status_code=APPROVED&search=<text>&page=1&page_size=20
 GET  /api/v1/inbound/purchase-orders/:id
+PUT  /api/v1/inbound/purchase-orders/:id
+POST /api/v1/inbound/purchase-orders/:id/lines
+PUT  /api/v1/inbound/purchase-orders/:id/lines/:line_id
+DELETE /api/v1/inbound/purchase-orders/:id/lines/:line_id
 POST /api/v1/inbound/purchase-orders/:id/approve
 
 POST /api/v1/inbound/orders
 GET  /api/v1/inbound/orders?owner_id=<uuid>&warehouse_id=<uuid>&status_code=RELEASED&page=1&page_size=20
 GET  /api/v1/inbound/orders/:id
+PUT  /api/v1/inbound/orders/:id
+POST /api/v1/inbound/orders/:id/lines
+PUT  /api/v1/inbound/orders/:id/lines/:line_id
+DELETE /api/v1/inbound/orders/:id/lines/:line_id
 POST /api/v1/inbound/orders/:id/release
 
 POST /api/v1/inbound/receipts
 GET  /api/v1/inbound/receipts?owner_id=<uuid>&warehouse_id=<uuid>&status_code=OPEN&page=1&page_size=20
 GET  /api/v1/inbound/receipts/:id
+PUT  /api/v1/inbound/receipts/:id
 POST /api/v1/inbound/receipts/:id/complete
 ```
 
-List endpoints require `owner_id`. Every request rejects unknown JSON fields,
+List endpoints require `owner_id` and `warehouse_id`. Every request rejects unknown JSON fields,
 extra JSON values, oversized bodies, unknown query parameters, and repeated
 query parameters.
+
+## Draft editing and cancelled-document replacement
+
+Purchase-order and inbound-order headers and lines can be added, updated, or
+deleted only while the document is `DRAFT`. At least one line must remain.
+Every mutation requires the latest `expected_version` and increments the
+document version.
+
+`PUT /receipts/:id` is available only while the receipt is `OPEN` and no batch
+has been posted. It replaces the editable receipt header and its complete
+line/batch draft atomically. `business_date` and `inbound_id` remain immutable.
+If any corrected line, quantity, lot, serial, handling unit, or location is
+invalid, the whole edit is rolled back.
+
+Cancelled, completed, closed, and reversed documents are immutable. Create a
+new document instead and supply the appropriate optional predecessor field:
+
+```json
+{
+  "supersedes_purchase_order_id": "<cancelled_purchase_order_id>"
+}
+```
+
+Inbound orders use `supersedes_inbound_id`; receipts use
+`supersedes_receipt_id`. The predecessor must be cancelled and must have the
+same business scope and source relationship. Only one direct successor is
+allowed. Responses expose both the `supersedes_*` and `successor_*` IDs.
 
 ## Test with the study master data
 

@@ -12,6 +12,7 @@ import (
 type ReceiptRow struct {
 	model.Receipt
 	StatusCode, OwnerCode, WarehouseCode string
+	SuccessorReceiptID                   *string
 }
 
 type ReceiptRepository struct{ db *gorm.DB }
@@ -20,13 +21,28 @@ func NewReceiptRepository(db *gorm.DB) *ReceiptRepository { return &ReceiptRepos
 func (r *ReceiptRepository) Create(ctx context.Context, value *model.Receipt) error {
 	return Error(r.db.WithContext(ctx).Create(value).Error)
 }
+func (r *ReceiptRepository) UpdateOpen(ctx context.Context, id, actor string, version int64, values map[string]interface{}) error {
+	values["updated_by"] = actor
+	values["updated_at"] = gorm.Expr("clock_timestamp()")
+	values["version_no"] = gorm.Expr("version_no+1")
+	result := r.db.WithContext(ctx).Model(&model.Receipt{}).
+		Where("receipt_id=? AND version_no=? AND status_id IN (SELECT status_id FROM document_status WHERE document_type_id=receipt.document_type_id AND code='OPEN')", id, version).
+		Updates(values)
+	if result.Error != nil {
+		return Error(result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return ErrConcurrentWrite
+	}
+	return nil
+}
 func (r *ReceiptRepository) Lock(ctx context.Context, id string) (model.Receipt, error) {
 	var value model.Receipt
 	err := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("receipt_id=?", id).Take(&value).Error
 	return value, Error(err)
 }
 func receiptQuery(db *gorm.DB) *gorm.DB {
-	return db.Table("receipt receipt").Select("receipt.*,status.code status_code,owner.code owner_code,warehouse.code warehouse_code").
+	return db.Table("receipt receipt").Select("receipt.*,status.code status_code,owner.code owner_code,warehouse.code warehouse_code,(SELECT successor.receipt_id FROM receipt successor WHERE successor.supersedes_receipt_id=receipt.receipt_id LIMIT 1) successor_receipt_id").
 		Joins("JOIN document_status status ON status.status_id=receipt.status_id").Joins("JOIN organization owner ON owner.organization_id=receipt.owner_id").Joins("JOIN warehouse ON warehouse.warehouse_id=receipt.warehouse_id")
 }
 func (r *ReceiptRepository) Get(ctx context.Context, id string) (ReceiptRow, error) {
@@ -64,4 +80,10 @@ func (r *ReceiptRepository) SetStatus(ctx context.Context, id, statusID, actor s
 		return ErrConcurrentWrite
 	}
 	return nil
+}
+
+func (r *ReceiptRepository) HasSuccessor(ctx context.Context, id string) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.Receipt{}).Where("supersedes_receipt_id=?", id).Count(&count).Error
+	return count > 0, Error(err)
 }

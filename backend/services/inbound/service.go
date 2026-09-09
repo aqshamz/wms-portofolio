@@ -24,6 +24,7 @@ import (
 var (
 	ErrInvalidInput = errors.New("invalid inbound request")
 	ErrInvalidState = errors.New("invalid inbound document state")
+	ErrForbidden    = errors.New("inbound owner or warehouse access denied")
 )
 
 var inboundUUIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
@@ -33,6 +34,20 @@ var inboundQuantityPattern = regexp.MustCompile(`^(0|[1-9][0-9]{0,13})(\.[0-9]{1
 type Service struct {
 	repositories *repository.Repositories
 	timezone     string
+}
+
+func (s *Service) CanAccess(ctx context.Context, accountID, ownerID, warehouseID string) (bool, error) {
+	if !inboundUUID(accountID) || !inboundUUID(ownerID) || !inboundUUID(warehouseID) {
+		return false, invalid("owner_id and warehouse_id are required UUIDs")
+	}
+	return s.repositories.Scope.Allowed(ctx, accountID, ownerID, warehouseID)
+}
+
+func (s *Service) ResourceScope(ctx context.Context, kind, id string) (string, string, error) {
+	if !inboundID(id, 190) {
+		return "", "", invalid("invalid inbound resource id")
+	}
+	return s.repositories.Scope.ResourceScope(ctx, kind, id)
 }
 
 func NewService(repositories *repository.Repositories, timezone string) (*Service, error) {

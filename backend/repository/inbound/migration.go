@@ -14,6 +14,9 @@ func Migrate(db *gorm.DB) error {
 			return err
 		}
 		statements := []string{
+			"CREATE UNIQUE INDEX IF NOT EXISTS uq_purchase_order_successor ON purchase_order(supersedes_purchase_order_id) WHERE supersedes_purchase_order_id IS NOT NULL",
+			"CREATE UNIQUE INDEX IF NOT EXISTS uq_inbound_order_successor ON inbound_order(supersedes_inbound_id) WHERE supersedes_inbound_id IS NOT NULL",
+			"CREATE UNIQUE INDEX IF NOT EXISTS uq_receipt_successor ON receipt(supersedes_receipt_id) WHERE supersedes_receipt_id IS NOT NULL",
 			"CREATE UNIQUE INDEX IF NOT EXISTS uq_purchase_order_id_owner ON purchase_order(purchase_order_id,owner_id)",
 			"CREATE INDEX IF NOT EXISTS ix_purchase_order_owner_vendor_date ON purchase_order(owner_id,vendor_id,business_date DESC)",
 			"CREATE INDEX IF NOT EXISTS ix_inbound_owner_warehouse_date ON inbound_order(owner_id,warehouse_id,business_date DESC)",
@@ -51,9 +54,12 @@ func Migrate(db *gorm.DB) error {
 			"DO $$ BEGIN ALTER TABLE rework_task ADD CONSTRAINT ck_rework_task_qty CHECK (planned_qty>0 AND completed_qty>=0 AND completed_qty<=planned_qty); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
 			"DO $$ BEGIN ALTER TABLE rework_task ADD CONSTRAINT ck_rework_task_version CHECK (version_no>0); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
 			"DO $$ BEGIN ALTER TABLE purchase_order_line ADD CONSTRAINT fk_po_line_header FOREIGN KEY (purchase_order_id) REFERENCES purchase_order(purchase_order_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE purchase_order ADD CONSTRAINT fk_purchase_order_supersedes FOREIGN KEY (supersedes_purchase_order_id) REFERENCES purchase_order(purchase_order_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
 			"DO $$ BEGIN ALTER TABLE inbound_order_line ADD CONSTRAINT fk_inbound_line_header FOREIGN KEY (inbound_id) REFERENCES inbound_order(inbound_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE inbound_order ADD CONSTRAINT fk_inbound_order_supersedes FOREIGN KEY (supersedes_inbound_id) REFERENCES inbound_order(inbound_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
 			"DO $$ BEGIN ALTER TABLE inbound_order_line ADD CONSTRAINT fk_inbound_line_po_line FOREIGN KEY (purchase_order_line_id) REFERENCES purchase_order_line(purchase_order_line_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
 			"DO $$ BEGIN ALTER TABLE receipt ADD CONSTRAINT fk_receipt_inbound FOREIGN KEY (inbound_id) REFERENCES inbound_order(inbound_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE receipt ADD CONSTRAINT fk_receipt_supersedes FOREIGN KEY (supersedes_receipt_id) REFERENCES receipt(receipt_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
 			"DO $$ BEGIN ALTER TABLE receipt_line ADD CONSTRAINT fk_receipt_line_header FOREIGN KEY (receipt_id) REFERENCES receipt(receipt_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$",
 			"DO $$ BEGIN ALTER TABLE receipt_line ADD CONSTRAINT fk_receipt_line_inbound FOREIGN KEY (inbound_line_id) REFERENCES inbound_order_line(inbound_line_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
 			"DO $$ BEGIN ALTER TABLE receipt_inventory ADD CONSTRAINT fk_receipt_inventory_line FOREIGN KEY (receipt_line_id) REFERENCES receipt_line(receipt_line_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$",

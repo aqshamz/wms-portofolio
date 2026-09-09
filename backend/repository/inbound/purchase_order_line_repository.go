@@ -24,6 +24,34 @@ func (r *PurchaseOrderLineRepository) Create(ctx context.Context, value *model.P
 	return Error(r.db.WithContext(ctx).Create(value).Error)
 }
 
+func (r *PurchaseOrderLineRepository) NextLineNo(ctx context.Context, purchaseOrderID string) (int, error) {
+	var value struct{ Next int }
+	err := r.db.WithContext(ctx).Model(&model.PurchaseOrderLine{}).Select("COALESCE(max(line_no),0)+1 next").Where("purchase_order_id=?", purchaseOrderID).Scan(&value).Error
+	return value.Next, Error(err)
+}
+
+func (r *PurchaseOrderLineRepository) UpdateDraft(ctx context.Context, id, purchaseOrderID string, values map[string]interface{}) error {
+	result := r.db.WithContext(ctx).Model(&model.PurchaseOrderLine{}).Where("purchase_order_line_id=? AND purchase_order_id=?", id, purchaseOrderID).Updates(values)
+	if result.Error != nil {
+		return Error(result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *PurchaseOrderLineRepository) DeleteDraft(ctx context.Context, id, purchaseOrderID string) error {
+	result := r.db.WithContext(ctx).Where("purchase_order_line_id=? AND purchase_order_id=?", id, purchaseOrderID).Delete(&model.PurchaseOrderLine{})
+	if result.Error != nil {
+		return Error(result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (r *PurchaseOrderLineRepository) Get(ctx context.Context, id string) (model.PurchaseOrderLine, error) {
 	var value model.PurchaseOrderLine
 	err := r.db.WithContext(ctx).Where("purchase_order_line_id=?", id).Take(&value).Error

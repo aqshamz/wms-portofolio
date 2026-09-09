@@ -32,6 +32,8 @@ func fail(c *gin.Context, err error) {
 		utils.Failure(c, http.StatusNotFound, err.Error(), nil)
 	case errors.Is(err, service.ErrInvalidState), errors.Is(err, repository.ErrConcurrentWrite), errors.Is(err, repository.ErrConflict), errors.Is(err, inventoryrepository.ErrConflict):
 		utils.Failure(c, http.StatusConflict, err.Error(), nil)
+	case errors.Is(err, service.ErrForbidden):
+		utils.Failure(c, http.StatusForbidden, err.Error(), nil)
 	default:
 		_ = c.Error(err)
 		utils.Failure(c, http.StatusInternalServerError, "unable to process inbound request", nil)
@@ -85,6 +87,54 @@ func (controller *Controller) GetPurchaseOrder(c *gin.Context) {
 	}
 	utils.Success(c, http.StatusOK, "purchase order retrieved", response)
 }
+func (controller *Controller) UpdatePurchaseOrder(c *gin.Context) {
+	var request dto.UpdatePurchaseOrderRequest
+	if !utils.BindStrictJSON(c, &request) {
+		return
+	}
+	response, err := controller.service.UpdatePurchaseOrder(c.Request.Context(), c.Param("id"), request, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "purchase order updated", response)
+}
+func (controller *Controller) AddPurchaseOrderLine(c *gin.Context) {
+	var request dto.AddPurchaseOrderLineRequest
+	if !utils.BindStrictJSON(c, &request) {
+		return
+	}
+	response, err := controller.service.AddPurchaseOrderLine(c.Request.Context(), c.Param("id"), request, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusCreated, "purchase order line added", response)
+}
+func (controller *Controller) UpdatePurchaseOrderLine(c *gin.Context) {
+	var request dto.UpdatePurchaseOrderLineRequest
+	if !utils.BindStrictJSON(c, &request) {
+		return
+	}
+	response, err := controller.service.UpdatePurchaseOrderLine(c.Request.Context(), c.Param("id"), c.Param("line_id"), request, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "purchase order line updated", response)
+}
+func (controller *Controller) DeletePurchaseOrderLine(c *gin.Context) {
+	var request dto.DeleteLineRequest
+	if !utils.BindStrictJSON(c, &request) {
+		return
+	}
+	response, err := controller.service.DeletePurchaseOrderLine(c.Request.Context(), c.Param("id"), c.Param("line_id"), request.ExpectedVersion, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "purchase order line deleted", response)
+}
 func (controller *Controller) ApprovePurchaseOrder(c *gin.Context) {
 	var request dto.TransitionRequest
 	if !utils.BindStrictJSON(c, &request) {
@@ -129,6 +179,54 @@ func (controller *Controller) GetInboundOrder(c *gin.Context) {
 	}
 	utils.Success(c, http.StatusOK, "inbound order retrieved", response)
 }
+func (controller *Controller) UpdateInboundOrder(c *gin.Context) {
+	var request dto.UpdateInboundOrderRequest
+	if !utils.BindStrictJSON(c, &request) {
+		return
+	}
+	response, err := controller.service.UpdateInboundOrder(c.Request.Context(), c.Param("id"), request, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "inbound order updated", response)
+}
+func (controller *Controller) AddInboundOrderLine(c *gin.Context) {
+	var request dto.AddInboundOrderLineRequest
+	if !utils.BindStrictJSON(c, &request) {
+		return
+	}
+	response, err := controller.service.AddInboundOrderLine(c.Request.Context(), c.Param("id"), request, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusCreated, "inbound order line added", response)
+}
+func (controller *Controller) UpdateInboundOrderLine(c *gin.Context) {
+	var request dto.UpdateInboundOrderLineRequest
+	if !utils.BindStrictJSON(c, &request) {
+		return
+	}
+	response, err := controller.service.UpdateInboundOrderLine(c.Request.Context(), c.Param("id"), c.Param("line_id"), request, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "inbound order line updated", response)
+}
+func (controller *Controller) DeleteInboundOrderLine(c *gin.Context) {
+	var request dto.DeleteLineRequest
+	if !utils.BindStrictJSON(c, &request) {
+		return
+	}
+	response, err := controller.service.DeleteInboundOrderLine(c.Request.Context(), c.Param("id"), c.Param("line_id"), request.ExpectedVersion, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "inbound order line deleted", response)
+}
 func (controller *Controller) ReleaseInboundOrder(c *gin.Context) {
 	var request dto.TransitionRequest
 	if !utils.BindStrictJSON(c, &request) {
@@ -172,6 +270,18 @@ func (controller *Controller) GetReceipt(c *gin.Context) {
 		return
 	}
 	utils.Success(c, http.StatusOK, "receipt retrieved", response)
+}
+func (controller *Controller) UpdateReceipt(c *gin.Context) {
+	var request dto.UpdateReceiptRequest
+	if !utils.BindStrictJSON(c, &request) {
+		return
+	}
+	response, err := controller.service.UpdateReceipt(c.Request.Context(), c.Param("id"), request, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "open receipt updated", response)
 }
 func (controller *Controller) CompleteReceipt(c *gin.Context) {
 	var request dto.TransitionRequest

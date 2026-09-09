@@ -21,6 +21,9 @@ func NewReceiptLineRepository(db *gorm.DB) *ReceiptLineRepository {
 func (r *ReceiptLineRepository) Create(ctx context.Context, value *model.ReceiptLine) error {
 	return Error(r.db.WithContext(ctx).Create(value).Error)
 }
+func (r *ReceiptLineRepository) DeleteByReceipt(ctx context.Context, receiptID string) error {
+	return Error(r.db.WithContext(ctx).Where("receipt_id=?", receiptID).Delete(&model.ReceiptLine{}).Error)
+}
 func (r *ReceiptLineRepository) Get(ctx context.Context, id string) (model.ReceiptLine, error) {
 	var value model.ReceiptLine
 	err := r.db.WithContext(ctx).Where("receipt_line_id=?", id).Take(&value).Error

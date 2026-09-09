@@ -51,3 +51,9 @@ func (r *ReceiptInventoryRepository) SetInitialBalance(ctx context.Context, id, 
 	}
 	return nil
 }
+
+func (r *ReceiptInventoryRepository) CountPostedByReceipt(ctx context.Context, receiptID string) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Table("receipt_inventory batch").Joins("JOIN receipt_line line ON line.receipt_line_id=batch.receipt_line_id").Where("line.receipt_id=? AND batch.initial_balance_id IS NOT NULL", receiptID).Count(&count).Error
+	return count, Error(err)
+}

@@ -13,15 +13,44 @@ type PurchaseOrderLineRequest struct {
 }
 
 type CreatePurchaseOrderRequest struct {
-	OwnerID           string                     `json:"owner_id" binding:"required,uuid"`
-	VendorID          string                     `json:"vendor_id" binding:"required,uuid"`
-	WarehouseID       string                     `json:"warehouse_id" binding:"required,uuid"`
-	BusinessDate      string                     `json:"business_date" binding:"required"`
-	PurchaseOrderNo   string                     `json:"purchase_order_no" binding:"required,max=120"`
-	OrderedAt         string                     `json:"ordered_at" binding:"required"`
-	ExpectedArrivalAt *string                    `json:"expected_arrival_at"`
-	Notes             *string                    `json:"notes" binding:"omitempty,max=4000"`
-	Lines             []PurchaseOrderLineRequest `json:"lines" binding:"required,min=1,max=500,dive"`
+	OwnerID                   string                     `json:"owner_id" binding:"required,uuid"`
+	VendorID                  string                     `json:"vendor_id" binding:"required,uuid"`
+	WarehouseID               string                     `json:"warehouse_id" binding:"required,uuid"`
+	BusinessDate              string                     `json:"business_date" binding:"required"`
+	PurchaseOrderNo           string                     `json:"purchase_order_no" binding:"required,max=120"`
+	OrderedAt                 string                     `json:"ordered_at" binding:"required"`
+	ExpectedArrivalAt         *string                    `json:"expected_arrival_at"`
+	Notes                     *string                    `json:"notes" binding:"omitempty,max=4000"`
+	SupersedesPurchaseOrderID *string                    `json:"supersedes_purchase_order_id" binding:"omitempty,max=120"`
+	Lines                     []PurchaseOrderLineRequest `json:"lines" binding:"required,min=1,max=500,dive"`
+}
+
+type UpdatePurchaseOrderRequest struct {
+	ExpectedVersion   int64   `json:"expected_version" binding:"required,min=1"`
+	PurchaseOrderNo   string  `json:"purchase_order_no" binding:"required,max=120"`
+	OrderedAt         string  `json:"ordered_at" binding:"required"`
+	ExpectedArrivalAt *string `json:"expected_arrival_at"`
+	Notes             *string `json:"notes" binding:"omitempty,max=4000"`
+}
+
+type AddPurchaseOrderLineRequest struct {
+	ExpectedVersion int64 `json:"expected_version" binding:"required,min=1"`
+	PurchaseOrderLineRequest
+}
+
+type UpdatePurchaseOrderLineRequest struct {
+	ExpectedVersion          int64   `json:"expected_version" binding:"required,min=1"`
+	OrderedQty               string  `json:"ordered_qty" binding:"required,max=30"`
+	VendorItemCode           *string `json:"vendor_item_code" binding:"omitempty,max=100"`
+	ExpectedLotNo            *string `json:"expected_lot_no" binding:"omitempty,max=100"`
+	ExpectedExpiryDate       *string `json:"expected_expiry_date"`
+	Notes                    *string `json:"notes" binding:"omitempty,max=4000"`
+	OverReceiptTolerancePct  *string `json:"over_receipt_tolerance_pct" binding:"omitempty,max=12"`
+	UnderReceiptTolerancePct *string `json:"under_receipt_tolerance_pct" binding:"omitempty,max=12"`
+}
+
+type DeleteLineRequest struct {
+	ExpectedVersion int64 `json:"expected_version" binding:"required,min=1"`
 }
 
 type TransitionRequest struct {
@@ -41,13 +70,34 @@ type InboundOrderLineRequest struct {
 }
 
 type CreateInboundOrderRequest struct {
-	PurchaseOrderID   string                    `json:"purchase_order_id" binding:"required,max=120"`
-	BusinessDate      string                    `json:"business_date" binding:"required"`
-	ExpectedArrivalAt *string                   `json:"expected_arrival_at"`
-	ExternalReference *string                   `json:"external_reference" binding:"omitempty,max=120"`
-	SupplierReference *string                   `json:"supplier_reference" binding:"omitempty,max=120"`
-	Notes             *string                   `json:"notes" binding:"omitempty,max=4000"`
-	Lines             []InboundOrderLineRequest `json:"lines" binding:"required,min=1,max=500,dive"`
+	PurchaseOrderID     string                    `json:"purchase_order_id" binding:"required,max=120"`
+	BusinessDate        string                    `json:"business_date" binding:"required"`
+	ExpectedArrivalAt   *string                   `json:"expected_arrival_at"`
+	ExternalReference   *string                   `json:"external_reference" binding:"omitempty,max=120"`
+	SupplierReference   *string                   `json:"supplier_reference" binding:"omitempty,max=120"`
+	Notes               *string                   `json:"notes" binding:"omitempty,max=4000"`
+	SupersedesInboundID *string                   `json:"supersedes_inbound_id" binding:"omitempty,max=120"`
+	Lines               []InboundOrderLineRequest `json:"lines" binding:"required,min=1,max=500,dive"`
+}
+
+type UpdateInboundOrderRequest struct {
+	ExpectedVersion   int64   `json:"expected_version" binding:"required,min=1"`
+	ExpectedArrivalAt *string `json:"expected_arrival_at"`
+	ExternalReference *string `json:"external_reference" binding:"omitempty,max=120"`
+	SupplierReference *string `json:"supplier_reference" binding:"omitempty,max=120"`
+	Notes             *string `json:"notes" binding:"omitempty,max=4000"`
+}
+
+type AddInboundOrderLineRequest struct {
+	ExpectedVersion int64 `json:"expected_version" binding:"required,min=1"`
+	InboundOrderLineRequest
+}
+
+type UpdateInboundOrderLineRequest struct {
+	ExpectedVersion       int64   `json:"expected_version" binding:"required,min=1"`
+	ExpectedQty           string  `json:"expected_qty" binding:"required,max=30"`
+	CustomerLineReference *string `json:"customer_line_reference" binding:"omitempty,max=100"`
+	Notes                 *string `json:"notes" binding:"omitempty,max=4000"`
 }
 
 type ReceiptLotRequest struct {
@@ -74,15 +124,30 @@ type ReceiptLineRequest struct {
 }
 
 type CreateReceiptRequest struct {
-	InboundID      string               `json:"inbound_id" binding:"required,max=120"`
-	BusinessDate   string               `json:"business_date" binding:"required"`
-	ReceivedAt     string               `json:"received_at" binding:"required"`
-	DockLocationID string               `json:"dock_location_id" binding:"required,uuid"`
-	VehicleNumber  *string              `json:"vehicle_number" binding:"omitempty,max=60"`
-	SealNumber     *string              `json:"seal_number" binding:"omitempty,max=60"`
-	DeliveryNoteNo *string              `json:"delivery_note_no" binding:"omitempty,max=100"`
-	Notes          *string              `json:"notes" binding:"omitempty,max=4000"`
-	Lines          []ReceiptLineRequest `json:"lines" binding:"required,min=1,max=500,dive"`
+	InboundID           string               `json:"inbound_id" binding:"required,max=120"`
+	BusinessDate        string               `json:"business_date" binding:"required"`
+	ReceivedAt          string               `json:"received_at" binding:"required"`
+	DockLocationID      string               `json:"dock_location_id" binding:"required,uuid"`
+	VehicleNumber       *string              `json:"vehicle_number" binding:"omitempty,max=60"`
+	SealNumber          *string              `json:"seal_number" binding:"omitempty,max=60"`
+	DeliveryNoteNo      *string              `json:"delivery_note_no" binding:"omitempty,max=100"`
+	Notes               *string              `json:"notes" binding:"omitempty,max=4000"`
+	SupersedesReceiptID *string              `json:"supersedes_receipt_id" binding:"omitempty,max=120"`
+	Lines               []ReceiptLineRequest `json:"lines" binding:"required,min=1,max=500,dive"`
+}
+
+// UpdateReceiptRequest replaces the editable header and complete line/batch draft.
+// Business date and inbound linkage stay immutable because they drive numbering
+// and document ownership.
+type UpdateReceiptRequest struct {
+	ExpectedVersion int64                `json:"expected_version" binding:"required,min=1"`
+	ReceivedAt      string               `json:"received_at" binding:"required"`
+	DockLocationID  string               `json:"dock_location_id" binding:"required,uuid"`
+	VehicleNumber   *string              `json:"vehicle_number" binding:"omitempty,max=60"`
+	SealNumber      *string              `json:"seal_number" binding:"omitempty,max=60"`
+	DeliveryNoteNo  *string              `json:"delivery_note_no" binding:"omitempty,max=100"`
+	Notes           *string              `json:"notes" binding:"omitempty,max=4000"`
+	Lines           []ReceiptLineRequest `json:"lines" binding:"required,min=1,max=500,dive"`
 }
 
 type CreateQualityInspectionRequest struct {

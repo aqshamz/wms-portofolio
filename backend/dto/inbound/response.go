@@ -30,23 +30,25 @@ type PurchaseOrderLineResponse struct {
 }
 
 type PurchaseOrderResponse struct {
-	ID                string                      `json:"purchase_order_id"`
-	OwnerID           string                      `json:"owner_id"`
-	OwnerCode         string                      `json:"owner_code"`
-	VendorID          string                      `json:"vendor_id"`
-	VendorCode        string                      `json:"vendor_code"`
-	VendorName        string                      `json:"vendor_name"`
-	WarehouseID       string                      `json:"warehouse_id"`
-	WarehouseCode     string                      `json:"warehouse_code"`
-	BusinessDate      string                      `json:"business_date"`
-	PurchaseOrderNo   string                      `json:"purchase_order_no"`
-	OrderedAt         time.Time                   `json:"ordered_at"`
-	ExpectedArrivalAt *time.Time                  `json:"expected_arrival_at"`
-	StatusCode        string                      `json:"status_code"`
-	Notes             *string                     `json:"notes"`
-	VersionNo         int64                       `json:"version_no"`
-	CreatedAt         time.Time                   `json:"created_at"`
-	Lines             []PurchaseOrderLineResponse `json:"lines,omitempty"`
+	ID                        string                      `json:"purchase_order_id"`
+	OwnerID                   string                      `json:"owner_id"`
+	OwnerCode                 string                      `json:"owner_code"`
+	VendorID                  string                      `json:"vendor_id"`
+	VendorCode                string                      `json:"vendor_code"`
+	VendorName                string                      `json:"vendor_name"`
+	WarehouseID               string                      `json:"warehouse_id"`
+	WarehouseCode             string                      `json:"warehouse_code"`
+	BusinessDate              string                      `json:"business_date"`
+	PurchaseOrderNo           string                      `json:"purchase_order_no"`
+	OrderedAt                 time.Time                   `json:"ordered_at"`
+	ExpectedArrivalAt         *time.Time                  `json:"expected_arrival_at"`
+	StatusCode                string                      `json:"status_code"`
+	Notes                     *string                     `json:"notes"`
+	SupersedesPurchaseOrderID *string                     `json:"supersedes_purchase_order_id"`
+	SuccessorPurchaseOrderID  *string                     `json:"successor_purchase_order_id"`
+	VersionNo                 int64                       `json:"version_no"`
+	CreatedAt                 time.Time                   `json:"created_at"`
+	Lines                     []PurchaseOrderLineResponse `json:"lines,omitempty"`
 }
 
 type InboundOrderLineResponse struct {
@@ -67,23 +69,25 @@ type InboundOrderLineResponse struct {
 }
 
 type InboundOrderResponse struct {
-	ID                string                     `json:"inbound_id"`
-	OwnerID           string                     `json:"owner_id"`
-	OwnerCode         string                     `json:"owner_code"`
-	VendorID          string                     `json:"vendor_id"`
-	VendorCode        string                     `json:"vendor_code"`
-	VendorName        string                     `json:"vendor_name"`
-	WarehouseID       string                     `json:"warehouse_id"`
-	WarehouseCode     string                     `json:"warehouse_code"`
-	BusinessDate      string                     `json:"business_date"`
-	ExpectedArrivalAt *time.Time                 `json:"expected_arrival_at"`
-	ExternalReference *string                    `json:"external_reference"`
-	SupplierReference *string                    `json:"supplier_reference"`
-	StatusCode        string                     `json:"status_code"`
-	Notes             *string                    `json:"notes"`
-	VersionNo         int64                      `json:"version_no"`
-	CreatedAt         time.Time                  `json:"created_at"`
-	Lines             []InboundOrderLineResponse `json:"lines,omitempty"`
+	ID                  string                     `json:"inbound_id"`
+	OwnerID             string                     `json:"owner_id"`
+	OwnerCode           string                     `json:"owner_code"`
+	VendorID            string                     `json:"vendor_id"`
+	VendorCode          string                     `json:"vendor_code"`
+	VendorName          string                     `json:"vendor_name"`
+	WarehouseID         string                     `json:"warehouse_id"`
+	WarehouseCode       string                     `json:"warehouse_code"`
+	BusinessDate        string                     `json:"business_date"`
+	ExpectedArrivalAt   *time.Time                 `json:"expected_arrival_at"`
+	ExternalReference   *string                    `json:"external_reference"`
+	SupplierReference   *string                    `json:"supplier_reference"`
+	StatusCode          string                     `json:"status_code"`
+	Notes               *string                    `json:"notes"`
+	SupersedesInboundID *string                    `json:"supersedes_inbound_id"`
+	SuccessorInboundID  *string                    `json:"successor_inbound_id"`
+	VersionNo           int64                      `json:"version_no"`
+	CreatedAt           time.Time                  `json:"created_at"`
+	Lines               []InboundOrderLineResponse `json:"lines,omitempty"`
 }
 
 type ReceiptBatchResponse struct {
@@ -127,23 +131,25 @@ type ReceiptLineResponse struct {
 }
 
 type ReceiptResponse struct {
-	ID             string                `json:"receipt_id"`
-	InboundID      *string               `json:"inbound_id"`
-	OwnerID        string                `json:"owner_id"`
-	OwnerCode      string                `json:"owner_code"`
-	WarehouseID    string                `json:"warehouse_id"`
-	WarehouseCode  string                `json:"warehouse_code"`
-	BusinessDate   string                `json:"business_date"`
-	ReceivedAt     time.Time             `json:"received_at"`
-	DockLocationID *string               `json:"dock_location_id"`
-	VehicleNumber  *string               `json:"vehicle_number"`
-	SealNumber     *string               `json:"seal_number"`
-	DeliveryNoteNo *string               `json:"delivery_note_no"`
-	StatusCode     string                `json:"status_code"`
-	Notes          *string               `json:"notes"`
-	VersionNo      int64                 `json:"version_no"`
-	CreatedAt      time.Time             `json:"created_at"`
-	Lines          []ReceiptLineResponse `json:"lines,omitempty"`
+	ID                  string                `json:"receipt_id"`
+	InboundID           *string               `json:"inbound_id"`
+	OwnerID             string                `json:"owner_id"`
+	OwnerCode           string                `json:"owner_code"`
+	WarehouseID         string                `json:"warehouse_id"`
+	WarehouseCode       string                `json:"warehouse_code"`
+	BusinessDate        string                `json:"business_date"`
+	ReceivedAt          time.Time             `json:"received_at"`
+	DockLocationID      *string               `json:"dock_location_id"`
+	VehicleNumber       *string               `json:"vehicle_number"`
+	SealNumber          *string               `json:"seal_number"`
+	DeliveryNoteNo      *string               `json:"delivery_note_no"`
+	StatusCode          string                `json:"status_code"`
+	Notes               *string               `json:"notes"`
+	SupersedesReceiptID *string               `json:"supersedes_receipt_id"`
+	SuccessorReceiptID  *string               `json:"successor_receipt_id"`
+	VersionNo           int64                 `json:"version_no"`
+	CreatedAt           time.Time             `json:"created_at"`
+	Lines               []ReceiptLineResponse `json:"lines,omitempty"`
 }
 
 type QualityInspectionResponse struct {
