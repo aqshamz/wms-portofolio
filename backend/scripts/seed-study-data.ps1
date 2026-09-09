@@ -138,7 +138,7 @@ try {
     $fefo = Require-Reference 'picking-sort-methods' 'FEFO'
     Require-Reference 'modules' 'INBOUND' | Out-Null
     $locationTypes = @{}
-    foreach ($code in @('RECEIVING', 'STORAGE', 'PICK_FACE', 'STAGING', 'SHIPPING', 'QUARANTINE')) {
+    foreach ($code in @('RECEIVING', 'STORAGE', 'PICK_FACE', 'STAGING', 'PACKING', 'SHIPPING', 'QUARANTINE')) {
         $locationTypes[$code] = Require-Reference 'location-types' $code
     }
 
@@ -165,7 +165,8 @@ try {
     foreach ($spec in @(
         @('RCV', 'INBOUND', 'RECEIVING'), @('BULK', 'STORAGE', 'STORAGE'),
         @('PICK', 'STORAGE', 'PICK_FACE'), @('STAGE', 'OUTBOUND', 'STAGING'),
-        @('SHIP', 'OUTBOUND', 'SHIPPING'), @('QC', 'INBOUND', 'QUARANTINE')
+        @('PACK', 'OUTBOUND', 'PACKING'), @('SHIP', 'OUTBOUND', 'SHIPPING'),
+        @('QC', 'INBOUND', 'QUARANTINE')
     )) {
         $links = @{ zone_id = $zones[$spec[1]].zone_id; location_type_id = $locationTypes[$spec[2]].location_type_id }
         $body = @{ code = "STUDY_$($spec[0])_01"; zone_id = $links.zone_id; location_type_id = $links.location_type_id; is_pick_face = ($spec[2] -eq 'PICK_FACE'); pick_sequence = 10 }

@@ -39,6 +39,20 @@ func (r *SerialInventoryRepository) Move(ctx context.Context, serialID, balanceI
 	}
 	return nil
 }
+
+func (r *SerialInventoryRepository) IDsByBalance(ctx context.Context, balanceID string) ([]string, error) {
+	var ids []string
+	err := r.db.WithContext(ctx).Model(&model.SerialInventory{}).Where("balance_id=?", balanceID).Order("serial_id").Pluck("serial_id", &ids).Error
+	return ids, Error(err)
+}
+
+func (r *SerialInventoryRepository) MoveBalance(ctx context.Context, sourceBalanceID, targetBalanceID string) error {
+	return Error(r.db.WithContext(ctx).Model(&model.SerialInventory{}).Where("balance_id=?", sourceBalanceID).Updates(map[string]interface{}{"balance_id": targetBalanceID, "version_no": gorm.Expr("version_no+1"), "updated_at": gorm.Expr("clock_timestamp()")}).Error)
+}
+
+func (r *SerialInventoryRepository) DeleteBalance(ctx context.Context, sourceBalanceID string) error {
+	return Error(r.db.WithContext(ctx).Where("balance_id=?", sourceBalanceID).Delete(&model.SerialInventory{}).Error)
+}
 func (r *SerialInventoryRepository) Delete(ctx context.Context, serialID string) error {
 	result := r.db.WithContext(ctx).Where("serial_id=?", serialID).Delete(&model.SerialInventory{})
 	if result.Error != nil {

@@ -117,6 +117,7 @@ access. This seed does not create accounts or grant access scopes.
 | STUDY_STORAGE | STUDY_BULK_01 | STORAGE: bulk storage |
 | STUDY_STORAGE | STUDY_PICK_01 | PICK_FACE: picking location |
 | STUDY_OUTBOUND | STUDY_STAGE_01 | STAGING: staged outbound goods |
+| STUDY_OUTBOUND | STUDY_PACK_01 | PACKING: checked goods being packed |
 | STUDY_OUTBOUND | STUDY_SHIP_01 | SHIPPING: dispatch area |
 
 Both items use **EA as their base unit**: one EA is one sealed pack, not one gram.

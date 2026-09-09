@@ -265,4 +265,22 @@ allocation, inventory reservations, multi-order waves, pick-task execution,
 short-pick closure, idempotent `PICK` movements, and staging confirmation. Stock
 is reserved without changing on-hand quantity and is moved only by physical pick
 confirmation. See [Outbound part 1 API](docs/outbound-part-1-api.md). Verification,
-packing, shipment, and delivery remain in outbound part 2.
+packing, shipment, and delivery continue in outbound part 2.
+
+### Outbound part 2
+
+Completed staging now continues through line-level picked-stock checks, packing
+with idempotent `PACK` movements, multi-order shipment manifests with
+idempotent `SHIP` movements, delivery events, proof of delivery, delivery
+failure, and controlled return-to-depot stock. A return policy routes undelivered
+goods into a non-allocatable inventory status. See
+[Outbound part 2 API](docs/outbound-part-2-api.md).
+
+### Outbound completion
+
+Outbound is now closed for the planned backend scope: draft-order maintenance,
+executable QC replacement picks, carrier/service/driver setup, primary-driver
+shipment enforcement, safe pre-execution cancellations, serial/HU state
+continuity, and bearer-account owner/warehouse authorization are implemented.
+See [Outbound completion API](docs/outbound-completion-api.md). Billing can build
+on the final shipped/delivered quantities and immutable movement history.
