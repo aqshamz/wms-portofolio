@@ -27,6 +27,14 @@ func (s *OperationalService) SeedOperational(ctx context.Context) error {
 				return err
 			}
 		}
+		for _, module := range []string{"AUTH", "SECURITY", "MASTER", "INBOUND", "INVENTORY", "OUTBOUND", "BILLING", "REPORTING"} {
+			for _, action := range []string{"READ", "WRITE"} {
+				value := model.AppPermission{Code: module + "." + action, Name: module + " " + action, ModuleCode: module, Description: operationalString("Allows " + action + " access to the " + module + " module."), IsActive: true}
+				if err := repos.AppPermission.SeedOne(ctx, &value); err != nil {
+					return err
+				}
+			}
+		}
 		for _, value := range []model.TaskType{
 			{Code: "PUTAWAY", Name: "Putaway", Description: operationalString("Move received stock into storage."), IsActive: true},
 			{Code: "PICK", Name: "Pick", Description: operationalString("Pick stock for outbound fulfillment."), IsActive: true},

@@ -179,9 +179,9 @@ kept separate.
 See [Catalog API and testing guide](docs/catalog-api.md) for endpoints, request
 bodies, validation rules, reference seeds, and automated tests.
 
-These routes validate database sessions but do not yet enforce role permissions
-or account owner/warehouse scopes. Inventory stock transactions and quality
-workflows are not part of this master-data slice.
+These routes validate database sessions and can enforce module permissions when
+RBAC is enabled. Owner/warehouse access remains an additional data-scope guard.
+Inventory stock transactions and quality workflows are separate modules.
 
 ### Operational configuration
 
@@ -284,3 +284,20 @@ shipment enforcement, safe pre-execution cancellations, serial/HU state
 continuity, and bearer-account owner/warehouse authorization are implemented.
 See [Outbound completion API](docs/outbound-completion-api.md). Billing can build
 on the final shipped/delivered quantities and immutable movement history.
+
+## Billing
+
+Billing is implemented as a separate owner/warehouse-scoped module. It provides
+contracts, versioned movement/manual rate cards, idempotent billable-event
+collection, calculation/review/reopen/cancel controls, invoice snapshots,
+partial payments, and credit-note settlement. See [Billing API](docs/billing-api.md)
+for the complete study flow and request examples.
+
+## Hardening
+
+The API now includes module RBAC, permission administration, exact-origin CORS,
+request/body/rate limits, request IDs, security headers, mutation audit records,
+versioned startup migrations, graceful HTTP shutdown, and route-level OpenAPI
+documentation at `/docs`. Development keeps RBAC disabled until an administrator
+is bootstrapped; production configuration fails closed. See
+[Backend hardening](docs/hardening.md) for setup and verification.

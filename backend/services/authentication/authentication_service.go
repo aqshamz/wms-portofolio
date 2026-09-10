@@ -31,15 +31,17 @@ type ClientInfo struct {
 }
 
 type Service struct {
-	accounts *repository.AppAccountRepository
-	sessions *repository.AppSessionRepository
+	accounts    *repository.AppAccountRepository
+	sessions    *repository.AppSessionRepository
+	permissions *repository.AccountPermissionRepository
 }
 
 func NewService(
 	accounts *repository.AppAccountRepository,
 	sessions *repository.AppSessionRepository,
+	permissions *repository.AccountPermissionRepository,
 ) *Service {
-	return &Service{accounts: accounts, sessions: sessions}
+	return &Service{accounts: accounts, sessions: sessions, permissions: permissions}
 }
 
 func (s *Service) Login(
@@ -101,6 +103,10 @@ func (s *Service) Login(
 	if err := s.sessions.Create(ctx, &session); err != nil {
 		return dto.LoginResponse{}, fmt.Errorf("create session: %w", err)
 	}
+	permissions, err := s.permissions.Codes(ctx, account.ID)
+	if err != nil {
+		return dto.LoginResponse{}, fmt.Errorf("load account permissions: %w", err)
+	}
 
 	return dto.LoginResponse{
 		Token:     rawToken,
@@ -112,6 +118,7 @@ func (s *Service) Login(
 			Email:       account.Email,
 			DisplayName: account.DisplayName,
 			LastLoginAt: &now,
+			Permissions: permissions,
 		},
 	}, nil
 }
@@ -128,6 +135,10 @@ func (s *Service) Authenticate(ctx context.Context, rawToken string) (dto.UserRe
 	if err := s.sessions.Touch(ctx, HashToken(rawToken)); err != nil {
 		return dto.UserResponse{}, fmt.Errorf("touch session: %w", err)
 	}
+	permissions, err := s.permissions.Codes(ctx, account.AccountID)
+	if err != nil {
+		return dto.UserResponse{}, fmt.Errorf("load account permissions: %w", err)
+	}
 
 	return dto.UserResponse{
 		AccountID:         account.AccountID,
@@ -135,6 +146,7 @@ func (s *Service) Authenticate(ctx context.Context, rawToken string) (dto.UserRe
 		Email:             account.Email,
 		DisplayName:       account.DisplayName,
 		PreferredTimezone: account.PreferredTimezone,
+		Permissions:       permissions,
 	}, nil
 }
 

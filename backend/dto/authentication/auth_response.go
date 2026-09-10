@@ -9,6 +9,7 @@ type UserResponse struct {
 	DisplayName       string     `json:"display_name"`
 	PreferredTimezone *string    `json:"preferred_timezone,omitempty"`
 	LastLoginAt       *time.Time `json:"last_login_at,omitempty"`
+	Permissions       []string   `json:"permissions"`
 }
 
 type LoginResponse struct {

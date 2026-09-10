@@ -2,24 +2,34 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
+	"net/http"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"wms-api/config"
 	authcontroller "wms-api/controller/authentication"
+	billingcontroller "wms-api/controller/billing"
 	inboundcontroller "wms-api/controller/inbound"
 	inventorycontroller "wms-api/controller/inventory"
 	mastercontroller "wms-api/controller/master"
 	outboundcontroller "wms-api/controller/outbound"
 	stockcontrolcontroller "wms-api/controller/stock_control"
 	"wms-api/middleware"
+	auditrepository "wms-api/repository/audit"
 	authrepository "wms-api/repository/authentication"
+	billingrepository "wms-api/repository/billing"
 	inboundrepository "wms-api/repository/inbound"
 	inventoryrepository "wms-api/repository/inventory"
 	masterrepository "wms-api/repository/master"
+	migrationrepository "wms-api/repository/migration"
 	outboundrepository "wms-api/repository/outbound"
 	stockcontrolrepository "wms-api/repository/stock_control"
 	"wms-api/routes"
 	authservice "wms-api/services/authentication"
+	billingservice "wms-api/services/billing"
 	inboundservice "wms-api/services/inbound"
 	inventoryservice "wms-api/services/inventory"
 	masterservice "wms-api/services/master"
@@ -38,25 +48,29 @@ func main() {
 		log.Fatalf("initialize database: %v", err)
 	}
 
-	if err := authrepository.Migrate(db); err != nil {
-		log.Fatalf("migrate authentication tables: %v", err)
-	}
-	if err := masterrepository.Migrate(db); err != nil {
-		log.Fatalf("migrate master tables: %v", err)
+	if err := migrationrepository.Apply(context.Background(), db, []migrationrepository.Step{
+		{Version: 1, Name: "authentication", Up: authrepository.Migrate},
+		{Version: 2, Name: "warehouse master", Up: masterrepository.Migrate},
+		{Version: 3, Name: "catalog master", Up: masterrepository.MigrateCatalog},
+		{Version: 4, Name: "operational configuration", Up: masterrepository.MigrateOperational},
+		{Version: 5, Name: "account permissions", Up: authrepository.MigratePermissions},
+		{Version: 6, Name: "inventory", Up: inventoryrepository.Migrate},
+		{Version: 7, Name: "stock control", Up: stockcontrolrepository.Migrate},
+		{Version: 8, Name: "inbound", Up: inboundrepository.Migrate},
+		{Version: 9, Name: "outbound", Up: outboundrepository.Migrate},
+		{Version: 10, Name: "billing", Up: billingrepository.Migrate},
+		{Version: 11, Name: "API audit", Up: auditrepository.Migrate},
+		{Version: 12, Name: "API audit request index", Up: auditrepository.MigrateRequestIndex},
+	}); err != nil {
+		log.Fatalf("apply database migrations: %v", err)
 	}
 
 	statusRepository := authrepository.NewAccountStatusRepository(db)
-	if err := masterrepository.MigrateCatalog(db); err != nil {
-		log.Fatalf("migrate catalog tables: %v", err)
-	}
 	catalogService := masterservice.NewCatalogService(masterrepository.NewCatalogRepositories(db))
 	if err := catalogService.SeedCatalog(context.Background()); err != nil {
 		log.Fatalf("seed catalog references: %v", err)
 	}
 	catalogController := mastercontroller.NewCatalogController(catalogService)
-	if err := masterrepository.MigrateOperational(db); err != nil {
-		log.Fatalf("migrate operational configuration: %v", err)
-	}
 	operationalService, err := masterservice.NewOperationalService(masterrepository.NewOperationalRepositories(db), cfg.Database.Timezone)
 	if err != nil {
 		log.Fatalf("configure operational timezone: %v", err)
@@ -65,20 +79,8 @@ func main() {
 		log.Fatalf("seed operational configuration: %v", err)
 	}
 	operationalController := mastercontroller.NewOperationalController(operationalService)
-	if err := inventoryrepository.Migrate(db); err != nil {
-		log.Fatalf("migrate inventory identity: %v", err)
-	}
-	if err := stockcontrolrepository.Migrate(db); err != nil {
-		log.Fatalf("migrate stock control: %v", err)
-	}
-	if err := inboundrepository.Migrate(db); err != nil {
-		log.Fatalf("migrate inbound tables: %v", err)
-	}
 	if err := inboundrepository.SeedReferenceData(db); err != nil {
 		log.Fatalf("seed inbound references: %v", err)
-	}
-	if err := outboundrepository.Migrate(db); err != nil {
-		log.Fatalf("migrate outbound tables: %v", err)
 	}
 	if err := outboundrepository.SeedReferenceData(db); err != nil {
 		log.Fatalf("seed outbound references: %v", err)
@@ -95,24 +97,36 @@ func main() {
 		log.Fatalf("configure outbound timezone: %v", err)
 	}
 	outboundController := outboundcontroller.NewController(outboundService)
+	billingService, err := billingservice.NewService(billingrepository.NewRepositories(db), cfg.Database.Timezone)
+	if err != nil {
+		log.Fatalf("configure billing timezone: %v", err)
+	}
+	billingController := billingcontroller.NewController(billingService)
 	policyRepository := authrepository.NewAuthenticationPolicyRepository(db)
 	reasonRepository := authrepository.NewSessionRevocationReasonRepository(db)
 	accountRepository := authrepository.NewAppAccountRepository(db)
 	sessionRepository := authrepository.NewAppSessionRepository(db)
+	accountPermissionRepository := authrepository.NewAccountPermissionRepository(db)
+	auditRepository := auditrepository.NewAPIAuditLogRepository(db)
 
 	bootstrapService := authservice.NewBootstrapService(
 		statusRepository,
 		policyRepository,
 		reasonRepository,
 		accountRepository,
+		accountPermissionRepository,
 	)
 	if err := bootstrapService.Seed(context.Background(), cfg.Auth); err != nil {
 		log.Fatalf("seed authentication data: %v", err)
 	}
 
-	authenticationService := authservice.NewService(accountRepository, sessionRepository)
+	authenticationService := authservice.NewService(accountRepository, sessionRepository, accountPermissionRepository)
 	authenticationController := authcontroller.NewController(authenticationService)
-	authenticationMiddleware := middleware.NewAuthentication(authenticationService)
+	securityController := authcontroller.NewSecurityController(
+		authservice.NewPermissionService(accountRepository, accountPermissionRepository),
+	)
+	authenticationMiddleware := middleware.NewAuthenticationWithAuthorization(authenticationService, cfg.Security.AuthorizationEnforced)
+	hardeningMiddleware := middleware.NewHardening(cfg.Security, auditRepository.Create)
 	organizationRepository := masterrepository.NewOrganizationRepository(db)
 	warehouseRepository := masterrepository.NewWarehouseRepository(db)
 	warehouseOwnerRepository := masterrepository.NewWarehouseOwnerRepository(db)
@@ -150,6 +164,7 @@ func main() {
 
 	router := routes.New(db, routes.Dependencies{
 		AuthenticationController: authenticationController,
+		SecurityController:       securityController,
 		AuthenticationMiddleware: authenticationMiddleware,
 		MasterController:         masterController,
 		CatalogController:        catalogController,
@@ -158,9 +173,29 @@ func main() {
 		InboundController:        inboundController,
 		OutboundController:       outboundController,
 		StockControlController:   stockControlController,
+		BillingController:        billingController,
+		Hardening:                hardeningMiddleware,
+		TrustedProxies:           cfg.App.TrustedProxies,
 	})
 	log.Printf("WMS API listening on %s", cfg.App.Address())
-	if err := router.Run(cfg.App.Address()); err != nil {
-		log.Fatalf("run HTTP server: %v", err)
+	server := &http.Server{Addr: cfg.App.Address(), Handler: router, ReadHeaderTimeout: time.Duration(cfg.App.ReadHeaderTimeoutSeconds) * time.Second, ReadTimeout: time.Duration(cfg.App.ReadTimeoutSeconds) * time.Second, WriteTimeout: time.Duration(cfg.App.WriteTimeoutSeconds) * time.Second, IdleTimeout: time.Duration(cfg.App.IdleTimeoutSeconds) * time.Second}
+	stopping, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	errorsFromServer := make(chan error, 1)
+	go func() { errorsFromServer <- server.ListenAndServe() }()
+	select {
+	case err := <-errorsFromServer:
+		if !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("run HTTP server: %v", err)
+		}
+	case <-stopping.Done():
+		shutdown, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.App.ShutdownTimeoutSeconds)*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdown); err != nil {
+			log.Printf("graceful shutdown failed: %v", err)
+		}
+		if err := <-errorsFromServer; !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("HTTP server stopped: %v", err)
+		}
 	}
 }

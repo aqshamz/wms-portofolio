@@ -14,10 +14,11 @@ import (
 )
 
 type BootstrapService struct {
-	statuses *repository.AccountStatusRepository
-	policies *repository.AuthenticationPolicyRepository
-	reasons  *repository.SessionRevocationReasonRepository
-	accounts *repository.AppAccountRepository
+	statuses    *repository.AccountStatusRepository
+	policies    *repository.AuthenticationPolicyRepository
+	reasons     *repository.SessionRevocationReasonRepository
+	accounts    *repository.AppAccountRepository
+	permissions *repository.AccountPermissionRepository
 }
 
 func NewBootstrapService(
@@ -25,12 +26,14 @@ func NewBootstrapService(
 	policies *repository.AuthenticationPolicyRepository,
 	reasons *repository.SessionRevocationReasonRepository,
 	accounts *repository.AppAccountRepository,
+	permissions *repository.AccountPermissionRepository,
 ) *BootstrapService {
 	return &BootstrapService{
-		statuses: statuses,
-		policies: policies,
-		reasons:  reasons,
-		accounts: accounts,
+		statuses:    statuses,
+		policies:    policies,
+		reasons:     reasons,
+		accounts:    accounts,
+		permissions: permissions,
 	}
 }
 
@@ -69,8 +72,8 @@ func (s *BootstrapService) Seed(ctx context.Context, cfg config.AuthConfig) erro
 	if !cfg.BootstrapAdminEnabled {
 		return nil
 	}
-	if _, err := s.accounts.FindByUsername(ctx, cfg.BootstrapAdminUsername); err == nil {
-		return nil
+	if existing, err := s.accounts.FindByUsername(ctx, cfg.BootstrapAdminUsername); err == nil {
+		return s.permissions.GrantAll(ctx, existing.ID)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return fmt.Errorf("find bootstrap admin: %w", err)
 	}
@@ -92,7 +95,7 @@ func (s *BootstrapService) Seed(ctx context.Context, cfg config.AuthConfig) erro
 	email := cfg.BootstrapAdminEmail
 	policyID := policy.ID
 	timezone := cfg.BootstrapAdminTimezone
-	return s.accounts.Create(ctx, &model.AppAccount{
+	account := model.AppAccount{
 		Username:               cfg.BootstrapAdminUsername,
 		Email:                  &email,
 		DisplayName:            cfg.BootstrapAdminDisplayName,
@@ -101,5 +104,9 @@ func (s *BootstrapService) Seed(ctx context.Context, cfg config.AuthConfig) erro
 		AuthenticationPolicyID: &policyID,
 		PreferredTimezone:      &timezone,
 		VersionNo:              1,
-	})
+	}
+	if err := s.accounts.Create(ctx, &account); err != nil {
+		return err
+	}
+	return s.permissions.GrantAll(ctx, account.ID)
 }

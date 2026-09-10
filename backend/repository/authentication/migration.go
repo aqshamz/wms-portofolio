@@ -68,3 +68,21 @@ func Migrate(db *gorm.DB) error {
 	}
 	return nil
 }
+
+// MigratePermissions runs after operational master tables exist because the
+// account-permission join references app_permission.
+func MigratePermissions(db *gorm.DB) error {
+	if err := db.AutoMigrate(&model.AccountPermission{}); err != nil {
+		return err
+	}
+	for _, statement := range []string{
+		`DO $$ BEGIN ALTER TABLE account_permission ADD CONSTRAINT fk_account_permission_account FOREIGN KEY(account_id) REFERENCES app_account(account_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+		`DO $$ BEGIN ALTER TABLE account_permission ADD CONSTRAINT fk_account_permission_permission FOREIGN KEY(permission_id) REFERENCES app_permission(permission_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+		`DO $$ BEGIN ALTER TABLE account_permission ADD CONSTRAINT fk_account_permission_granted_by FOREIGN KEY(granted_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+	} {
+		if err := db.Exec(statement).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
