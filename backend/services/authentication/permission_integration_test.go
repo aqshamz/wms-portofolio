@@ -42,6 +42,7 @@ func TestPermissionAdministrationPostgreSQL(t *testing.T) {
 	authOK(t, masterrepository.MigrateCatalog(tx))
 	authOK(t, masterrepository.MigrateOperational(tx))
 	authOK(t, repository.MigratePermissions(tx))
+	authOK(t, repository.MigrateAdministration(tx))
 
 	ctx := context.Background()
 	operational, err := masterservice.NewOperationalService(masterrepository.NewOperationalRepositories(tx), "Asia/Jakarta")

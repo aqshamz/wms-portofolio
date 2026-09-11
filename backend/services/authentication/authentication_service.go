@@ -31,17 +31,11 @@ type ClientInfo struct {
 }
 
 type Service struct {
-	accounts    *repository.AppAccountRepository
-	sessions    *repository.AppSessionRepository
-	permissions *repository.AccountPermissionRepository
+	repositories *repository.AdministrationRepositories
 }
 
-func NewService(
-	accounts *repository.AppAccountRepository,
-	sessions *repository.AppSessionRepository,
-	permissions *repository.AccountPermissionRepository,
-) *Service {
-	return &Service{accounts: accounts, sessions: sessions, permissions: permissions}
+func NewService(repositories *repository.AdministrationRepositories) *Service {
+	return &Service{repositories: repositories}
 }
 
 func (s *Service) Login(
@@ -49,30 +43,6 @@ func (s *Service) Login(
 	request dto.LoginRequest,
 	client ClientInfo,
 ) (dto.LoginResponse, error) {
-	account, err := s.accounts.FindForLogin(ctx, strings.TrimSpace(request.Identifier))
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			compareDummyPassword(request.Password)
-			return dto.LoginResponse{}, ErrInvalidCredentials
-		}
-		return dto.LoginResponse{}, fmt.Errorf("find login account: %w", err)
-	}
-
-	passwordValid := account.PasswordHash != nil &&
-		bcrypt.CompareHashAndPassword([]byte(*account.PasswordHash), []byte(request.Password)) == nil
-	locked := account.LockedUntil != nil && account.LockedUntil.After(time.Now())
-	if !passwordValid {
-		if account.StatusIsActive && account.AllowsLogin && !locked {
-			if err := s.accounts.RecordFailedLogin(ctx, account.ID); err != nil {
-				return dto.LoginResponse{}, fmt.Errorf("record failed login: %w", err)
-			}
-		}
-		return dto.LoginResponse{}, ErrInvalidCredentials
-	}
-	if !account.StatusIsActive || !account.AllowsLogin || locked {
-		return dto.LoginResponse{}, ErrInvalidCredentials
-	}
-
 	rawToken, err := secureRandomString(32)
 	if err != nil {
 		return dto.LoginResponse{}, fmt.Errorf("generate session token: %w", err)
@@ -82,30 +52,72 @@ func (s *Service) Login(
 		return dto.LoginResponse{}, fmt.Errorf("generate session ID: %w", err)
 	}
 
-	now := time.Now()
-	expiresAt := now.Add(time.Duration(account.SessionTTLSeconds) * time.Second)
-	ipAddress := optionalString(client.IPAddress)
-	userAgent := optionalString(client.UserAgent)
-	session := model.AppSession{
-		ID:         "ses_" + sessionIDPart,
-		AccountID:  account.ID,
-		TokenHash:  HashToken(rawToken),
-		IssuedAt:   now,
-		ExpiresAt:  expiresAt,
-		LastSeenAt: now,
-		IPAddress:  ipAddress,
-		UserAgent:  userAgent,
-	}
+	var account repository.LoginAccount
+	var permissions []string
+	var now, expiresAt time.Time
+	var loginErr error
+	err = s.repositories.Transaction(ctx, func(local *repository.AdministrationRepositories) error {
+		account, err = local.Accounts.FindForLoginForUpdate(ctx, strings.TrimSpace(request.Identifier))
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				compareDummyPassword(request.Password)
+				loginErr = ErrInvalidCredentials
+				return nil
+			}
+			return fmt.Errorf("find login account: %w", err)
+		}
 
-	if err := s.accounts.RecordSuccessfulLogin(ctx, account.ID); err != nil {
-		return dto.LoginResponse{}, fmt.Errorf("complete login: %w", err)
-	}
-	if err := s.sessions.Create(ctx, &session); err != nil {
-		return dto.LoginResponse{}, fmt.Errorf("create session: %w", err)
-	}
-	permissions, err := s.permissions.Codes(ctx, account.ID)
+		passwordValid := account.PasswordHash != nil &&
+			bcrypt.CompareHashAndPassword([]byte(*account.PasswordHash), []byte(request.Password)) == nil
+		locked := account.LockedUntil != nil && account.LockedUntil.After(time.Now())
+		if !passwordValid {
+			if account.StatusIsActive && account.AllowsLogin && !locked {
+				if recordErr := local.Accounts.RecordFailedLogin(ctx, account.ID); recordErr != nil {
+					return fmt.Errorf("record failed login: %w", recordErr)
+				}
+				if account.FailedLoginCount+1 >= account.MaxFailedAttempts {
+					if revokeErr := local.Sessions.RevokeByAccount(ctx, account.ID, "ACCOUNT_LOCKED"); revokeErr != nil {
+						return fmt.Errorf("revoke locked account sessions: %w", revokeErr)
+					}
+				}
+			}
+			loginErr = ErrInvalidCredentials
+			return nil
+		}
+		if !account.StatusIsActive || !account.AllowsLogin || locked {
+			loginErr = ErrInvalidCredentials
+			return nil
+		}
+
+		permissions, err = local.Permissions.Codes(ctx, account.ID)
+		if err != nil {
+			return fmt.Errorf("load account permissions: %w", err)
+		}
+		now = time.Now()
+		expiresAt = now.Add(time.Duration(account.SessionTTLSeconds) * time.Second)
+		session := model.AppSession{
+			ID:         "ses_" + sessionIDPart,
+			AccountID:  account.ID,
+			TokenHash:  HashToken(rawToken),
+			IssuedAt:   now,
+			ExpiresAt:  expiresAt,
+			LastSeenAt: now,
+			IPAddress:  optionalString(client.IPAddress),
+			UserAgent:  optionalString(client.UserAgent),
+		}
+		if completeErr := local.Accounts.RecordSuccessfulLogin(ctx, account.ID); completeErr != nil {
+			return fmt.Errorf("complete login: %w", completeErr)
+		}
+		if createErr := local.Sessions.Create(ctx, &session); createErr != nil {
+			return fmt.Errorf("create session: %w", createErr)
+		}
+		return nil
+	})
 	if err != nil {
-		return dto.LoginResponse{}, fmt.Errorf("load account permissions: %w", err)
+		return dto.LoginResponse{}, err
+	}
+	if loginErr != nil {
+		return dto.LoginResponse{}, loginErr
 	}
 
 	return dto.LoginResponse{
@@ -124,7 +136,7 @@ func (s *Service) Login(
 }
 
 func (s *Service) Authenticate(ctx context.Context, rawToken string) (dto.UserResponse, error) {
-	account, err := s.sessions.FindValid(ctx, HashToken(rawToken))
+	account, err := s.repositories.Sessions.FindValid(ctx, HashToken(rawToken))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return dto.UserResponse{}, ErrUnauthorized
@@ -132,10 +144,10 @@ func (s *Service) Authenticate(ctx context.Context, rawToken string) (dto.UserRe
 		return dto.UserResponse{}, fmt.Errorf("validate session: %w", err)
 	}
 
-	if err := s.sessions.Touch(ctx, HashToken(rawToken)); err != nil {
+	if err := s.repositories.Sessions.Touch(ctx, HashToken(rawToken)); err != nil {
 		return dto.UserResponse{}, fmt.Errorf("touch session: %w", err)
 	}
-	permissions, err := s.permissions.Codes(ctx, account.AccountID)
+	permissions, err := s.repositories.Permissions.Codes(ctx, account.AccountID)
 	if err != nil {
 		return dto.UserResponse{}, fmt.Errorf("load account permissions: %w", err)
 	}
@@ -151,7 +163,7 @@ func (s *Service) Authenticate(ctx context.Context, rawToken string) (dto.UserRe
 }
 
 func (s *Service) Logout(ctx context.Context, rawToken string) error {
-	err := s.sessions.Revoke(ctx, HashToken(rawToken), "USER_LOGOUT")
+	err := s.repositories.Sessions.Revoke(ctx, HashToken(rawToken), "USER_LOGOUT")
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil
 	}
@@ -159,7 +171,7 @@ func (s *Service) Logout(ctx context.Context, rawToken string) error {
 }
 
 func (s *Service) LogoutAll(ctx context.Context, rawToken string) error {
-	err := s.sessions.RevokeAll(ctx, HashToken(rawToken), "USER_LOGOUT_ALL")
+	err := s.repositories.Sessions.RevokeAll(ctx, HashToken(rawToken), "USER_LOGOUT_ALL")
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil
 	}

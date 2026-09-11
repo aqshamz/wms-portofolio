@@ -93,3 +93,22 @@ func (r *AppSessionRepository) RevokeAll(ctx context.Context, tokenHash, reasonC
 	}
 	return nil
 }
+
+func (r *AppSessionRepository) RevokeByAccount(ctx context.Context, accountID, reasonCode string) error {
+	reasonID := r.db.Model(&model.SessionRevocationReason{}).
+		Select("session_revocation_reason_id").Where("code = ? AND is_active", reasonCode)
+	return r.db.WithContext(ctx).Model(&model.AppSession{}).
+		Where("account_id = ? AND revoked_at IS NULL", accountID).
+		Updates(map[string]interface{}{
+			"revoked_at":                   gorm.Expr("clock_timestamp()"),
+			"session_revocation_reason_id": reasonID,
+		}).Error
+}
+
+func (r *AppSessionRepository) ActiveCountByAccount(ctx context.Context, accountID string) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.AppSession{}).
+		Where("account_id = ? AND revoked_at IS NULL AND expires_at > clock_timestamp()", accountID).
+		Count(&count).Error
+	return count, err
+}

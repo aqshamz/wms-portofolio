@@ -3,8 +3,6 @@ package routes
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 	authcontroller "wms-api/controller/authentication"
 	billingcontroller "wms-api/controller/billing"
 	inboundcontroller "wms-api/controller/inbound"
@@ -14,6 +12,9 @@ import (
 	stockcontrolcontroller "wms-api/controller/stock_control"
 	"wms-api/middleware"
 	"wms-api/utils"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type Dependencies struct {
@@ -67,17 +68,9 @@ func New(db *gorm.DB, dependencies Dependencies) *gin.Engine {
 	})
 
 	api := router.Group("/api/v1")
-	registerAuthenticationRoutes(
-		api,
-		dependencies.AuthenticationController,
-		dependencies.AuthenticationMiddleware.RequireSession(),
-	)
+	registerAuthenticationRoutes(api, dependencies.AuthenticationController, dependencies.AuthenticationMiddleware.RequireSession())
 	registerSecurityRoutes(api, dependencies.SecurityController, dependencies.AuthenticationMiddleware.RequireModule("SECURITY"))
-	registerMasterRoutes(
-		api,
-		dependencies.MasterController,
-		dependencies.AuthenticationMiddleware.RequireModule("MASTER"),
-	)
+	registerMasterRoutes(api, dependencies.MasterController, dependencies.AuthenticationMiddleware.RequireModule("MASTER"))
 	registerCatalogRoutes(api, dependencies.CatalogController, dependencies.AuthenticationMiddleware.RequireModule("MASTER"))
 	registerOperationalRoutes(api, dependencies.OperationalController, dependencies.AuthenticationMiddleware.RequireModule("MASTER"))
 	registerInventoryRoutes(api, dependencies.InventoryController, dependencies.AuthenticationMiddleware.RequireModule("INVENTORY"))

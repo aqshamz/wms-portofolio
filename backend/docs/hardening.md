@@ -17,6 +17,9 @@ does not change inbound, inventory, outbound, or billing calculations.
   its actor when authentication succeeded. Request bodies and bearer tokens are
   deliberately not stored.
 - Versioned, serialized startup migrations are recorded in `schema_migration`.
+- Reusable roles contribute permissions to an account while direct grants remain
+  available for exceptions. Account and role changes protect the final security
+  administrator from accidental lockout.
 - A route-level OpenAPI document is served at `/openapi.json`, with Swagger UI
   at `/docs`. The module guides in `docs/` remain the source for exact request
   bodies and workflow examples.
@@ -37,7 +40,8 @@ at least one administrator owns all grants:
 4. Set `AUTH_RBAC_ENFORCED=true` and restart.
 
 The login and `/api/v1/auth/me` response includes the account's permission
-codes. Use these security endpoints with the administrator bearer token:
+codes, including permissions inherited from roles. Use these security endpoints
+with the administrator bearer token:
 
 ```text
 GET    /api/v1/security/permissions

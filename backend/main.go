@@ -61,6 +61,7 @@ func main() {
 		{Version: 10, Name: "billing", Up: billingrepository.Migrate},
 		{Version: 11, Name: "API audit", Up: auditrepository.Migrate},
 		{Version: 12, Name: "API audit request index", Up: auditrepository.MigrateRequestIndex},
+		{Version: 13, Name: "account and role administration", Up: authrepository.MigrateAdministration},
 	}); err != nil {
 		log.Fatalf("apply database migrations: %v", err)
 	}
@@ -105,7 +106,6 @@ func main() {
 	policyRepository := authrepository.NewAuthenticationPolicyRepository(db)
 	reasonRepository := authrepository.NewSessionRevocationReasonRepository(db)
 	accountRepository := authrepository.NewAppAccountRepository(db)
-	sessionRepository := authrepository.NewAppSessionRepository(db)
 	accountPermissionRepository := authrepository.NewAccountPermissionRepository(db)
 	auditRepository := auditrepository.NewAPIAuditLogRepository(db)
 
@@ -120,10 +120,13 @@ func main() {
 		log.Fatalf("seed authentication data: %v", err)
 	}
 
-	authenticationService := authservice.NewService(accountRepository, sessionRepository, accountPermissionRepository)
+	administrationRepositories := authrepository.NewAdministrationRepositories(db)
+	authenticationService := authservice.NewService(administrationRepositories)
 	authenticationController := authcontroller.NewController(authenticationService)
 	securityController := authcontroller.NewSecurityController(
 		authservice.NewPermissionService(accountRepository, accountPermissionRepository),
+		authservice.NewAccountAdminService(administrationRepositories),
+		authservice.NewRoleService(administrationRepositories),
 	)
 	authenticationMiddleware := middleware.NewAuthenticationWithAuthorization(authenticationService, cfg.Security.AuthorizationEnforced)
 	hardeningMiddleware := middleware.NewHardening(cfg.Security, auditRepository.Create)

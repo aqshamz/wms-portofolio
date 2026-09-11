@@ -63,6 +63,8 @@ func (s *BootstrapService) Seed(ctx context.Context, cfg config.AuthConfig) erro
 		{Code: "USER_LOGOUT", Name: "User logout", IsActive: true},
 		{Code: "USER_LOGOUT_ALL", Name: "Logout all", IsActive: true},
 		{Code: "PASSWORD_CHANGED", Name: "Password changed", IsActive: true},
+		{Code: "AUTH_POLICY_CHANGED", Name: "Authentication policy changed", IsActive: true},
+		{Code: "ACCOUNT_LOCKED", Name: "Account locked", IsActive: true},
 		{Code: "ACCOUNT_DISABLED", Name: "Account disabled", IsActive: true},
 		{Code: "ADMIN_REVOKED", Name: "Administrator revoked", IsActive: true},
 	}); err != nil {

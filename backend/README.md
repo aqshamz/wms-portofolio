@@ -301,3 +301,12 @@ versioned startup migrations, graceful HTTP shutdown, and route-level OpenAPI
 documentation at `/docs`. Development keeps RBAC disabled until an administrator
 is bootstrapped; production configuration fails closed. See
 [Backend hardening](docs/hardening.md) for setup and verification.
+
+## Account administration
+
+Security administration now provides account create/list/detail/update,
+status/deactivation, password reset, unlock, direct permissions, reusable roles,
+role permissions, and owner/warehouse access. Account detail returns the full
+aggregate needed by the frontend menu. Deactivation preserves operational
+history and revokes sessions. See
+[Account and role administration API](docs/account-administration-api.md).
