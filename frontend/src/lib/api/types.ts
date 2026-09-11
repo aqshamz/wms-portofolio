@@ -10,7 +10,8 @@ export interface PaginatedData<T> {
   items: T[];
   page: number;
   page_size: number;
-  total: number;
+  total_items: number;
+  total_pages: number;
 }
 
 export type { AuthenticatedUser, LoginResult } from "@/lib/auth/schemas";

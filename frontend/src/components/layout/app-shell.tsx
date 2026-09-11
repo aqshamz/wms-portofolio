@@ -14,7 +14,6 @@ import {
   LogOut,
   Menu,
   PackageCheck,
-  Settings2,
   ShieldCheck,
   Truck,
   UsersRound,
@@ -27,7 +26,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-provider";
 import { ConnectionStatus } from "@/components/layout/connection-status";
 import { Button } from "@/components/ui/button";
-import type { PermissionRequirement } from "@/lib/auth/permissions";
+import {
+  MODULE_ACCESS,
+  type PermissionRequirement,
+} from "@/lib/auth/permissions";
 import { cn } from "@/lib/utils";
 
 interface NavigationItem {
@@ -46,7 +48,11 @@ interface NavigationGroup {
 interface ReportNavigationItem {
   label: string;
   href: string;
-  permission?: string;
+}
+
+interface MasterDataNavigationItem {
+  label: string;
+  href: string;
 }
 
 const navigation: NavigationGroup[] = [
@@ -61,29 +67,29 @@ const navigation: NavigationGroup[] = [
         label: "Inbound",
         icon: Archive,
         badge: "12",
-        access: { anyPrefix: ["INBOUND."] },
+        access: MODULE_ACCESS.INBOUND.READ,
       },
       {
         label: "Inventory",
         icon: Boxes,
-        access: { anyPrefix: ["INVENTORY.", "STOCK."] },
+        access: MODULE_ACCESS.INVENTORY.READ,
       },
       {
         label: "Stock control",
         icon: ClipboardCheck,
         badge: "3",
-        access: { anyPrefix: ["INVENTORY.", "STOCK."] },
+        access: MODULE_ACCESS.INVENTORY.READ,
       },
       {
         label: "Outbound",
         icon: PackageCheck,
         badge: "8",
-        access: { anyPrefix: ["OUTBOUND."] },
+        access: MODULE_ACCESS.OUTBOUND.READ,
       },
       {
         label: "Transport",
         icon: Truck,
-        access: { anyPrefix: ["OUTBOUND."] },
+        access: MODULE_ACCESS.OUTBOUND.READ,
       },
     ],
   },
@@ -91,27 +97,24 @@ const navigation: NavigationGroup[] = [
     label: "Administration",
     items: [
       {
-        label: "Master data",
-        icon: Warehouse,
-        access: { anyPrefix: ["MASTER."] },
-      },
-      {
         label: "Accounts",
         icon: UsersRound,
-        access: { anyPrefix: ["ACCOUNT."], anyOf: ["SECURITY.READ"] },
+        access: MODULE_ACCESS.SECURITY.READ,
       },
       {
         label: "Permissions",
         icon: ShieldCheck,
-        access: { anyOf: ["ROLE.MANAGE", "SECURITY.WRITE"] },
-      },
-      {
-        label: "Configuration",
-        icon: Settings2,
-        access: { anyOf: ["MASTER.CONFIG", "MASTER.WRITE"] },
+        access: MODULE_ACCESS.SECURITY.WRITE,
       },
     ],
   },
+];
+
+const masterDataNavigation: MasterDataNavigationItem[] = [
+  { label: "All master data", href: "/master-data" },
+  { label: "Core masters", href: "/master-data/core" },
+  { label: "Catalog", href: "/master-data/catalog" },
+  { label: "Operational setup", href: "/master-data/operational" },
 ];
 
 const reportNavigation: ReportNavigationItem[] = [
@@ -119,27 +122,22 @@ const reportNavigation: ReportNavigationItem[] = [
   {
     label: "Master data",
     href: "/reports#master-data",
-    permission: "REPORT.MASTER",
   },
   {
     label: "Inbound",
     href: "/reports#inbound",
-    permission: "REPORT.INBOUND",
   },
   {
     label: "Stock control",
     href: "/reports#stock-control",
-    permission: "REPORT.INVENTORY",
   },
   {
     label: "Outbound",
     href: "/reports#outbound",
-    permission: "REPORT.OUTBOUND",
   },
   {
     label: "Billing",
     href: "/reports#billing",
-    permission: "REPORT.BILLING",
   },
 ];
 
@@ -150,6 +148,13 @@ function initials(name: string) {
       ? `${parts[0][0]}${parts.at(-1)?.[0] ?? ""}`
       : parts[0]?.slice(0, 2) || "WU"
   ).toUpperCase();
+}
+
+function isSectionActive(pathname: string, href: string) {
+  return (
+    pathname === href ||
+    (href !== "/master-data" && pathname.startsWith(`${href}/`))
+  );
 }
 
 function Brand() {
@@ -221,21 +226,18 @@ function NavigationEntry({
 function SidebarNavigation({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, can, canAccess } = useAuth();
+  const { user, canAccess } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(
     pathname.startsWith("/reports"),
   );
+  const [masterDataOpen, setMasterDataOpen] = useState(
+    pathname.startsWith("/master-data"),
+  );
   const reportsActive = pathname.startsWith("/reports");
-  const allowedReports = reportNavigation.filter(
-    (item) =>
-      item.permission === undefined ||
-      can("REPORTING.READ") ||
-      can(item.permission),
-  );
-  const canViewReports = allowedReports.some(
-    (item) => item.permission !== undefined,
-  );
+  const masterDataActive = pathname.startsWith("/master-data");
+  const canViewMasterData = canAccess(MODULE_ACCESS.MASTER.READ);
+  const canViewReports = canAccess(MODULE_ACCESS.REPORTING.READ);
   const accountInitials = initials(user.display_name || user.username);
 
   async function logout() {
@@ -326,7 +328,7 @@ function SidebarNavigation({ onNavigate }: { onNavigate?: () => void }) {
                 id="reports-navigation"
                 className="mt-1 ml-5 space-y-0.5 border-l border-white/10 pl-4"
               >
-                {allowedReports.map((item) => (
+                {reportNavigation.map((item) => (
                   <li key={item.label}>
                     <Link
                       href={item.href}
@@ -346,14 +348,66 @@ function SidebarNavigation({ onNavigate }: { onNavigate?: () => void }) {
           const allowedItems = group.items.filter((item) =>
             canAccess(item.access),
           );
-          if (allowedItems.length === 0) return null;
+          if (allowedItems.length === 0 && !canViewMasterData) return null;
 
           return (
             <div key={group.label} className="mb-6">
               <p className="mb-2 px-3 text-[11px] font-bold tracking-[0.16em] text-slate-500 uppercase">
                 {group.label}
               </p>
-              <ul className="space-y-1">
+              {canViewMasterData ? (
+                <>
+                  <button
+                    type="button"
+                    aria-expanded={masterDataOpen}
+                    aria-controls="master-data-navigation"
+                    onClick={() => setMasterDataOpen((open) => !open)}
+                    className={cn(
+                      "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-colors",
+                      masterDataActive
+                        ? "bg-cyan-400 text-slate-950"
+                        : "text-slate-300 hover:bg-white/[0.07] hover:text-white",
+                    )}
+                  >
+                    <Warehouse className="size-[18px] shrink-0" />
+                    <span className="flex-1">Master data</span>
+                    <ChevronDown
+                      className={cn(
+                        "size-4 transition-transform",
+                        masterDataOpen && "rotate-180",
+                      )}
+                    />
+                  </button>
+                  {masterDataOpen ? (
+                    <ul
+                      id="master-data-navigation"
+                      className="mt-1 ml-5 space-y-0.5 border-l border-white/10 pl-4"
+                    >
+                      {masterDataNavigation.map((item) => {
+                        const active = isSectionActive(pathname, item.href);
+                        return (
+                          <li key={item.href}>
+                            <Link
+                              href={item.href}
+                              onClick={onNavigate}
+                              aria-current={active ? "page" : undefined}
+                              className={cn(
+                                "flex min-h-9 items-center rounded-lg px-3 text-sm transition-colors",
+                                active
+                                  ? "bg-white/10 font-semibold text-white"
+                                  : "text-slate-400 hover:bg-white/[0.06] hover:text-white",
+                              )}
+                            >
+                              {item.label}
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+                </>
+              ) : null}
+              <ul className={cn("space-y-1", canViewMasterData && "mt-2")}>
                 {allowedItems.map((item) => (
                   <li key={item.label}>
                     <NavigationEntry

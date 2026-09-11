@@ -5,13 +5,14 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
 import {
   hasPermission,
   isAuthorized,
+  type PermissionCode,
   type PermissionRequirement,
 } from "@/lib/auth/permissions";
 import type { AuthenticatedUser } from "@/lib/auth/schemas";
 
 interface AuthContextValue {
   user: AuthenticatedUser;
-  can: (permission: string) => boolean;
+  can: (permission: PermissionCode) => boolean;
   canAccess: (requirement?: PermissionRequirement) => boolean;
 }
 

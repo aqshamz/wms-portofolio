@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { ReportsOverview } from "@/features/reports/reports-overview";
+import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions";
 import { getServerSession } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
@@ -14,12 +15,10 @@ export default async function ReportsPage() {
     return null;
   }
 
-  const canViewReports =
-    session.user.permissions.includes("*") ||
-    session.user.permissions.includes("REPORTING.READ") ||
-    session.user.permissions.some((permission) =>
-      permission.startsWith("REPORT."),
-    );
+  const canViewReports = hasPermission(
+    session.user.permissions,
+    PERMISSIONS.REPORTING.READ,
+  );
 
   if (!canViewReports) {
     return (
@@ -31,12 +30,12 @@ export default async function ReportsPage() {
           Reports are not assigned to your account
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-900">
-          Ask an administrator for the specific report permission you need. The
-          API will also reject report data requests without that permission.
+          Ask an administrator for reporting access. The API will also reject
+          report data requests without the REPORTING.READ permission.
         </p>
       </section>
     );
   }
 
-  return <ReportsOverview permissions={session.user.permissions} />;
+  return <ReportsOverview />;
 }

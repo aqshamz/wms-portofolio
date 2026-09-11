@@ -1,25 +1,32 @@
 import { describe, expect, it } from "vitest";
 
-import { hasPermission, isAuthorized } from "@/lib/auth/permissions";
+import {
+  hasPermission,
+  isAuthorized,
+  MODULE_ACCESS,
+  PERMISSIONS,
+} from "@/lib/auth/permissions";
 
 describe("authorization helpers", () => {
   it("matches an exact permission", () => {
-    expect(hasPermission(["REPORT.INBOUND"], "REPORT.INBOUND")).toBe(true);
-    expect(hasPermission(["REPORT.INBOUND"], "REPORT.OUTBOUND")).toBe(false);
+    expect(
+      hasPermission([PERMISSIONS.REPORTING.READ], PERMISSIONS.REPORTING.READ),
+    ).toBe(true);
+    expect(
+      hasPermission([PERMISSIONS.REPORTING.READ], PERMISSIONS.REPORTING.WRITE),
+    ).toBe(false);
   });
 
-  it("matches one permission or one module prefix", () => {
-    expect(isAuthorized(["INBOUND.PO.READ"], { anyPrefix: ["INBOUND."] })).toBe(
-      true,
-    );
+  it("uses the same read and write codes enforced by backend modules", () => {
     expect(
-      isAuthorized(["REPORT.BILLING"], {
-        anyOf: ["REPORT.INBOUND", "REPORT.BILLING"],
-      }),
+      isAuthorized([PERMISSIONS.INBOUND.READ], MODULE_ACCESS.INBOUND.READ),
     ).toBe(true);
+    expect(
+      isAuthorized([PERMISSIONS.INBOUND.READ], MODULE_ACCESS.INBOUND.WRITE),
+    ).toBe(false);
   });
 
   it("allows the backend wildcard permission", () => {
-    expect(isAuthorized(["*"], { anyOf: ["SECURITY.WRITE"] })).toBe(true);
+    expect(isAuthorized(["*"], MODULE_ACCESS.SECURITY.WRITE)).toBe(true);
   });
 });
