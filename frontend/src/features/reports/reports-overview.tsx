@@ -20,6 +20,7 @@ interface ReportArea {
   name: string;
   description: string;
   icon: LucideIcon;
+  permission: string;
   reports: ReportDefinition[];
 }
 
@@ -29,6 +30,7 @@ const reportAreas: ReportArea[] = [
     name: "Master data",
     description: "Warehouse structure, partners, items, and configuration.",
     icon: Building2,
+    permission: "REPORT.MASTER",
     reports: [
       {
         name: "Organization and warehouse coverage",
@@ -57,6 +59,7 @@ const reportAreas: ReportArea[] = [
     name: "Inbound",
     description: "From purchase-order planning through putaway.",
     icon: PackageOpen,
+    permission: "REPORT.INBOUND",
     reports: [
       {
         name: "Purchase order fulfillment",
@@ -89,6 +92,7 @@ const reportAreas: ReportArea[] = [
     name: "Stock control",
     description: "Inventory position, movement, accuracy, and transfers.",
     icon: Boxes,
+    permission: "REPORT.INVENTORY",
     reports: [
       {
         name: "Current stock on hand",
@@ -125,6 +129,7 @@ const reportAreas: ReportArea[] = [
     name: "Outbound",
     description: "Delivery-order fulfillment through final delivery.",
     icon: Truck,
+    permission: "REPORT.OUTBOUND",
     reports: [
       {
         name: "Delivery order fulfillment",
@@ -158,6 +163,7 @@ const reportAreas: ReportArea[] = [
     name: "Billing",
     description: "Contract coverage, revenue, invoices, and settlement.",
     icon: Calculator,
+    permission: "REPORT.BILLING",
     reports: [
       {
         name: "Contract and rate coverage",
@@ -191,7 +197,14 @@ const reportAreas: ReportArea[] = [
   },
 ];
 
-export function ReportsOverview() {
+export function ReportsOverview({ permissions }: { permissions: string[] }) {
+  const allowedAreas = reportAreas.filter(
+    (area) =>
+      permissions.includes("*") ||
+      permissions.includes("REPORTING.READ") ||
+      permissions.includes(area.permission),
+  );
+
   return (
     <div className="space-y-8">
       <header>
@@ -209,7 +222,7 @@ export function ReportsOverview() {
         aria-label="Report categories"
         className="flex gap-2 overflow-x-auto pb-1"
       >
-        {reportAreas.map((area) => (
+        {allowedAreas.map((area) => (
           <a
             key={area.id}
             href={`#${area.id}`}
@@ -221,7 +234,7 @@ export function ReportsOverview() {
       </nav>
 
       <div className="space-y-8">
-        {reportAreas.map((area) => {
+        {allowedAreas.map((area) => {
           const Icon = area.icon;
 
           return (

@@ -16,7 +16,7 @@ type RequestOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
 };
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+export const SESSION_EXPIRED_EVENT = "wms:session-expired";
 
 export async function apiRequest<T>(
   path: string,
@@ -30,7 +30,8 @@ export async function apiRequest<T>(
     headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(`${apiUrl}${path}`, {
+  const proxyPath = `/api/backend${path.startsWith("/") ? path : `/${path}`}`;
+  const response = await fetch(proxyPath, {
     ...options,
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
@@ -39,6 +40,10 @@ export async function apiRequest<T>(
   const payload = (await response.json()) as ApiResponse<T>;
 
   if (!response.ok || !payload.success) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+    }
+
     throw new ApiError(
       payload.message || "The request could not be completed.",
       response.status,

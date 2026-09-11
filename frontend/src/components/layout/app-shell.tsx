@@ -10,6 +10,8 @@ import {
   ChevronDown,
   ClipboardCheck,
   LayoutDashboard,
+  LoaderCircle,
+  LogOut,
   Menu,
   PackageCheck,
   Settings2,
@@ -20,10 +22,12 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
+import { useAuth } from "@/components/auth/auth-provider";
 import { ConnectionStatus } from "@/components/layout/connection-status";
 import { Button } from "@/components/ui/button";
+import type { PermissionRequirement } from "@/lib/auth/permissions";
 import { cn } from "@/lib/utils";
 
 interface NavigationItem {
@@ -31,6 +35,7 @@ interface NavigationItem {
   icon: LucideIcon;
   href?: string;
   badge?: string;
+  access?: PermissionRequirement;
 }
 
 interface NavigationGroup {
@@ -41,6 +46,7 @@ interface NavigationGroup {
 interface ReportNavigationItem {
   label: string;
   href: string;
+  permission?: string;
 }
 
 const navigation: NavigationGroup[] = [
@@ -51,32 +57,100 @@ const navigation: NavigationGroup[] = [
   {
     label: "Operations",
     items: [
-      { label: "Inbound", icon: Archive, badge: "12" },
-      { label: "Inventory", icon: Boxes },
-      { label: "Stock control", icon: ClipboardCheck, badge: "3" },
-      { label: "Outbound", icon: PackageCheck, badge: "8" },
-      { label: "Transport", icon: Truck },
+      {
+        label: "Inbound",
+        icon: Archive,
+        badge: "12",
+        access: { anyPrefix: ["INBOUND."] },
+      },
+      {
+        label: "Inventory",
+        icon: Boxes,
+        access: { anyPrefix: ["INVENTORY.", "STOCK."] },
+      },
+      {
+        label: "Stock control",
+        icon: ClipboardCheck,
+        badge: "3",
+        access: { anyPrefix: ["INVENTORY.", "STOCK."] },
+      },
+      {
+        label: "Outbound",
+        icon: PackageCheck,
+        badge: "8",
+        access: { anyPrefix: ["OUTBOUND."] },
+      },
+      {
+        label: "Transport",
+        icon: Truck,
+        access: { anyPrefix: ["OUTBOUND."] },
+      },
     ],
   },
   {
     label: "Administration",
     items: [
-      { label: "Master data", icon: Warehouse },
-      { label: "Accounts", icon: UsersRound },
-      { label: "Permissions", icon: ShieldCheck },
-      { label: "Configuration", icon: Settings2 },
+      {
+        label: "Master data",
+        icon: Warehouse,
+        access: { anyPrefix: ["MASTER."] },
+      },
+      {
+        label: "Accounts",
+        icon: UsersRound,
+        access: { anyPrefix: ["ACCOUNT."], anyOf: ["SECURITY.READ"] },
+      },
+      {
+        label: "Permissions",
+        icon: ShieldCheck,
+        access: { anyOf: ["ROLE.MANAGE", "SECURITY.WRITE"] },
+      },
+      {
+        label: "Configuration",
+        icon: Settings2,
+        access: { anyOf: ["MASTER.CONFIG", "MASTER.WRITE"] },
+      },
     ],
   },
 ];
 
 const reportNavigation: ReportNavigationItem[] = [
   { label: "All reports", href: "/reports" },
-  { label: "Master data", href: "/reports#master-data" },
-  { label: "Inbound", href: "/reports#inbound" },
-  { label: "Stock control", href: "/reports#stock-control" },
-  { label: "Outbound", href: "/reports#outbound" },
-  { label: "Billing", href: "/reports#billing" },
+  {
+    label: "Master data",
+    href: "/reports#master-data",
+    permission: "REPORT.MASTER",
+  },
+  {
+    label: "Inbound",
+    href: "/reports#inbound",
+    permission: "REPORT.INBOUND",
+  },
+  {
+    label: "Stock control",
+    href: "/reports#stock-control",
+    permission: "REPORT.INVENTORY",
+  },
+  {
+    label: "Outbound",
+    href: "/reports#outbound",
+    permission: "REPORT.OUTBOUND",
+  },
+  {
+    label: "Billing",
+    href: "/reports#billing",
+    permission: "REPORT.BILLING",
+  },
 ];
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return (
+    parts.length > 1
+      ? `${parts[0][0]}${parts.at(-1)?.[0] ?? ""}`
+      : parts[0]?.slice(0, 2) || "WU"
+  ).toUpperCase();
+}
 
 function Brand() {
   return (
@@ -146,10 +220,33 @@ function NavigationEntry({
 
 function SidebarNavigation({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, can, canAccess } = useAuth();
+  const [loggingOut, setLoggingOut] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(
     pathname.startsWith("/reports"),
   );
   const reportsActive = pathname.startsWith("/reports");
+  const allowedReports = reportNavigation.filter(
+    (item) =>
+      item.permission === undefined ||
+      can("REPORTING.READ") ||
+      can(item.permission),
+  );
+  const canViewReports = allowedReports.some(
+    (item) => item.permission !== undefined,
+  );
+  const accountInitials = initials(user.display_name || user.username);
+
+  async function logout() {
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      router.replace("/login");
+      router.refresh();
+    }
+  }
 
   return (
     <>
@@ -172,102 +269,131 @@ function SidebarNavigation({ onNavigate }: { onNavigate?: () => void }) {
         aria-label="Primary navigation"
         className="flex-1 overflow-y-auto px-3 py-5"
       >
-        {navigation.slice(0, 2).map((group) => (
-          <div key={group.label} className="mb-6">
-            <p className="mb-2 px-3 text-[11px] font-bold tracking-[0.16em] text-slate-500 uppercase">
-              {group.label}
-            </p>
-            <ul className="space-y-1">
-              {group.items.map((item) => (
-                <li key={item.label}>
-                  <NavigationEntry
-                    item={item}
-                    active={item.href === "/" && pathname === "/"}
-                    onNavigate={onNavigate}
-                  />
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+        {navigation.slice(0, 2).map((group) => {
+          const allowedItems = group.items.filter((item) =>
+            canAccess(item.access),
+          );
+          if (allowedItems.length === 0) return null;
 
-        <div className="mb-6">
-          <p className="mb-2 px-3 text-[11px] font-bold tracking-[0.16em] text-slate-500 uppercase">
-            Reporting
-          </p>
-          <button
-            type="button"
-            aria-expanded={reportsOpen}
-            aria-controls="reports-navigation"
-            onClick={() => setReportsOpen((open) => !open)}
-            className={cn(
-              "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-colors",
-              reportsActive
-                ? "bg-cyan-400 text-slate-950"
-                : "text-slate-300 hover:bg-white/[0.07] hover:text-white",
-            )}
-          >
-            <BarChart3 className="size-[18px] shrink-0" />
-            <span className="flex-1">Reports</span>
-            <ChevronDown
+          return (
+            <div key={group.label} className="mb-6">
+              <p className="mb-2 px-3 text-[11px] font-bold tracking-[0.16em] text-slate-500 uppercase">
+                {group.label}
+              </p>
+              <ul className="space-y-1">
+                {allowedItems.map((item) => (
+                  <li key={item.label}>
+                    <NavigationEntry
+                      item={item}
+                      active={item.href === "/" && pathname === "/"}
+                      onNavigate={onNavigate}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+
+        {canViewReports ? (
+          <div className="mb-6">
+            <p className="mb-2 px-3 text-[11px] font-bold tracking-[0.16em] text-slate-500 uppercase">
+              Reporting
+            </p>
+            <button
+              type="button"
+              aria-expanded={reportsOpen}
+              aria-controls="reports-navigation"
+              onClick={() => setReportsOpen((open) => !open)}
               className={cn(
-                "size-4 transition-transform",
-                reportsOpen && "rotate-180",
+                "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-colors",
+                reportsActive
+                  ? "bg-cyan-400 text-slate-950"
+                  : "text-slate-300 hover:bg-white/[0.07] hover:text-white",
               )}
-            />
-          </button>
-          {reportsOpen ? (
-            <ul
-              id="reports-navigation"
-              className="mt-1 ml-5 space-y-0.5 border-l border-white/10 pl-4"
             >
-              {reportNavigation.map((item) => (
-                <li key={item.label}>
-                  <Link
-                    href={item.href}
-                    onClick={onNavigate}
-                    className="flex min-h-9 items-center rounded-lg px-3 text-sm text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white"
-                  >
-                    {item.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-
-        {navigation.slice(2).map((group) => (
-          <div key={group.label} className="mb-6">
-            <p className="mb-2 px-3 text-[11px] font-bold tracking-[0.16em] text-slate-500 uppercase">
-              {group.label}
-            </p>
-            <ul className="space-y-1">
-              {group.items.map((item) => (
-                <li key={item.label}>
-                  <NavigationEntry
-                    item={item}
-                    active={false}
-                    onNavigate={onNavigate}
-                  />
-                </li>
-              ))}
-            </ul>
+              <BarChart3 className="size-[18px] shrink-0" />
+              <span className="flex-1">Reports</span>
+              <ChevronDown
+                className={cn(
+                  "size-4 transition-transform",
+                  reportsOpen && "rotate-180",
+                )}
+              />
+            </button>
+            {reportsOpen ? (
+              <ul
+                id="reports-navigation"
+                className="mt-1 ml-5 space-y-0.5 border-l border-white/10 pl-4"
+              >
+                {allowedReports.map((item) => (
+                  <li key={item.label}>
+                    <Link
+                      href={item.href}
+                      onClick={onNavigate}
+                      className="flex min-h-9 items-center rounded-lg px-3 text-sm text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white"
+                    >
+                      {item.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
-        ))}
+        ) : null}
+
+        {navigation.slice(2).map((group) => {
+          const allowedItems = group.items.filter((item) =>
+            canAccess(item.access),
+          );
+          if (allowedItems.length === 0) return null;
+
+          return (
+            <div key={group.label} className="mb-6">
+              <p className="mb-2 px-3 text-[11px] font-bold tracking-[0.16em] text-slate-500 uppercase">
+                {group.label}
+              </p>
+              <ul className="space-y-1">
+                {allowedItems.map((item) => (
+                  <li key={item.label}>
+                    <NavigationEntry
+                      item={item}
+                      active={false}
+                      onNavigate={onNavigate}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
       </nav>
 
       <div className="border-t border-white/10 p-4">
         <div className="flex items-center gap-3 rounded-xl p-2">
           <div className="grid size-9 shrink-0 place-items-center rounded-full bg-slate-700 text-sm font-bold text-white">
-            AW
+            {accountInitials}
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-white">
-              Andi Wijaya
+              {user.display_name || user.username}
             </p>
-            <p className="truncate text-xs text-slate-400">Warehouse Manager</p>
+            <p className="truncate text-xs text-slate-400">@{user.username}</p>
           </div>
-          <ChevronDown className="size-4 text-slate-500" />
+          <button
+            type="button"
+            onClick={logout}
+            disabled={loggingOut}
+            className="grid size-9 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white disabled:opacity-60"
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            {loggingOut ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <LogOut className="size-4" />
+            )}
+          </button>
         </div>
       </div>
     </>
@@ -310,6 +436,9 @@ function MobileSidebar() {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const accountInitials = initials(user.display_name || user.username);
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-68 flex-col bg-slate-950 lg:flex">
@@ -334,7 +463,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               className="grid size-10 place-items-center rounded-full bg-slate-950 text-sm font-bold text-white lg:hidden"
               aria-label="Open account menu"
             >
-              AW
+              {accountInitials}
             </button>
           </div>
         </header>

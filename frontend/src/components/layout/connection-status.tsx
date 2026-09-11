@@ -5,8 +5,6 @@ import { WifiOff } from "lucide-react";
 
 type ConnectionState = "checking" | "healthy" | "unavailable";
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
-
 export function ConnectionStatus() {
   const [status, setStatus] = useState<ConnectionState>("checking");
 
@@ -17,7 +15,7 @@ export function ConnectionStatus() {
     }
 
     try {
-      const response = await fetch(`${apiUrl}/health`, {
+      const response = await fetch("/api/health", {
         cache: "no-store",
         signal: AbortSignal.timeout(4_000),
       });

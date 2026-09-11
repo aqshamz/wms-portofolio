@@ -13,19 +13,4 @@ export interface PaginatedData<T> {
   total: number;
 }
 
-export interface AuthenticatedUser {
-  account_id: string;
-  username: string;
-  email?: string;
-  display_name: string;
-  preferred_timezone?: string;
-  last_login_at?: string;
-  permissions: string[];
-}
-
-export interface LoginResult {
-  token: string;
-  token_type: string;
-  expires_at: string;
-  user: AuthenticatedUser;
-}
+export type { AuthenticatedUser, LoginResult } from "@/lib/auth/schemas";
