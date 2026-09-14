@@ -51,7 +51,7 @@ function ResourceGrid({ section }: { section: MasterDataSection }) {
             </ul>
             {resource.href ? (
               <span className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-cyan-800">
-                Manage organizations
+                Manage {resource.name.toLowerCase()}
                 <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
               </span>
             ) : null}

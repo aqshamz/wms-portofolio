@@ -50,12 +50,14 @@ export const masterDataSections = [
         description:
           "Structure each warehouse with location types, zones, and physical locations.",
         includes: ["Location types", "Zones", "Locations"],
+        href: "/master-data/core/storage-layout",
       },
       {
         name: "Access scopes",
         description:
           "Control which owners and warehouses an account is allowed to work with.",
         includes: ["Owner access", "Warehouse access"],
+        href: "/master-data/core/access-scopes",
       },
     ],
   },
@@ -72,6 +74,7 @@ export const masterDataSections = [
         description:
           "Maintain vendors, customers, and other partners with their assigned partner types.",
         includes: ["Partner types", "Partner profiles", "Type assignments"],
+        href: "/master-data/catalog/business-partners",
       },
       {
         name: "Item catalog",

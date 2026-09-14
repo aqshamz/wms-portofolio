@@ -99,12 +99,14 @@ const navigation: NavigationGroup[] = [
       {
         label: "Accounts",
         icon: UsersRound,
+        href: "/accounts",
         access: MODULE_ACCESS.SECURITY.READ,
       },
       {
         label: "Permissions",
         icon: ShieldCheck,
-        access: MODULE_ACCESS.SECURITY.WRITE,
+        href: "/permissions",
+        access: MODULE_ACCESS.SECURITY.READ,
       },
     ],
   },
@@ -412,7 +414,9 @@ function SidebarNavigation({ onNavigate }: { onNavigate?: () => void }) {
                   <li key={item.label}>
                     <NavigationEntry
                       item={item}
-                      active={false}
+                      active={Boolean(
+                        item.href && isSectionActive(pathname, item.href),
+                      )}
                       onNavigate={onNavigate}
                     />
                   </li>
