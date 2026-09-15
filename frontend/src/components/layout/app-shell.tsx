@@ -14,6 +14,8 @@ import {
   LogOut,
   Menu,
   PackageCheck,
+  PanelLeftClose,
+  PanelLeftOpen,
   ShieldCheck,
   Truck,
   UsersRound,
@@ -159,18 +161,46 @@ function isSectionActive(pathname: string, href: string) {
   );
 }
 
-function Brand() {
+function Brand({
+  collapsed = false,
+  onToggleCollapsed,
+}: {
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+}) {
   return (
-    <div className="flex h-16 items-center gap-3 px-5">
+    <div
+      className={cn(
+        "relative flex h-16 shrink-0 items-center gap-3",
+        collapsed ? "justify-center px-2" : "px-5",
+      )}
+    >
       <div className="grid size-9 place-items-center rounded-xl bg-cyan-400 text-sm font-black text-slate-950 shadow-[0_0_0_4px_rgba(34,211,238,0.12)]">
         W
       </div>
-      <div>
-        <p className="text-[15px] font-bold tracking-tight text-white">
-          NEXA WMS
-        </p>
-        <p className="text-xs text-slate-400">Operations control</p>
-      </div>
+      {!collapsed ? (
+        <div>
+          <p className="text-[15px] font-bold tracking-tight text-white">
+            NEXA WMS
+          </p>
+          <p className="text-xs text-slate-400">Operations control</p>
+        </div>
+      ) : null}
+      {onToggleCollapsed ? (
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="absolute top-1/2 -right-3 z-10 grid size-7 -translate-y-1/2 place-items-center rounded-full border border-slate-700 bg-slate-900 text-slate-300 shadow-md transition-colors hover:border-slate-500 hover:bg-slate-800 hover:text-white"
+        >
+          {collapsed ? (
+            <PanelLeftOpen className="size-4" />
+          ) : (
+            <PanelLeftClose className="size-4" />
+          )}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -178,15 +208,18 @@ function Brand() {
 function NavigationEntry({
   item,
   active,
+  collapsed = false,
   onNavigate,
 }: {
   item: NavigationItem;
   active: boolean;
+  collapsed?: boolean;
   onNavigate?: () => void;
 }) {
   const Icon = item.icon;
   const className = cn(
-    "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-colors",
+    "flex min-h-11 w-full items-center gap-3 rounded-xl text-left text-sm font-medium transition-colors",
+    collapsed ? "justify-center px-2" : "px-3",
     active
       ? "bg-cyan-400 text-slate-950"
       : "text-slate-300 hover:bg-white/[0.07] hover:text-white",
@@ -194,8 +227,8 @@ function NavigationEntry({
   const content = (
     <>
       <Icon className="size-[18px] shrink-0" />
-      <span className="flex-1">{item.label}</span>
-      {item.badge ? (
+      <span className={collapsed ? "sr-only" : "flex-1"}>{item.label}</span>
+      {item.badge && !collapsed ? (
         <span
           className={cn(
             "rounded-full px-2 py-0.5 text-xs font-bold",
@@ -212,20 +245,40 @@ function NavigationEntry({
 
   if (item.href) {
     return (
-      <Link href={item.href} onClick={onNavigate} className={className}>
+      <Link
+        href={item.href}
+        onClick={onNavigate}
+        className={className}
+        title={collapsed ? item.label : undefined}
+        aria-current={active ? "page" : undefined}
+      >
         {content}
       </Link>
     );
   }
 
   return (
-    <button type="button" onClick={onNavigate} className={className}>
+    <button
+      type="button"
+      onClick={onNavigate}
+      className={className}
+      title={collapsed ? item.label : undefined}
+      aria-label={collapsed ? item.label : undefined}
+    >
       {content}
     </button>
   );
 }
 
-function SidebarNavigation({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarNavigation({
+  collapsed = false,
+  onToggleCollapsed,
+  onNavigate,
+}: {
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, canAccess } = useAuth();
@@ -254,24 +307,37 @@ function SidebarNavigation({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <>
-      <Brand />
-      <div className="mx-4 mt-2 rounded-xl border border-white/10 bg-white/[0.06] p-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-slate-400">
-              Active warehouse
-            </p>
-            <p className="mt-0.5 truncate text-sm font-semibold text-white">
-              Jakarta Distribution
-            </p>
+      <Brand collapsed={collapsed} onToggleCollapsed={onToggleCollapsed} />
+      <div
+        className={cn(
+          "mt-2 rounded-xl border border-white/10 bg-white/[0.06]",
+          collapsed ? "mx-2 grid h-11 place-items-center p-2" : "mx-4 p-3",
+        )}
+        title={collapsed ? "Active warehouse: Jakarta Distribution" : undefined}
+      >
+        {collapsed ? (
+          <Warehouse className="size-[18px] text-cyan-300" />
+        ) : (
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-slate-400">
+                Active warehouse
+              </p>
+              <p className="mt-0.5 truncate text-sm font-semibold text-white">
+                Jakarta Distribution
+              </p>
+            </div>
+            <ChevronDown className="size-4 shrink-0 text-slate-400" />
           </div>
-          <ChevronDown className="size-4 shrink-0 text-slate-400" />
-        </div>
+        )}
       </div>
 
       <nav
         aria-label="Primary navigation"
-        className="flex-1 overflow-y-auto px-3 py-5"
+        className={cn(
+          "flex-1 overflow-y-auto py-5",
+          collapsed ? "px-2" : "px-3",
+        )}
       >
         {navigation.slice(0, 2).map((group) => {
           const allowedItems = group.items.filter((item) =>
@@ -280,8 +346,20 @@ function SidebarNavigation({ onNavigate }: { onNavigate?: () => void }) {
           if (allowedItems.length === 0) return null;
 
           return (
-            <div key={group.label} className="mb-6">
-              <p className="mb-2 px-3 text-[11px] font-bold tracking-[0.16em] text-slate-500 uppercase">
+            <div
+              key={group.label}
+              className={cn(
+                "mb-6",
+                collapsed &&
+                  "border-t border-white/10 pt-3 first:border-t-0 first:pt-0",
+              )}
+            >
+              <p
+                className={cn(
+                  "mb-2 px-3 text-[11px] font-bold tracking-[0.16em] text-slate-500 uppercase",
+                  collapsed && "sr-only",
+                )}
+              >
                 {group.label}
               </p>
               <ul className="space-y-1">
@@ -290,6 +368,7 @@ function SidebarNavigation({ onNavigate }: { onNavigate?: () => void }) {
                     <NavigationEntry
                       item={item}
                       active={item.href === "/" && pathname === "/"}
+                      collapsed={collapsed}
                       onNavigate={onNavigate}
                     />
                   </li>
@@ -300,32 +379,51 @@ function SidebarNavigation({ onNavigate }: { onNavigate?: () => void }) {
         })}
 
         {canViewReports ? (
-          <div className="mb-6">
-            <p className="mb-2 px-3 text-[11px] font-bold tracking-[0.16em] text-slate-500 uppercase">
+          <div
+            className={cn("mb-6", collapsed && "border-t border-white/10 pt-3")}
+          >
+            <p
+              className={cn(
+                "mb-2 px-3 text-[11px] font-bold tracking-[0.16em] text-slate-500 uppercase",
+                collapsed && "sr-only",
+              )}
+            >
               Reporting
             </p>
             <button
               type="button"
-              aria-expanded={reportsOpen}
+              aria-expanded={!collapsed && reportsOpen}
               aria-controls="reports-navigation"
-              onClick={() => setReportsOpen((open) => !open)}
+              aria-label={collapsed ? "Reports" : undefined}
+              title={collapsed ? "Reports" : undefined}
+              onClick={() => {
+                if (collapsed) {
+                  onToggleCollapsed?.();
+                  setReportsOpen(true);
+                } else {
+                  setReportsOpen((open) => !open);
+                }
+              }}
               className={cn(
-                "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-colors",
+                "flex min-h-11 w-full items-center gap-3 rounded-xl text-left text-sm font-medium transition-colors",
+                collapsed ? "justify-center px-2" : "px-3",
                 reportsActive
                   ? "bg-cyan-400 text-slate-950"
                   : "text-slate-300 hover:bg-white/[0.07] hover:text-white",
               )}
             >
               <BarChart3 className="size-[18px] shrink-0" />
-              <span className="flex-1">Reports</span>
-              <ChevronDown
-                className={cn(
-                  "size-4 transition-transform",
-                  reportsOpen && "rotate-180",
-                )}
-              />
+              <span className={collapsed ? "sr-only" : "flex-1"}>Reports</span>
+              {!collapsed ? (
+                <ChevronDown
+                  className={cn(
+                    "size-4 transition-transform",
+                    reportsOpen && "rotate-180",
+                  )}
+                />
+              ) : null}
             </button>
-            {reportsOpen ? (
+            {reportsOpen && !collapsed ? (
               <ul
                 id="reports-navigation"
                 className="mt-1 ml-5 space-y-0.5 border-l border-white/10 pl-4"
@@ -353,34 +451,59 @@ function SidebarNavigation({ onNavigate }: { onNavigate?: () => void }) {
           if (allowedItems.length === 0 && !canViewMasterData) return null;
 
           return (
-            <div key={group.label} className="mb-6">
-              <p className="mb-2 px-3 text-[11px] font-bold tracking-[0.16em] text-slate-500 uppercase">
+            <div
+              key={group.label}
+              className={cn(
+                "mb-6",
+                collapsed && "border-t border-white/10 pt-3",
+              )}
+            >
+              <p
+                className={cn(
+                  "mb-2 px-3 text-[11px] font-bold tracking-[0.16em] text-slate-500 uppercase",
+                  collapsed && "sr-only",
+                )}
+              >
                 {group.label}
               </p>
               {canViewMasterData ? (
                 <>
                   <button
                     type="button"
-                    aria-expanded={masterDataOpen}
+                    aria-expanded={!collapsed && masterDataOpen}
                     aria-controls="master-data-navigation"
-                    onClick={() => setMasterDataOpen((open) => !open)}
+                    aria-label={collapsed ? "Master data" : undefined}
+                    title={collapsed ? "Master data" : undefined}
+                    onClick={() => {
+                      if (collapsed) {
+                        onToggleCollapsed?.();
+                        setMasterDataOpen(true);
+                      } else {
+                        setMasterDataOpen((open) => !open);
+                      }
+                    }}
                     className={cn(
-                      "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-colors",
+                      "flex min-h-11 w-full items-center gap-3 rounded-xl text-left text-sm font-medium transition-colors",
+                      collapsed ? "justify-center px-2" : "px-3",
                       masterDataActive
                         ? "bg-cyan-400 text-slate-950"
                         : "text-slate-300 hover:bg-white/[0.07] hover:text-white",
                     )}
                   >
                     <Warehouse className="size-[18px] shrink-0" />
-                    <span className="flex-1">Master data</span>
-                    <ChevronDown
-                      className={cn(
-                        "size-4 transition-transform",
-                        masterDataOpen && "rotate-180",
-                      )}
-                    />
+                    <span className={collapsed ? "sr-only" : "flex-1"}>
+                      Master data
+                    </span>
+                    {!collapsed ? (
+                      <ChevronDown
+                        className={cn(
+                          "size-4 transition-transform",
+                          masterDataOpen && "rotate-180",
+                        )}
+                      />
+                    ) : null}
                   </button>
-                  {masterDataOpen ? (
+                  {masterDataOpen && !collapsed ? (
                     <ul
                       id="master-data-navigation"
                       className="mt-1 ml-5 space-y-0.5 border-l border-white/10 pl-4"
@@ -409,7 +532,12 @@ function SidebarNavigation({ onNavigate }: { onNavigate?: () => void }) {
                   ) : null}
                 </>
               ) : null}
-              <ul className={cn("space-y-1", canViewMasterData && "mt-2")}>
+              <ul
+                className={cn(
+                  "space-y-1",
+                  canViewMasterData && !collapsed && "mt-2",
+                )}
+              >
                 {allowedItems.map((item) => (
                   <li key={item.label}>
                     <NavigationEntry
@@ -417,6 +545,7 @@ function SidebarNavigation({ onNavigate }: { onNavigate?: () => void }) {
                       active={Boolean(
                         item.href && isSectionActive(pathname, item.href),
                       )}
+                      collapsed={collapsed}
                       onNavigate={onNavigate}
                     />
                   </li>
@@ -427,17 +556,31 @@ function SidebarNavigation({ onNavigate }: { onNavigate?: () => void }) {
         })}
       </nav>
 
-      <div className="border-t border-white/10 p-4">
-        <div className="flex items-center gap-3 rounded-xl p-2">
-          <div className="grid size-9 shrink-0 place-items-center rounded-full bg-slate-700 text-sm font-bold text-white">
+      <div
+        className={cn("border-t border-white/10", collapsed ? "p-2" : "p-4")}
+      >
+        <div
+          className={cn(
+            "flex rounded-xl p-2",
+            collapsed ? "flex-col items-center gap-2" : "items-center gap-3",
+          )}
+        >
+          <div
+            className="grid size-9 shrink-0 place-items-center rounded-full bg-slate-700 text-sm font-bold text-white"
+            title={collapsed ? user.display_name || user.username : undefined}
+          >
             {accountInitials}
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-white">
-              {user.display_name || user.username}
-            </p>
-            <p className="truncate text-xs text-slate-400">@{user.username}</p>
-          </div>
+          {!collapsed ? (
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-white">
+                {user.display_name || user.username}
+              </p>
+              <p className="truncate text-xs text-slate-400">
+                @{user.username}
+              </p>
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={logout}
@@ -481,7 +624,7 @@ function MobileSidebar() {
             <button
               type="button"
               aria-label="Close navigation"
-              className="absolute top-3 right-3 grid size-10 place-items-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white"
+              className="absolute top-3 right-3 z-20 grid size-10 place-items-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white"
             >
               <X className="size-5" />
             </button>
@@ -496,14 +639,28 @@ function MobileSidebar() {
 export function AppShell({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const accountInitials = initials(user.display_name || user.username);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-68 flex-col bg-slate-950 lg:flex">
-        <SidebarNavigation />
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-30 hidden flex-col bg-slate-950 transition-[width] duration-200 lg:flex",
+          sidebarCollapsed ? "w-20" : "w-68",
+        )}
+      >
+        <SidebarNavigation
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
+        />
       </aside>
 
-      <div className="lg:pl-68">
+      <div
+        className={cn(
+          "transition-[padding] duration-200",
+          sidebarCollapsed ? "lg:pl-20" : "lg:pl-68",
+        )}
+      >
         <header className="sticky top-0 z-20 flex h-16 items-center border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
           <MobileSidebar />
           <div className="ml-2 min-w-0 lg:ml-0">
