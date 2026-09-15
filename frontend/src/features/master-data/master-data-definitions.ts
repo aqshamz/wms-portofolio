@@ -81,24 +81,28 @@ export const masterDataSections = [
         description:
           "Maintain owner-scoped categories and item handling requirements.",
         includes: ["Item categories", "Items", "Control settings"],
+        href: "/master-data/catalog/items",
       },
       {
         name: "Units and packaging",
         description:
           "Define global units, item conversions, packaging, and scannable identifiers.",
         includes: ["UOMs", "Handling units", "Item UOMs", "Barcodes"],
+        href: "/master-data/catalog/units-packaging",
       },
       {
         name: "Inventory classifications",
         description:
           "Define whether inventory is available, held, blocked, or otherwise controlled.",
         includes: ["Inventory statuses"],
+        href: "/master-data/catalog/inventory-classifications",
       },
       {
         name: "Quality setup",
         description:
           "Standardize quality states and the outcomes recorded during inspection.",
         includes: ["Quality statuses", "Inspection results"],
+        href: "/master-data/catalog/quality-setup",
       },
     ],
   },
