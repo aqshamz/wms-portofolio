@@ -119,36 +119,42 @@ export const masterDataSections = [
         description:
           "Define document types, statuses, and the transitions allowed between them.",
         includes: ["Document types", "Statuses", "Transitions"],
+        href: "/master-data/operational/document-workflows",
       },
       {
         name: "Document numbering",
         description:
           "Control identifier rules and inspect daily allocation counters.",
         includes: ["Number rules", "Document IDs", "Daily counters"],
+        href: "/master-data/operational/document-numbering",
       },
       {
         name: "Task workflows",
         description:
           "Configure task types, shared statuses, transitions, and execution priorities.",
         includes: ["Task types", "Statuses", "Transitions", "Priorities"],
+        href: "/master-data/operational/task-workflows",
       },
       {
         name: "Picking configuration",
         description:
           "Define sort methods and scoped picking strategies with ordered rules.",
         includes: ["Sort methods", "Strategies", "Strategy rules"],
+        href: "/master-data/operational/picking-configuration",
       },
       {
         name: "Putaway configuration",
         description:
           "Define scoped putaway strategies and the rules used to select destinations.",
         includes: ["Strategies", "Strategy rules"],
+        href: "/master-data/operational/putaway-configuration",
       },
       {
         name: "Modules and workflow permissions",
         description:
           "Maintain application modules and select permission metadata for workflows.",
         includes: ["Application modules", "Permission lookup"],
+        href: "/master-data/operational/modules-permissions",
       },
     ],
   },
