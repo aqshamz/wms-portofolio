@@ -21,6 +21,15 @@ export interface Warehouse {
 
 export type WarehousePage = PaginatedData<Warehouse>;
 
+export interface WarehouseOwner {
+  warehouse_id: string;
+  owner_id: string;
+  owner_code: string;
+  owner_name: string;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface WarehouseListFilters {
   search: string;
   active: "all" | "active" | "inactive";

@@ -3,6 +3,7 @@ import type {
   CreateWarehouseRequest,
   UpdateWarehouseRequest,
   Warehouse,
+  WarehouseOwner,
   WarehouseListFilters,
   WarehousePage,
 } from "@/features/warehouses/warehouse-types";
@@ -16,6 +17,7 @@ export const warehouseKeys = {
     [...warehouseKeys.lists(), filters] as const,
   details: () => [...warehouseKeys.all, "detail"] as const,
   detail: (id: string) => [...warehouseKeys.details(), id] as const,
+  owners: (id: string) => [...warehouseKeys.detail(id), "owners"] as const,
 };
 
 export function warehouseListPath(filters: WarehouseListFilters) {
@@ -36,6 +38,10 @@ export function listWarehouses(filters: WarehouseListFilters) {
 
 export function getWarehouse(id: string) {
   return apiRequest<Warehouse>(`${basePath}/${id}`);
+}
+
+export function listWarehouseOwners(id: string) {
+  return apiRequest<WarehouseOwner[]>(`${basePath}/${id}/owners`);
 }
 
 export function createWarehouse(request: CreateWarehouseRequest) {

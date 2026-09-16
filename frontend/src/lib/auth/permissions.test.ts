@@ -17,13 +17,16 @@ describe("authorization helpers", () => {
     ).toBe(false);
   });
 
-  it("uses the same read and write codes enforced by backend modules", () => {
+  it("uses the exact inbound action codes enforced by the backend", () => {
     expect(
       isAuthorized([PERMISSIONS.INBOUND.READ], MODULE_ACCESS.INBOUND.READ),
     ).toBe(true);
     expect(
-      isAuthorized([PERMISSIONS.INBOUND.READ], MODULE_ACCESS.INBOUND.WRITE),
+      isAuthorized([PERMISSIONS.INBOUND.READ], MODULE_ACCESS.INBOUND.PLAN),
     ).toBe(false);
+    expect(
+      isAuthorized([PERMISSIONS.INBOUND.PLAN], MODULE_ACCESS.INBOUND.PLAN),
+    ).toBe(true);
   });
 
   it("allows the backend wildcard permission", () => {

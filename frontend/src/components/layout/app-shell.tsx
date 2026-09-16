@@ -57,6 +57,11 @@ interface MasterDataNavigationItem {
   href: string;
 }
 
+interface InboundNavigationItem {
+  label: string;
+  href: string;
+}
+
 const navigation: NavigationGroup[] = [
   {
     label: "Workspace",
@@ -68,7 +73,6 @@ const navigation: NavigationGroup[] = [
       {
         label: "Inbound",
         icon: Archive,
-        badge: "12",
         access: MODULE_ACCESS.INBOUND.READ,
       },
       {
@@ -112,6 +116,17 @@ const navigation: NavigationGroup[] = [
       },
     ],
   },
+];
+
+const inboundNavigation: InboundNavigationItem[] = [
+  { label: "Purchase orders", href: "/inbound/purchase-orders" },
+  { label: "Orders", href: "/inbound/orders" },
+  { label: "Receipts", href: "/inbound/receipts" },
+  { label: "Quality inspections", href: "/inbound/quality-inspections" },
+  { label: "Putaway tasks", href: "/inbound/putaway" },
+  { label: "Quarantine", href: "/inbound/quarantine" },
+  { label: "Exceptions", href: "/inbound/exceptions" },
+  { label: "Rework tasks", href: "/inbound/rework" },
 ];
 
 const masterDataNavigation: MasterDataNavigationItem[] = [
@@ -286,10 +301,14 @@ function SidebarNavigation({
   const [reportsOpen, setReportsOpen] = useState(
     pathname.startsWith("/reports"),
   );
+  const [inboundOpen, setInboundOpen] = useState(
+    pathname.startsWith("/inbound"),
+  );
   const [masterDataOpen, setMasterDataOpen] = useState(
     pathname.startsWith("/master-data"),
   );
   const reportsActive = pathname.startsWith("/reports");
+  const inboundActive = pathname.startsWith("/inbound");
   const masterDataActive = pathname.startsWith("/master-data");
   const canViewMasterData = canAccess(MODULE_ACCESS.MASTER.READ);
   const canViewReports = canAccess(MODULE_ACCESS.REPORTING.READ);
@@ -363,16 +382,95 @@ function SidebarNavigation({
                 {group.label}
               </p>
               <ul className="space-y-1">
-                {allowedItems.map((item) => (
-                  <li key={item.label}>
-                    <NavigationEntry
-                      item={item}
-                      active={item.href === "/" && pathname === "/"}
-                      collapsed={collapsed}
-                      onNavigate={onNavigate}
-                    />
-                  </li>
-                ))}
+                {allowedItems.map((item) => {
+                  if (item.label === "Inbound") {
+                    return (
+                      <li key={item.label}>
+                        <button
+                          type="button"
+                          aria-expanded={!collapsed && inboundOpen}
+                          aria-controls="inbound-navigation"
+                          aria-label={collapsed ? "Inbound" : undefined}
+                          title={collapsed ? "Inbound" : undefined}
+                          onClick={() => {
+                            if (collapsed) {
+                              onToggleCollapsed?.();
+                              setInboundOpen(true);
+                            } else {
+                              setInboundOpen((open) => !open);
+                            }
+                          }}
+                          className={cn(
+                            "flex min-h-11 w-full items-center gap-3 rounded-xl text-left text-sm font-medium transition-colors",
+                            collapsed ? "justify-center px-2" : "px-3",
+                            inboundActive
+                              ? "bg-cyan-400 text-slate-950"
+                              : "text-slate-300 hover:bg-white/[0.07] hover:text-white",
+                          )}
+                        >
+                          <Archive className="size-[18px] shrink-0" />
+                          <span className={collapsed ? "sr-only" : "flex-1"}>
+                            Inbound
+                          </span>
+                          {!collapsed ? (
+                            <ChevronDown
+                              className={cn(
+                                "size-4 transition-transform",
+                                inboundOpen && "rotate-180",
+                              )}
+                            />
+                          ) : null}
+                        </button>
+                        {inboundOpen && !collapsed ? (
+                          <ul
+                            id="inbound-navigation"
+                            className="mt-1 ml-5 space-y-0.5 border-l border-white/10 pl-4"
+                          >
+                            {inboundNavigation.map((entry) => {
+                              const active = isSectionActive(
+                                pathname,
+                                entry.href,
+                              );
+                              return (
+                                <li key={entry.href}>
+                                  <Link
+                                    href={entry.href}
+                                    onClick={onNavigate}
+                                    aria-current={active ? "page" : undefined}
+                                    className={cn(
+                                      "flex min-h-9 items-center rounded-lg px-3 text-sm transition-colors",
+                                      active
+                                        ? "bg-white/10 font-semibold text-white"
+                                        : "text-slate-400 hover:bg-white/[0.06] hover:text-white",
+                                    )}
+                                  >
+                                    {entry.label}
+                                  </Link>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : null}
+                      </li>
+                    );
+                  }
+
+                  return (
+                    <li key={item.label}>
+                      <NavigationEntry
+                        item={item}
+                        active={Boolean(
+                          item.href &&
+                          (item.href === "/"
+                            ? pathname === "/"
+                            : isSectionActive(pathname, item.href)),
+                        )}
+                        collapsed={collapsed}
+                        onNavigate={onNavigate}
+                      />
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           );
