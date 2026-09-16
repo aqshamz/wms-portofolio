@@ -73,11 +73,11 @@ func New(db *gorm.DB, dependencies Dependencies) *gin.Engine {
 	registerMasterRoutes(api, dependencies.MasterController, dependencies.AuthenticationMiddleware.RequireModule("MASTER"))
 	registerCatalogRoutes(api, dependencies.CatalogController, dependencies.AuthenticationMiddleware.RequireModule("MASTER"))
 	registerOperationalRoutes(api, dependencies.OperationalController, dependencies.AuthenticationMiddleware.RequireModule("MASTER"))
-	registerInventoryRoutes(api, dependencies.InventoryController, dependencies.AuthenticationMiddleware.RequireModule("INVENTORY"))
-	registerInboundRoutes(api, dependencies.InboundController, dependencies.AuthenticationMiddleware.RequireModule("INBOUND"))
-	registerStockControlRoutes(api, dependencies.StockControlController, dependencies.AuthenticationMiddleware.RequireModule("INVENTORY"))
-	registerOutboundRoutes(api, dependencies.OutboundController, dependencies.AuthenticationMiddleware.RequireModule("OUTBOUND"))
-	registerBillingRoutes(api, dependencies.BillingController, dependencies.AuthenticationMiddleware.RequireModule("BILLING"))
+	registerInventoryRoutes(api, dependencies.InventoryController, dependencies.AuthenticationMiddleware)
+	registerInboundRoutes(api, dependencies.InboundController, dependencies.AuthenticationMiddleware)
+	registerStockControlRoutes(api, dependencies.StockControlController, dependencies.AuthenticationMiddleware)
+	registerOutboundRoutes(api, dependencies.OutboundController, dependencies.AuthenticationMiddleware)
+	registerBillingRoutes(api, dependencies.BillingController, dependencies.AuthenticationMiddleware)
 	registerDocumentationRoutes(router)
 
 	return router

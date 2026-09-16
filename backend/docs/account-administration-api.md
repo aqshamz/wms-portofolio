@@ -14,6 +14,11 @@ All routes use `/api/v1/security` and require a valid bearer session plus the
   permissions from active roles. They are recalculated on every authenticated
   request, so revocation takes effect immediately without waiting for the token
   to expire.
+- Operational mutations use exact action permissions such as
+  `INBOUND.RECEIVE`, `INBOUND.QUARANTINE_DISPOSE`, `OUTBOUND.PACK`, and
+  `BILLING.APPROVE`. A broad legacy permission such as `INBOUND.WRITE` does not
+  satisfy an exact action check. See `action-permissions.md` for the complete
+  matrix.
 - Deleting an account or role is a soft deactivation. Historical assignments,
   document ownership, inventory movements, billing records, and audit rows are
   never orphaned.
@@ -143,7 +148,8 @@ Create a receiver role using permission UUIDs from `/permissions`:
   "description": "Can read and process inbound documents",
   "permission_ids": [
     "INBOUND-READ-PERMISSION-UUID",
-    "INBOUND-WRITE-PERMISSION-UUID",
+    "INBOUND-RECEIVE-PERMISSION-UUID",
+    "INBOUND-PUTAWAY-PERMISSION-UUID",
     "INVENTORY-READ-PERMISSION-UUID"
   ]
 }
@@ -155,7 +161,8 @@ Replace the complete permission set. An empty array intentionally clears it:
 {
   "permission_ids": [
     "INBOUND-READ-PERMISSION-UUID",
-    "INBOUND-WRITE-PERMISSION-UUID"
+    "INBOUND-RECEIVE-PERMISSION-UUID",
+    "INBOUND-PUTAWAY-PERMISSION-UUID"
   ],
   "expected_version": 1
 }

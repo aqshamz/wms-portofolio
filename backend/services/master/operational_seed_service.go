@@ -35,6 +35,42 @@ func (s *OperationalService) SeedOperational(ctx context.Context) error {
 				}
 			}
 		}
+		for _, value := range []model.AppPermission{
+			{Code: "INBOUND.PLAN", Name: "Plan inbound documents", ModuleCode: "INBOUND", Description: operationalString("Create and maintain purchase orders and inbound plans."), IsActive: true},
+			{Code: "INBOUND.APPROVE", Name: "Approve inbound documents", ModuleCode: "INBOUND", Description: operationalString("Approve purchase orders and release or close inbound plans."), IsActive: true},
+			{Code: "INBOUND.RECEIVE", Name: "Receive inbound stock", ModuleCode: "INBOUND", Description: operationalString("Create, maintain, and complete warehouse receipts."), IsActive: true},
+			{Code: "INBOUND.QC", Name: "Perform inbound quality control", ModuleCode: "INBOUND", Description: operationalString("Create and complete quality inspections."), IsActive: true},
+			{Code: "INBOUND.PUTAWAY", Name: "Execute putaway", ModuleCode: "INBOUND", Description: operationalString("Start and complete putaway tasks."), IsActive: true},
+			{Code: "INBOUND.ASSIGN", Name: "Assign inbound tasks", ModuleCode: "INBOUND", Description: operationalString("Assign or retarget putaway work."), IsActive: true},
+			{Code: "INBOUND.QUARANTINE_DISPOSE", Name: "Decide quarantine disposition", ModuleCode: "INBOUND", Description: operationalString("Accept, return, rework, or dispose quarantined stock."), IsActive: true},
+			{Code: "INBOUND.REWORK", Name: "Execute quarantine rework", ModuleCode: "INBOUND", Description: operationalString("Start and complete quarantine rework tasks."), IsActive: true},
+			{Code: "INBOUND.CANCEL", Name: "Cancel or reverse inbound work", ModuleCode: "INBOUND", Description: operationalString("Cancel or reverse inbound documents, inspections, receipts, and putaway tasks."), IsActive: true},
+			{Code: "INVENTORY.IDENTITY", Name: "Create inventory identities", ModuleCode: "INVENTORY", Description: operationalString("Create lots, serial numbers, and handling units."), IsActive: true},
+			{Code: "INVENTORY.MOVE", Name: "Move inventory internally", ModuleCode: "INVENTORY", Description: operationalString("Post internal warehouse movements."), IsActive: true},
+			{Code: "INVENTORY.STATUS_CHANGE", Name: "Change inventory status", ModuleCode: "INVENTORY", Description: operationalString("Post inventory status changes."), IsActive: true},
+			{Code: "INVENTORY.ADJUST", Name: "Adjust inventory", ModuleCode: "INVENTORY", Description: operationalString("Post quantity adjustments."), IsActive: true},
+			{Code: "INVENTORY.COUNT", Name: "Reconcile stock counts", ModuleCode: "INVENTORY", Description: operationalString("Post stock-count reconciliations."), IsActive: true},
+			{Code: "INVENTORY.TRANSFER", Name: "Transfer inventory", ModuleCode: "INVENTORY", Description: operationalString("Post inter-warehouse transfers."), IsActive: true},
+			{Code: "OUTBOUND.PLAN", Name: "Plan outbound fulfillment", ModuleCode: "OUTBOUND", Description: operationalString("Maintain, validate, allocate, reserve, and wave outbound orders."), IsActive: true},
+			{Code: "OUTBOUND.PICK", Name: "Execute picking", ModuleCode: "OUTBOUND", Description: operationalString("Start, confirm, or short-close pick tasks."), IsActive: true},
+			{Code: "OUTBOUND.STAGE", Name: "Stage picked stock", ModuleCode: "OUTBOUND", Description: operationalString("Create and complete outbound staging."), IsActive: true},
+			{Code: "OUTBOUND.CHECK", Name: "Check outbound stock", ModuleCode: "OUTBOUND", Description: operationalString("Perform outbound checks and resolve check exceptions."), IsActive: true},
+			{Code: "OUTBOUND.PACK", Name: "Pack outbound stock", ModuleCode: "OUTBOUND", Description: operationalString("Create and complete packing documents."), IsActive: true},
+			{Code: "OUTBOUND.TRANSPORT", Name: "Configure transport", ModuleCode: "OUTBOUND", Description: operationalString("Maintain carriers, services, and drivers."), IsActive: true},
+			{Code: "OUTBOUND.SHIP", Name: "Dispatch shipments", ModuleCode: "OUTBOUND", Description: operationalString("Create, assign, dispatch, and complete shipments."), IsActive: true},
+			{Code: "OUTBOUND.DELIVER", Name: "Execute deliveries", ModuleCode: "OUTBOUND", Description: operationalString("Depart, arrive, deliver, fail, and return deliveries."), IsActive: true},
+			{Code: "OUTBOUND.CANCEL", Name: "Cancel outbound work", ModuleCode: "OUTBOUND", Description: operationalString("Cancel outbound orders, waves, packing, shipments, and deliveries."), IsActive: true},
+			{Code: "OUTBOUND.CONFIG", Name: "Configure outbound policy", ModuleCode: "OUTBOUND", Description: operationalString("Maintain outbound return policy."), IsActive: true},
+			{Code: "BILLING.CONFIGURE", Name: "Configure billing", ModuleCode: "BILLING", Description: operationalString("Create and maintain contracts and rate cards."), IsActive: true},
+			{Code: "BILLING.PREPARE", Name: "Prepare billing", ModuleCode: "BILLING", Description: operationalString("Collect events, calculate billing runs, and prepare draft invoices."), IsActive: true},
+			{Code: "BILLING.APPROVE", Name: "Approve billing", ModuleCode: "BILLING", Description: operationalString("Approve commercial configuration and review billing runs and invoices."), IsActive: true},
+			{Code: "BILLING.ISSUE", Name: "Issue billing documents", ModuleCode: "BILLING", Description: operationalString("Issue or void invoices and issue credit notes."), IsActive: true},
+			{Code: "BILLING.PAYMENT", Name: "Record billing payments", ModuleCode: "BILLING", Description: operationalString("Record and allocate invoice payments."), IsActive: true},
+		} {
+			if err := repos.AppPermission.SeedOne(ctx, &value); err != nil {
+				return err
+			}
+		}
 		for _, value := range []model.TaskType{
 			{Code: "PUTAWAY", Name: "Putaway", Description: operationalString("Move received stock into storage."), IsActive: true},
 			{Code: "PICK", Name: "Pick", Description: operationalString("Pick stock for outbound fulfillment."), IsActive: true},

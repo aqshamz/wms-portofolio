@@ -11,7 +11,7 @@ import (
 func TestAllStockControlRoutesRequireSession(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	registerStockControlRoutes(router.Group("/api/v1"), controller.NewController(nil), middleware.NewAuthentication(nil).RequireSession())
+	registerStockControlRoutes(router.Group("/api/v1"), controller.NewController(nil), middleware.NewAuthentication(nil))
 	if len(router.Routes()) != 6 {
 		t.Fatalf("expected 6 routes got %d", len(router.Routes()))
 	}

@@ -12,7 +12,7 @@ import (
 func TestAllBillingRoutesRequireSession(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	registerBillingRoutes(router.Group("/api/v1"), controller.NewController(nil), middleware.NewAuthentication(nil).RequireSession())
+	registerBillingRoutes(router.Group("/api/v1"), controller.NewController(nil), middleware.NewAuthentication(nil))
 	if len(router.Routes()) != 45 {
 		t.Fatalf("expected 45 routes got %d", len(router.Routes()))
 	}

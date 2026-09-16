@@ -58,6 +58,57 @@ func (m *Authentication) RequireModule(module string) gin.HandlerFunc {
 	}
 }
 
+// RequireAnyPermission authorizes an already-authenticated request against an
+// exact action permission. It is intended to run after RequireSession on the
+// route group. Exact matching prevents a broad module write role from silently
+// bypassing approval, disposal, issue, or payment separation.
+func (m *Authentication) RequireAnyPermission(required ...string) gin.HandlerFunc {
+	normalized := make([]string, 0, len(required))
+	for _, code := range required {
+		code = strings.ToUpper(strings.TrimSpace(code))
+		if code != "" {
+			normalized = append(normalized, code)
+		}
+	}
+	if len(normalized) == 0 {
+		panic("at least one permission is required")
+	}
+	return func(c *gin.Context) {
+		if !m.authorizationEnforced {
+			c.Next()
+			return
+		}
+		value, exists := c.Get(ContextUserKey)
+		user, ok := value.(authdto.UserResponse)
+		if !exists || !ok {
+			utils.Failure(c, http.StatusUnauthorized, "authentication required", nil)
+			c.Abort()
+			return
+		}
+		for _, code := range normalized {
+			if hasExactPermission(user.Permissions, code) {
+				c.Next()
+				return
+			}
+		}
+		utils.Failure(c, http.StatusForbidden, "permission required: one of "+strings.Join(normalized, ", "), nil)
+		c.Abort()
+	}
+}
+
+func (m *Authentication) RequirePermission(required string) gin.HandlerFunc {
+	return m.RequireAnyPermission(required)
+}
+
+func hasExactPermission(permissions []string, required string) bool {
+	for _, code := range permissions {
+		if code == required || code == "*" {
+			return true
+		}
+	}
+	return false
+}
+
 func hasModulePermission(permissions []string, module, method string) (string, bool) {
 	action := "WRITE"
 	if method == http.MethodGet || method == http.MethodHead {

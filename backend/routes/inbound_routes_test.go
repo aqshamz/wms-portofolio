@@ -12,7 +12,7 @@ import (
 func TestAllInboundRoutesRequireSession(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	registerInboundRoutes(router.Group("/api/v1"), controller.NewController(nil), middleware.NewAuthentication(nil).RequireSession())
+	registerInboundRoutes(router.Group("/api/v1"), controller.NewController(nil), middleware.NewAuthentication(nil))
 	if len(router.Routes()) != 50 {
 		t.Fatalf("expected 50 routes got %d", len(router.Routes()))
 	}

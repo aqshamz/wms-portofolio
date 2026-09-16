@@ -12,7 +12,7 @@ import (
 func TestAllOutboundRoutesRequireSession(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	registerOutboundRoutes(router.Group("/api/v1"), controller.NewController(nil), middleware.NewAuthentication(nil).RequireSession())
+	registerOutboundRoutes(router.Group("/api/v1"), controller.NewController(nil), middleware.NewAuthentication(nil))
 	if len(router.Routes()) != 76 {
 		t.Fatalf("expected 76 routes got %d", len(router.Routes()))
 	}

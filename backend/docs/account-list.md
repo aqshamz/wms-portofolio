@@ -1,0 +1,11 @@
+admin                   Admin@123456
+whm                     12345678912             
+receiver.warehouse      12345678912
+planner.warehouse	    Wm9!YItmTU6LTJwKMolOMIn41HfC
+qc.warehouse	        Wm9!ledC23ODPfHBjaLvacgFnOMz
+rework.warehouse	    Wm9!fDn8EukJfIkR16aiYnBvou06
+packer.warehouse	    Wm9!SSovU7y9YS4ly6YuUmaQTcqm
+dispatcher.warehouse	Wm9!rySHMGnXkr2zyTwYL4VdqTvj
+billing.operator	    Wm9!CDfwYP8eKQ8x2ifiHVAtN52M
+billing.approver	    Wm9!gbzPsVEkNpevoutzYExYZSSF
+cashier.sis	            Wm9!U69B4XBZ6Mn851x5LvIYJrqB
