@@ -19,10 +19,26 @@ type CatalogFilter struct {
 
 // catalogTable shares plumbing; every table still has its own typed repository.
 type catalogTable[T any] struct {
-	db         *gorm.DB
-	key        string
-	searchable bool
-	audited    bool
+	db             *gorm.DB
+	key            string
+	searchable     bool
+	audited        bool
+	ownerScoped    bool
+	itemScoped     bool
+	strategyScoped bool
+}
+
+func (r *catalogTable[T]) scopedQuery(ctx context.Context, query *gorm.DB) *gorm.DB {
+	if r.ownerScoped {
+		query = applyOwnerAccess(ctx, query, "owner_id")
+	}
+	if r.itemScoped {
+		query = applyItemOwnerAccess(ctx, query, "item_id")
+	}
+	if r.strategyScoped {
+		query = applyOptionalOwnerWarehouseAccess(ctx, query, "owner_id", "warehouse_id")
+	}
+	return query
 }
 
 func (r *catalogTable[T]) Create(ctx context.Context, value *T) error {
@@ -35,12 +51,13 @@ func (r *catalogTable[T]) Seed(ctx context.Context, values []T) error {
 
 func (r *catalogTable[T]) Get(ctx context.Context, id string) (T, error) {
 	var value T
-	err := r.db.WithContext(ctx).Where(r.key+" = ?", id).Take(&value).Error
+	query := r.scopedQuery(ctx, r.db.WithContext(ctx))
+	err := query.Where(r.key+" = ?", id).Take(&value).Error
 	return value, err
 }
 
 func (r *catalogTable[T]) List(ctx context.Context, filter CatalogFilter) ([]T, int64, error) {
-	query := r.db.WithContext(ctx).Model(new(T))
+	query := r.scopedQuery(ctx, r.db.WithContext(ctx).Model(new(T)))
 	if filter.OwnerID != "" {
 		query = query.Where("owner_id = ?", filter.OwnerID)
 	}
@@ -74,7 +91,7 @@ func (r *catalogTable[T]) List(ctx context.Context, filter CatalogFilter) ([]T, 
 
 func (r *catalogTable[T]) Update(ctx context.Context, id string, changes map[string]interface{}, actor string, expected *time.Time) (T, error) {
 	var value T
-	query := r.db.WithContext(ctx).Model(&value).Where(r.key+" = ?", id)
+	query := r.scopedQuery(ctx, r.db.WithContext(ctx).Model(&value)).Where(r.key+" = ?", id)
 	if r.audited {
 		if expected == nil {
 			return value, ErrConcurrentUpdate

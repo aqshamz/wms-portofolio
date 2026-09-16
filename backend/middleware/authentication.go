@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	authdto "wms-api/dto/authentication"
+	"wms-api/requestscope"
 	service "wms-api/services/authentication"
 	"wms-api/utils"
 
@@ -140,6 +141,13 @@ func (m *Authentication) authenticate(c *gin.Context) bool {
 
 	c.Set(ContextUserKey, user)
 	c.Set(ContextTokenKey, token)
+	c.Request = c.Request.WithContext(requestscope.WithPrincipal(
+		c.Request.Context(),
+		requestscope.Principal{
+			AccountID:    user.AccountID,
+			Unrestricted: !m.authorizationEnforced || hasExactPermission(user.Permissions, "*"),
+		},
+	))
 	return true
 }
 

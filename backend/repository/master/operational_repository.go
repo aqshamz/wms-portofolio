@@ -18,7 +18,7 @@ type operationalTable[T any] struct {
 }
 
 func (r *operationalTable[T]) List(ctx context.Context, filter OperationalFilter) ([]T, int64, error) {
-	query := r.db.WithContext(ctx).Model(new(T))
+	query := r.scopedQuery(ctx, r.db.WithContext(ctx).Model(new(T)))
 	if r.parentColumn != "" {
 		query = query.Where(r.parentColumn+" = ?", filter.ParentID)
 	}
@@ -52,12 +52,14 @@ func (r *operationalTable[T]) List(ctx context.Context, filter OperationalFilter
 }
 func (r *operationalTable[T]) Lock(ctx context.Context, id string) (T, error) {
 	var value T
-	err := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where(r.key+" = ?", id).Take(&value).Error
+	query := r.scopedQuery(ctx, r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}))
+	err := query.Where(r.key+" = ?", id).Take(&value).Error
 	return value, err
 }
 func (r *operationalTable[T]) ByCode(ctx context.Context, code string) (T, error) {
 	var value T
-	err := r.db.WithContext(ctx).Where("code = ?", code).Take(&value).Error
+	query := r.scopedQuery(ctx, r.db.WithContext(ctx))
+	err := query.Where("code = ?", code).Take(&value).Error
 	return value, err
 }
 func (r *operationalTable[T]) SeedOne(ctx context.Context, value *T) error {

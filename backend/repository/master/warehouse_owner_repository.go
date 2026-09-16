@@ -23,7 +23,9 @@ type WarehouseOwnerRepository struct{ db *gorm.DB }
 
 func (r *WarehouseOwnerRepository) IsActive(ctx context.Context, warehouseID, ownerID string) (bool, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&model.WarehouseOwner{}).Where("warehouse_id = ? AND owner_id = ? AND is_active", warehouseID, ownerID).Count(&count).Error
+	query := applyWarehouseAccess(ctx, r.db.WithContext(ctx).Model(&model.WarehouseOwner{}), "warehouse_id")
+	query = applyOwnerAccess(ctx, query, "owner_id")
+	err := query.Where("warehouse_id = ? AND owner_id = ? AND is_active", warehouseID, ownerID).Count(&count).Error
 	return count > 0, err
 }
 
@@ -43,18 +45,22 @@ func (r *WarehouseOwnerRepository) Assign(ctx context.Context, assignment *model
 
 func (r *WarehouseOwnerRepository) List(ctx context.Context, warehouseID string) ([]WarehouseOwnerDetail, error) {
 	var rows []WarehouseOwnerDetail
-	err := r.db.WithContext(ctx).Table("warehouse_owner AS wo").
+	query := r.db.WithContext(ctx).Table("warehouse_owner AS wo").
 		Select(`wo.warehouse_id, wo.owner_id, owner.code AS owner_code,
 			owner.name AS owner_name, wo.is_active, wo.created_at`).
-		Joins("JOIN organization owner ON owner.organization_id = wo.owner_id").
-		Where("wo.warehouse_id = ?", warehouseID).
+		Joins("JOIN organization owner ON owner.organization_id = wo.owner_id")
+	query = applyWarehouseAccess(ctx, query, "wo.warehouse_id")
+	query = applyOwnerAccess(ctx, query, "wo.owner_id")
+	err := query.Where("wo.warehouse_id = ?", warehouseID).
 		Order("owner.name").
 		Scan(&rows).Error
 	return rows, err
 }
 
 func (r *WarehouseOwnerRepository) Deactivate(ctx context.Context, warehouseID, ownerID string) error {
-	result := r.db.WithContext(ctx).Model(&model.WarehouseOwner{}).
+	query := applyWarehouseAccess(ctx, r.db.WithContext(ctx).Model(&model.WarehouseOwner{}), "warehouse_id")
+	query = applyOwnerAccess(ctx, query, "owner_id")
+	result := query.
 		Where("warehouse_id = ? AND owner_id = ?", warehouseID, ownerID).
 		Update("is_active", false)
 	if result.Error != nil {

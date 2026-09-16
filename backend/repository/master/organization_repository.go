@@ -32,7 +32,9 @@ func NewOrganizationRepository(db *gorm.DB) *OrganizationRepository {
 
 func (r *OrganizationRepository) Lock(ctx context.Context, id string) (model.Organization, error) {
 	var value model.Organization
-	err := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("organization_id = ?", id).Take(&value).Error
+	query := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"})
+	query = applyOwnerAccess(ctx, query, "organization_id")
+	err := query.Where("organization_id = ?", id).Take(&value).Error
 	return value, err
 }
 
@@ -42,7 +44,8 @@ func (r *OrganizationRepository) Create(ctx context.Context, organization *model
 
 func (r *OrganizationRepository) FindByID(ctx context.Context, id string) (model.Organization, error) {
 	var organization model.Organization
-	err := r.db.WithContext(ctx).Where("organization_id = ?", id).Take(&organization).Error
+	query := applyOwnerAccess(ctx, r.db.WithContext(ctx), "organization_id")
+	err := query.Where("organization_id = ?", id).Take(&organization).Error
 	return organization, err
 }
 
@@ -58,6 +61,7 @@ func (r *OrganizationRepository) List(
 		Select(`organization_id AS id, code, name, legal_name, timezone_name,
 			city, country_code, is_active, created_at, updated_at,
 			count(*) OVER () AS total_rows`)
+	query = applyOwnerAccess(ctx, query, "organization_id")
 	if search != nil {
 		query = query.Where("code ILIKE ? OR name ILIKE ?", "%"+*search+"%", "%"+*search+"%")
 	}
@@ -78,7 +82,8 @@ func (r *OrganizationRepository) Update(
 	changes map[string]interface{},
 ) (model.Organization, error) {
 	var organization model.Organization
-	result := r.db.WithContext(ctx).Model(&organization).
+	query := applyOwnerAccess(ctx, r.db.WithContext(ctx).Model(&organization), "organization_id")
+	result := query.
 		Clauses(clause.Returning{}).
 		Where("organization_id = ? AND updated_at = ?", id, expectedUpdatedAt).
 		Updates(changes)

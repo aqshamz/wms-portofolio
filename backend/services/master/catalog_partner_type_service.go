@@ -50,5 +50,8 @@ func (s *CatalogService) RemoveBusinessPartnerType(ctx context.Context, partnerI
 	if validateID(partnerID) != nil || validateID(typeID) != nil {
 		return ErrInvalidInput
 	}
+	if _, err := s.repositories.BusinessPartner.Get(ctx, partnerID); err != nil {
+		return catalogError(err)
+	}
 	return catalogError(s.repositories.BusinessPartnerType.Remove(ctx, partnerID, typeID))
 }

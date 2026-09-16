@@ -1,6 +1,6 @@
 admin                   Admin@123456
-whm                     12345678912             
-receiver.warehouse      12345678912
+whm                     123456789012             
+receiver.warehouse      123456789012
 planner.warehouse	    Wm9!YItmTU6LTJwKMolOMIn41HfC
 qc.warehouse	        Wm9!ledC23ODPfHBjaLvacgFnOMz
 rework.warehouse	    Wm9!fDn8EukJfIkR16aiYnBvou06

@@ -10,5 +10,5 @@ type ItemCategoryRepository struct {
 }
 
 func NewItemCategoryRepository(db *gorm.DB) *ItemCategoryRepository {
-	return &ItemCategoryRepository{catalogTable[model.ItemCategory]{db: db, key: "category_id", searchable: true, audited: false}}
+	return &ItemCategoryRepository{catalogTable[model.ItemCategory]{db: db, key: "category_id", searchable: true, audited: false, ownerScoped: true}}
 }

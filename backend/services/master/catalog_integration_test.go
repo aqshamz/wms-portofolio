@@ -16,6 +16,7 @@ import (
 	model "wms-api/models/master"
 	authrepo "wms-api/repository/authentication"
 	repository "wms-api/repository/master"
+	"wms-api/requestscope"
 )
 
 func catalogMust[T any](t *testing.T, value T, err error) T {
@@ -84,6 +85,34 @@ func testCatalogPostgreSQL(t *testing.T, fresh bool) {
 	otherOwner := model.Organization{Code: "CT2_" + suffix, Name: "Other test owner", TimezoneName: "Asia/Jakarta", IsActive: true}
 	catalogOK(t, repository.NewOrganizationRepository(tx).Create(ctx, &owner))
 	catalogOK(t, repository.NewOrganizationRepository(tx).Create(ctx, &otherOwner))
+	catalogOK(t, tx.Create(&model.AccountOwnerAccess{AccountID: account.ID, OwnerID: owner.ID}).Error)
+	restrictedCtx := requestscope.WithPrincipal(ctx, requestscope.Principal{AccountID: account.ID})
+	organizationRows, organizationTotal, err := repository.NewOrganizationRepository(tx).List(
+		restrictedCtx, nil, nil, 100, 0,
+	)
+	catalogOK(t, err)
+	if organizationTotal != 1 || len(organizationRows) != 1 || organizationRows[0].ID != owner.ID {
+		t.Fatal("organization list was not limited to account owner access")
+	}
+	if _, err := repository.NewOrganizationRepository(tx).FindByID(restrictedCtx, otherOwner.ID); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("out-of-scope organization lookup returned %v", err)
+	}
+
+	warehouse := model.Warehouse{OperatorID: owner.ID, Code: "CW_" + suffix, Name: "Scoped warehouse", TimezoneName: "Asia/Jakarta", IsActive: true}
+	otherWarehouse := model.Warehouse{OperatorID: otherOwner.ID, Code: "CW2_" + suffix, Name: "Other warehouse", TimezoneName: "Asia/Jakarta", IsActive: true}
+	catalogOK(t, repository.NewWarehouseRepository(tx).Create(ctx, &warehouse))
+	catalogOK(t, repository.NewWarehouseRepository(tx).Create(ctx, &otherWarehouse))
+	catalogOK(t, tx.Create(&model.AccountWarehouseAccess{AccountID: account.ID, WarehouseID: warehouse.ID}).Error)
+	warehouseRows, warehouseTotal, err := repository.NewWarehouseRepository(tx).List(
+		restrictedCtx, nil, nil, nil, 100, 0,
+	)
+	catalogOK(t, err)
+	if warehouseTotal != 1 || len(warehouseRows) != 1 || warehouseRows[0].ID != warehouse.ID {
+		t.Fatal("warehouse list was not limited to account warehouse access")
+	}
+	if _, err := repository.NewWarehouseRepository(tx).FindByID(restrictedCtx, otherWarehouse.ID); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("out-of-scope warehouse lookup returned %v", err)
+	}
 	units, err := service.ListUOM(ctx, repository.CatalogFilter{Page: 1, PageSize: 100})
 	catalogOK(t, err)
 	var each, box, kilogram string
@@ -136,6 +165,18 @@ func testCatalogPostgreSQL(t *testing.T, fresh bool) {
 
 	partner, err := service.CreateBusinessPartner(ctx, dto.CreateBusinessPartnerRequest{OwnerID: owner.ID, Code: "SUP_" + suffix, Name: "Supplier"}, account.ID)
 	catalogOK(t, err)
+	otherPartner := model.BusinessPartner{OwnerID: otherOwner.ID, Code: "OTHER_" + suffix, Name: "Other supplier", IsActive: true}
+	catalogOK(t, repos.BusinessPartner.Create(ctx, &otherPartner))
+	restrictedPartners, restrictedPartnerTotal, err := repos.BusinessPartner.List(
+		restrictedCtx, repository.CatalogFilter{Page: 1, PageSize: 100},
+	)
+	catalogOK(t, err)
+	if restrictedPartnerTotal != 1 || len(restrictedPartners) != 1 || restrictedPartners[0].ID != partner.ID {
+		t.Fatal("business partner list was not limited to account owner access")
+	}
+	if _, err := repos.BusinessPartner.Get(restrictedCtx, otherPartner.ID); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("out-of-scope business partner lookup returned %v", err)
+	}
 	types, err := service.ListPartnerType(ctx, repository.CatalogFilter{Page: 1, PageSize: 100})
 	catalogOK(t, err)
 	if len(types.Items) < 2 {

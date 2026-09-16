@@ -14,6 +14,9 @@ func (s *OperationalService) GetPickingStrategyRule(ctx context.Context, parentI
 	if validateID(parentID) != nil {
 		return response, ErrInvalidInput
 	}
+	if _, err := s.repositories.PickingStrategy.Get(ctx, parentID); err != nil {
+		return response, catalogError(err)
+	}
 	value, err := s.repositories.PickingStrategyRule.Get(ctx, id)
 	if err != nil {
 		return response, catalogError(err)

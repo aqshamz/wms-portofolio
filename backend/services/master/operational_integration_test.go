@@ -17,6 +17,7 @@ import (
 	model "wms-api/models/master"
 	authrepo "wms-api/repository/authentication"
 	repository "wms-api/repository/master"
+	"wms-api/requestscope"
 )
 
 func operationalDatabase(t *testing.T) *gorm.DB {
@@ -51,6 +52,25 @@ func operationalActor(t *testing.T, db *gorm.DB) string {
 	catalogOK(t, db.Create(&account).Error)
 	return account.ID
 }
+
+func containsPickingStrategy(items []dto.PickingStrategyResponse, id string) bool {
+	for _, item := range items {
+		if item.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func containsPutawayStrategy(items []dto.PutawayStrategyResponse, id string) bool {
+	for _, item := range items {
+		if item.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 func TestOperationalPostgreSQL(t *testing.T) {
 	for _, fresh := range []bool{false, true} {
 		t.Run(fmt.Sprintf("fresh=%v", fresh), func(t *testing.T) {
@@ -178,6 +198,10 @@ func TestOperationalPostgreSQL(t *testing.T) {
 			otherWarehouse := model.Warehouse{OperatorID: owner.ID, Code: "WH2_" + suffix, Name: "Other warehouse", TimezoneName: "Asia/Jakarta", IsActive: true}
 			catalogOK(t, repos.Warehouse.Create(ctx, &otherWarehouse))
 			catalogOK(t, repos.WarehouseOwner.Assign(ctx, &model.WarehouseOwner{WarehouseID: warehouse.ID, OwnerID: owner.ID, IsActive: true}))
+			catalogOK(t, repos.WarehouseOwner.Assign(ctx, &model.WarehouseOwner{WarehouseID: otherWarehouse.ID, OwnerID: otherOwner.ID, IsActive: true}))
+			catalogOK(t, tx.Create(&model.AccountOwnerAccess{AccountID: actor, OwnerID: owner.ID}).Error)
+			catalogOK(t, tx.Create(&model.AccountWarehouseAccess{AccountID: actor, WarehouseID: warehouse.ID}).Error)
+			restrictedCtx := requestscope.WithPrincipal(ctx, requestscope.Principal{AccountID: actor})
 			zone := model.WarehouseZone{WarehouseID: warehouse.ID, Code: "Z", Name: "Zone", IsActive: true}
 			catalogOK(t, repos.Zone.Create(ctx, &zone))
 			wrongZone := model.WarehouseZone{WarehouseID: otherWarehouse.ID, Code: "Z", Name: "Other", IsActive: true}
@@ -192,6 +216,8 @@ func TestOperationalPostgreSQL(t *testing.T) {
 			catalogWantError(t, err, ErrInvalidInput)
 			global, err := s.CreatePickingStrategy(ctx, dto.CreatePickingStrategyRequest{Code: "GLOBAL_" + suffix, Name: "Global"})
 			catalogOK(t, err)
+			otherPick, err := s.CreatePickingStrategy(ctx, dto.CreatePickingStrategyRequest{OwnerID: &otherOwner.ID, WarehouseID: &otherWarehouse.ID, Code: "OTHER_PICK_" + suffix, Name: "Other picking"})
+			catalogOK(t, err)
 			_, err = s.CreatePickingStrategy(ctx, dto.CreatePickingStrategyRequest{Code: global.Code, Name: "Duplicate"})
 			catalogWantError(t, err, ErrConflict)
 			method, err := repos.PickingSortMethod.ByCode(ctx, "FEFO")
@@ -201,6 +227,8 @@ func TestOperationalPostgreSQL(t *testing.T) {
 			_, err = s.CreatePickingStrategyRule(ctx, global.ID, dto.CreatePickingStrategyRuleRequest{SequenceNo: 10, ZoneID: &zone.ID, PickingSortMethodID: method.ID})
 			catalogWantError(t, err, ErrInvalidInput)
 			rule, err := s.CreatePickingStrategyRule(ctx, pick.ID, dto.CreatePickingStrategyRuleRequest{SequenceNo: 20, ZoneID: &zone.ID, PickingSortMethodID: method.ID})
+			catalogOK(t, err)
+			otherRule, err := s.CreatePickingStrategyRule(ctx, otherPick.ID, dto.CreatePickingStrategyRuleRequest{SequenceNo: 10, PickingSortMethodID: method.ID})
 			catalogOK(t, err)
 			_, err = s.CreatePickingStrategyRule(ctx, pick.ID, dto.CreatePickingStrategyRuleRequest{SequenceNo: 10, PickingSortMethodID: method.ID})
 			catalogOK(t, err)
@@ -213,6 +241,10 @@ func TestOperationalPostgreSQL(t *testing.T) {
 			catalogWantError(t, err, ErrNotFound)
 			put, err := s.CreatePutawayStrategy(ctx, dto.CreatePutawayStrategyRequest{OwnerID: &owner.ID, WarehouseID: &warehouse.ID, Code: "PUT", Name: "Putaway"})
 			catalogOK(t, err)
+			otherPut, err := s.CreatePutawayStrategy(ctx, dto.CreatePutawayStrategyRequest{OwnerID: &otherOwner.ID, WarehouseID: &otherWarehouse.ID, Code: "OTHER_PUT_" + suffix, Name: "Other putaway"})
+			catalogOK(t, err)
+			globalPut, err := s.CreatePutawayStrategy(ctx, dto.CreatePutawayStrategyRequest{Code: "GLOBAL_PUT_" + suffix, Name: "Global putaway"})
+			catalogOK(t, err)
 			_, err = s.CreatePutawayStrategyRule(ctx, put.ID, dto.CreatePutawayStrategyRuleRequest{SequenceNo: 10, CategoryID: &wrongCategory.ID})
 			catalogWantError(t, err, ErrInvalidInput)
 			_, err = s.CreatePutawayStrategyRule(ctx, put.ID, dto.CreatePutawayStrategyRuleRequest{SequenceNo: 10, MinimumEmptyPercent: catalogPointer("100.0001")})
@@ -222,6 +254,22 @@ func TestOperationalPostgreSQL(t *testing.T) {
 			if putRule.MinimumEmptyPercent == nil || *putRule.MinimumEmptyPercent != "25.1234" {
 				t.Fatal("putaway percentage lost precision")
 			}
+			scopedPicking, err := s.ListPickingStrategy(restrictedCtx, list)
+			catalogOK(t, err)
+			if !containsPickingStrategy(scopedPicking.Items, pick.ID) || !containsPickingStrategy(scopedPicking.Items, global.ID) || containsPickingStrategy(scopedPicking.Items, otherPick.ID) {
+				t.Fatal("picking strategy list did not apply owner and warehouse access")
+			}
+			_, err = s.GetPickingStrategy(restrictedCtx, otherPick.ID)
+			catalogWantError(t, err, ErrNotFound)
+			_, err = s.GetPickingStrategyRule(restrictedCtx, otherPick.ID, otherRule.ID)
+			catalogWantError(t, err, ErrNotFound)
+			scopedPutaway, err := s.ListPutawayStrategy(restrictedCtx, list)
+			catalogOK(t, err)
+			if !containsPutawayStrategy(scopedPutaway.Items, put.ID) || !containsPutawayStrategy(scopedPutaway.Items, globalPut.ID) || containsPutawayStrategy(scopedPutaway.Items, otherPut.ID) {
+				t.Fatal("putaway strategy list did not apply owner and warehouse access")
+			}
+			_, err = s.GetPutawayStrategy(restrictedCtx, otherPut.ID)
+			catalogWantError(t, err, ErrNotFound)
 			_, err = s.DeactivatePutawayStrategy(ctx, put.ID)
 			catalogOK(t, err)
 			_, err = s.CreatePutawayStrategyRule(ctx, put.ID, dto.CreatePutawayStrategyRuleRequest{SequenceNo: 20})

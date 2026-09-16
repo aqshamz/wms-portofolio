@@ -38,14 +38,15 @@ func (r *WarehouseLocationRepository) Create(ctx context.Context, value *model.W
 
 func (r *WarehouseLocationRepository) FindByID(ctx context.Context, id string) (WarehouseLocationDetail, error) {
 	var value WarehouseLocationDetail
-	err := r.db.WithContext(ctx).Table("warehouse_location AS l").
+	query := r.db.WithContext(ctx).Table("warehouse_location AS l").
 		Select(`l.*, w.code AS warehouse_code, w.name AS warehouse_name,
 			z.code AS zone_code, z.name AS zone_name,
 			lt.code AS location_type_code, lt.name AS location_type_name`).
 		Joins("JOIN warehouse w ON w.warehouse_id = l.warehouse_id").
 		Joins("JOIN warehouse_zone z ON z.zone_id = l.zone_id").
-		Joins("JOIN location_type lt ON lt.location_type_id = l.location_type_id").
-		Where("l.location_id = ?", id).Take(&value).Error
+		Joins("JOIN location_type lt ON lt.location_type_id = l.location_type_id")
+	query = applyWarehouseAccess(ctx, query, "l.warehouse_id")
+	err := query.Where("l.location_id = ?", id).Take(&value).Error
 	return value, err
 }
 
@@ -63,6 +64,7 @@ func (r *WarehouseLocationRepository) List(
 		Joins("JOIN warehouse_zone z ON z.zone_id = l.zone_id").
 		Joins("JOIN location_type lt ON lt.location_type_id = l.location_type_id").
 		Where("l.warehouse_id = ?", warehouseID)
+	query = applyWarehouseAccess(ctx, query, "l.warehouse_id")
 	if zoneID != nil {
 		query = query.Where("l.zone_id = ?", *zoneID)
 	}
@@ -86,7 +88,8 @@ func (r *WarehouseLocationRepository) Update(
 	ctx context.Context, id string, changes map[string]interface{},
 ) (model.WarehouseLocation, error) {
 	var value model.WarehouseLocation
-	result := r.db.WithContext(ctx).Model(&value).Clauses(clause.Returning{}).
+	query := applyWarehouseAccess(ctx, r.db.WithContext(ctx).Model(&value), "warehouse_id")
+	result := query.Clauses(clause.Returning{}).
 		Where("location_id = ?", id).Updates(changes)
 	if result.Error != nil {
 		return value, result.Error

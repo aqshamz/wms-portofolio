@@ -28,5 +28,5 @@ func (r *ItemUOMRepository) Create(ctx context.Context, value *model.ItemUOM) er
 }
 
 func NewItemUOMRepository(db *gorm.DB) *ItemUOMRepository {
-	return &ItemUOMRepository{catalogTable[model.ItemUOM]{db: db, key: "item_uom_id", searchable: false, audited: false}}
+	return &ItemUOMRepository{catalogTable[model.ItemUOM]{db: db, key: "item_uom_id", searchable: false, audited: false, itemScoped: true}}
 }

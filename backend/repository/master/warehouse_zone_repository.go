@@ -26,7 +26,8 @@ func (r *WarehouseZoneRepository) Create(ctx context.Context, value *model.Wareh
 
 func (r *WarehouseZoneRepository) FindByID(ctx context.Context, id string) (model.WarehouseZone, error) {
 	var value model.WarehouseZone
-	err := r.db.WithContext(ctx).Where("zone_id = ?", id).Take(&value).Error
+	query := applyWarehouseAccess(ctx, r.db.WithContext(ctx), "warehouse_id")
+	err := query.Where("zone_id = ?", id).Take(&value).Error
 	return value, err
 }
 
@@ -38,6 +39,7 @@ func (r *WarehouseZoneRepository) List(
 		Select("z.*, count(l.location_id) AS location_count").
 		Joins("LEFT JOIN warehouse_location l ON l.zone_id = z.zone_id").
 		Where("z.warehouse_id = ?", warehouseID)
+	query = applyWarehouseAccess(ctx, query, "z.warehouse_id")
 	if search != nil {
 		query = query.Where("z.code ILIKE ? OR z.name ILIKE ?", "%"+*search+"%", "%"+*search+"%")
 	}
@@ -52,7 +54,8 @@ func (r *WarehouseZoneRepository) Update(
 	ctx context.Context, id string, changes map[string]interface{},
 ) (model.WarehouseZone, error) {
 	var value model.WarehouseZone
-	result := r.db.WithContext(ctx).Model(&value).Clauses(clause.Returning{}).
+	query := applyWarehouseAccess(ctx, r.db.WithContext(ctx).Model(&value), "warehouse_id")
+	result := query.Clauses(clause.Returning{}).
 		Where("zone_id = ?", id).Updates(changes)
 	if result.Error != nil {
 		return value, result.Error

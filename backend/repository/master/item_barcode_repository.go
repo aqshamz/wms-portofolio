@@ -23,5 +23,5 @@ type ItemBarcodeRepository struct {
 }
 
 func NewItemBarcodeRepository(db *gorm.DB) *ItemBarcodeRepository {
-	return &ItemBarcodeRepository{catalogTable[model.ItemBarcode]{db: db, key: "item_barcode_id", searchable: false, audited: false}}
+	return &ItemBarcodeRepository{catalogTable[model.ItemBarcode]{db: db, key: "item_barcode_id", searchable: false, audited: false, itemScoped: true}}
 }

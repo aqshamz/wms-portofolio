@@ -44,11 +44,12 @@ func (r *WarehouseRepository) Create(ctx context.Context, warehouse *model.Wareh
 
 func (r *WarehouseRepository) FindByID(ctx context.Context, id string) (WarehouseDetail, error) {
 	var warehouse WarehouseDetail
-	err := r.db.WithContext(ctx).
+	query := r.db.WithContext(ctx).
 		Table("warehouse AS w").
 		Select("w.*, operator.code AS operator_code, operator.name AS operator_name").
-		Joins("JOIN organization operator ON operator.organization_id = w.operator_id").
-		Where("w.warehouse_id = ?", id).
+		Joins("JOIN organization operator ON operator.organization_id = w.operator_id")
+	query = applyWarehouseAccess(ctx, query, "w.warehouse_id")
+	err := query.Where("w.warehouse_id = ?", id).
 		Take(&warehouse).Error
 	return warehouse, err
 }
@@ -67,6 +68,7 @@ func (r *WarehouseRepository) List(
 			w.timezone_name, w.city, w.country_code, w.is_active, w.created_at, w.updated_at,
 			count(*) OVER () AS total_rows`).
 		Joins("JOIN organization operator ON operator.organization_id = w.operator_id")
+	query = applyWarehouseAccess(ctx, query, "w.warehouse_id")
 	if operatorID != nil {
 		query = query.Where("w.operator_id = ?", *operatorID)
 	}
@@ -90,7 +92,8 @@ func (r *WarehouseRepository) Update(
 	changes map[string]interface{},
 ) (model.Warehouse, error) {
 	var warehouse model.Warehouse
-	result := r.db.WithContext(ctx).Model(&warehouse).
+	query := applyWarehouseAccess(ctx, r.db.WithContext(ctx).Model(&warehouse), "warehouse_id")
+	result := query.
 		Clauses(clause.Returning{}).
 		Where("warehouse_id = ? AND updated_at = ?", id, expectedUpdatedAt).
 		Updates(changes)

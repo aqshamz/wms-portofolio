@@ -10,5 +10,5 @@ type BusinessPartnerRepository struct {
 }
 
 func NewBusinessPartnerRepository(db *gorm.DB) *BusinessPartnerRepository {
-	return &BusinessPartnerRepository{catalogTable[model.BusinessPartner]{db: db, key: "partner_id", searchable: true, audited: true}}
+	return &BusinessPartnerRepository{catalogTable[model.BusinessPartner]{db: db, key: "partner_id", searchable: true, audited: true, ownerScoped: true}}
 }

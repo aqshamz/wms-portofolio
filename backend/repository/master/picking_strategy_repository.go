@@ -10,5 +10,5 @@ type PickingStrategyRepository struct {
 }
 
 func NewPickingStrategyRepository(db *gorm.DB) *PickingStrategyRepository {
-	return &PickingStrategyRepository{operationalTable[model.PickingStrategy]{catalogTable: catalogTable[model.PickingStrategy]{db: db, key: "picking_strategy_id", searchable: true}, parentColumn: "", order: "picking_strategy_id", scoped: true, moduleScoped: false}}
+	return &PickingStrategyRepository{operationalTable[model.PickingStrategy]{catalogTable: catalogTable[model.PickingStrategy]{db: db, key: "picking_strategy_id", searchable: true, strategyScoped: true}, parentColumn: "", order: "picking_strategy_id", scoped: true, moduleScoped: false}}
 }
