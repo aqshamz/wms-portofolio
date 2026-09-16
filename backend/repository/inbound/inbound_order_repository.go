@@ -12,6 +12,7 @@ import (
 type InboundOrderRow struct {
 	model.InboundOrder
 	StatusCode, OwnerCode, VendorCode, VendorName, WarehouseCode string
+	PurchaseOrderID                                              string
 	SuccessorInboundID                                           *string
 }
 
@@ -44,7 +45,7 @@ func (r *InboundOrderRepository) Lock(ctx context.Context, id string) (model.Inb
 	return value, Error(err)
 }
 func inboundOrderQuery(db *gorm.DB) *gorm.DB {
-	return db.Table("inbound_order inbound").Select("inbound.*,status.code status_code,owner.code owner_code,vendor.code vendor_code,vendor.name vendor_name,warehouse.code warehouse_code,(SELECT successor.inbound_id FROM inbound_order successor WHERE successor.supersedes_inbound_id=inbound.inbound_id LIMIT 1) successor_inbound_id").
+	return db.Table("inbound_order inbound").Select("inbound.*,status.code status_code,owner.code owner_code,vendor.code vendor_code,vendor.name vendor_name,warehouse.code warehouse_code,(SELECT po_line.purchase_order_id FROM inbound_order_line inbound_line JOIN purchase_order_line po_line ON po_line.purchase_order_line_id=inbound_line.purchase_order_line_id WHERE inbound_line.inbound_id=inbound.inbound_id LIMIT 1) purchase_order_id,(SELECT successor.inbound_id FROM inbound_order successor WHERE successor.supersedes_inbound_id=inbound.inbound_id LIMIT 1) successor_inbound_id").
 		Joins("JOIN document_status status ON status.status_id=inbound.status_id").Joins("JOIN organization owner ON owner.organization_id=inbound.owner_id").
 		Joins("JOIN business_partner vendor ON vendor.partner_id=inbound.vendor_id").Joins("JOIN warehouse ON warehouse.warehouse_id=inbound.warehouse_id")
 }

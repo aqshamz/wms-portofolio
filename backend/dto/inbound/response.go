@@ -70,6 +70,7 @@ type InboundOrderLineResponse struct {
 
 type InboundOrderResponse struct {
 	ID                  string                     `json:"inbound_id"`
+	PurchaseOrderID     string                     `json:"purchase_order_id"`
 	OwnerID             string                     `json:"owner_id"`
 	OwnerCode           string                     `json:"owner_code"`
 	VendorID            string                     `json:"vendor_id"`
