@@ -138,7 +138,7 @@ try {
     $fefo = Require-Reference 'picking-sort-methods' 'FEFO'
     Require-Reference 'modules' 'INBOUND' | Out-Null
     $locationTypes = @{}
-    foreach ($code in @('RECEIVING', 'STORAGE', 'PICK_FACE', 'STAGING', 'PACKING', 'SHIPPING', 'QUARANTINE')) {
+    foreach ($code in @('DOCK', 'RECEIVING', 'STORAGE', 'PICK_FACE', 'STAGING', 'PACKING', 'SHIPPING', 'QUARANTINE')) {
         $locationTypes[$code] = Require-Reference 'location-types' $code
     }
 
@@ -163,7 +163,7 @@ try {
     }
     $locations = @()
     foreach ($spec in @(
-        @('RCV', 'INBOUND', 'RECEIVING'), @('BULK', 'STORAGE', 'STORAGE'),
+        @('DOCK', 'INBOUND', 'DOCK'), @('RCV', 'INBOUND', 'RECEIVING'), @('BULK', 'STORAGE', 'STORAGE'),
         @('PICK', 'STORAGE', 'PICK_FACE'), @('STAGE', 'OUTBOUND', 'STAGING'),
         @('PACK', 'OUTBOUND', 'PACKING'), @('SHIP', 'OUTBOUND', 'SHIPPING'),
         @('QC', 'INBOUND', 'QUARANTINE')

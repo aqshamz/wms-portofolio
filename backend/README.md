@@ -162,11 +162,21 @@ precision:
 }
 ```
 
-Startup seeds the standard location types `RECEIVING`, `STORAGE`, `PICK_FACE`,
+Startup seeds the standard location types `DOCK`, `RECEIVING`, `STORAGE`, `PICK_FACE`,
 `STAGING`, `CHECKING`, `PACKING`, `SHIPPING`, and `QUARANTINE`. Location codes
 are unique per warehouse; a location's zone is enforced to belong to that same
 warehouse. Owner assignments and physical master records use soft deactivation.
 Account scope grants are join records and are removed when revoked.
+
+`DOCK` is shared for loading/unloading: receiving and shipping enabled, storage
+and picking disabled. Receipt headers require a Dock; accepted batches may stay
+at the Dock or move to another receiving-enabled area. Putaway requires storage.
+No schema migration is needed. Seeds preserve existing location types and locations.
+For the existing local study warehouse, run `go run ./cmd/seed-dock` from `backend`
+to add `DOCK` and `STUDY_DOCK_01` idempotently. Restart the API to load new validation.
+Existing open receipts with a non-Dock header must be edited before completion;
+completed history is not relabelled. Outbound dock transfer is a future workflow
+change; this seed alone does not move packed inventory.
 
 ### Business partners, items, UOMs, and classifications
 

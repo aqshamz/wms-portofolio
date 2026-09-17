@@ -12,9 +12,15 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"wms-api/config"
+	dto "wms-api/dto/authentication"
 	authmodel "wms-api/models/authentication"
+	mastermodel "wms-api/models/master"
 	repository "wms-api/repository/authentication"
+	billingrepository "wms-api/repository/billing"
+	inboundrepository "wms-api/repository/inbound"
 	masterrepository "wms-api/repository/master"
+	outboundrepository "wms-api/repository/outbound"
+	"wms-api/requestscope"
 	masterservice "wms-api/services/master"
 )
 
@@ -81,6 +87,95 @@ func TestPermissionAdministrationPostgreSQL(t *testing.T) {
 		if code == "SECURITY.WRITE" {
 			t.Fatal("revoked permission is still present")
 		}
+	}
+	// The full-access role is additive and idempotent, not a username bypass.
+	authOK(t, permissionRepository.EnsureSuperadmin(ctx, first.ID))
+	authOK(t, permissionRepository.EnsureSuperadmin(ctx, first.ID))
+	codes, err = permissionRepository.Codes(ctx, first.ID)
+	authOK(t, err)
+	if !hasPermissionCode(codes, "*") {
+		t.Fatal("superadmin wildcard is missing")
+	}
+	authOK(t, permissionRepository.GrantAll(ctx, second.ID))
+	secondCodes, err := permissionRepository.Codes(ctx, second.ID)
+	authOK(t, err)
+	if hasPermissionCode(secondCodes, "*") {
+		t.Fatal("granting all named permissions implicitly granted superadmin")
+	}
+	var superRole authmodel.AppRole
+	authOK(t, tx.Where("code=?", "SUPERADMIN").Take(&superRole).Error)
+	var roleCount int64
+	authOK(t, tx.Model(&authmodel.AccountRole{}).Where("account_id=? AND role_id=?", first.ID, superRole.ID).Count(&roleCount).Error)
+	if roleCount != 1 {
+		t.Fatalf("duplicate superadmin assignments: %d", roleCount)
+	}
+	owner := mastermodel.Organization{Code: "SUPER_OWNER", Name: "Superadmin owner", TimezoneName: "Asia/Jakarta"}
+	authOK(t, tx.Create(&owner).Error)
+	warehouse := mastermodel.Warehouse{OperatorID: owner.ID, Code: "SUPER_WH", Name: "Superadmin warehouse", TimezoneName: "Asia/Jakarta"}
+	authOK(t, tx.Create(&warehouse).Error)
+	warehouseRepository := masterrepository.NewWarehouseRepository(tx)
+	ordinaryContext := requestscope.WithPrincipal(ctx, requestscope.Principal{AccountID: second.ID})
+	rows, total, err := warehouseRepository.List(ordinaryContext, nil, nil, nil, 20, 0)
+	authOK(t, err)
+	if total != 0 || len(rows) != 0 {
+		t.Fatal("ordinary administrator unexpectedly bypassed warehouse scope")
+	}
+	superContext := requestscope.WithPrincipal(ctx, requestscope.Principal{AccountID: first.ID, Unrestricted: true})
+	rows, total, err = warehouseRepository.List(superContext, nil, nil, nil, 20, 0)
+	authOK(t, err)
+	if total != 1 || len(rows) != 1 || rows[0].ID != warehouse.ID {
+		t.Fatal("superadmin could not see warehouses without individual scope grants")
+	}
+	for name, scope := range map[string]interface {
+		Allowed(context.Context, string, string, string) (bool, error)
+	}{
+		"inbound":  inboundrepository.NewInboundScopeRepository(tx),
+		"outbound": outboundrepository.NewOutboundScopeRepository(tx),
+		"billing":  billingrepository.NewScopeRepository(tx),
+	} {
+		allowed, err := scope.Allowed(superContext, first.ID, owner.ID, warehouse.ID)
+		authOK(t, err)
+		if !allowed {
+			t.Fatalf("superadmin denied %s scope without access grants", name)
+		}
+		allowed, err = scope.Allowed(ordinaryContext, second.ID, owner.ID, warehouse.ID)
+		authOK(t, err)
+		if allowed {
+			t.Fatalf("ordinary administrator bypassed %s scope", name)
+		}
+	}
+	eligible, err := inboundrepository.NewPutawayTaskRepository(tx).AccountCanPutaway(ctx, first.ID, owner.ID, warehouse.ID)
+	authOK(t, err)
+	if !eligible {
+		t.Fatal("superadmin without scope grants cannot be assigned putaway")
+	}
+	// Wildcard-only access still counts for last-security-administrator safety.
+	var wildcard mastermodel.AppPermission
+	authOK(t, tx.Where("code=?", "*").Take(&wildcard).Error)
+	roles := NewRoleService(repository.NewAdministrationRepositories(tx))
+	wildcardIDs := []string{wildcard.ID}
+	updatedRole, err := roles.ReplacePermissions(ctx, superRole.ID, dto.ReplaceRolePermissionsRequest{PermissionIDs: &wildcardIDs, ExpectedVersion: superRole.VersionNo}, first.ID)
+	authOK(t, err)
+	authOK(t, service.Revoke(ctx, second.ID, securityWrite))
+	if err := roles.Revoke(ctx, first.ID, superRole.ID); !errors.Is(err, ErrLastSecurityAdmin) {
+		t.Fatalf("last wildcard admin could be revoked: %v", err)
+	}
+	if _, err := roles.Deactivate(ctx, superRole.ID, updatedRole.VersionNo, first.ID); !errors.Is(err, ErrLastSecurityAdmin) {
+		t.Fatalf("last wildcard admin role could be disabled: %v", err)
+	}
+	// With another administrator available, deactivation removes wildcard access.
+	authOK(t, service.Grant(ctx, second.ID, securityWrite, first.ID))
+	_, err = roles.Deactivate(ctx, superRole.ID, updatedRole.VersionNo, first.ID)
+	authOK(t, err)
+	codes, err = permissionRepository.Codes(ctx, first.ID)
+	authOK(t, err)
+	if hasPermissionCode(codes, "*") {
+		t.Fatal("inactive superadmin role retained unrestricted access")
+	}
+	eligible, err = inboundrepository.NewPutawayTaskRepository(tx).AccountCanPutaway(ctx, first.ID, owner.ID, warehouse.ID)
+	authOK(t, err)
+	if eligible {
+		t.Fatal("inactive superadmin remained assignable without scope grants")
 	}
 }
 

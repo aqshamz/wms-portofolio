@@ -26,6 +26,7 @@ POST /api/v1/inbound/quality-inspections
 GET  /api/v1/inbound/quality-inspections?owner_id=<uuid>&warehouse_id=<uuid>&status_code=PENDING&page=1&page_size=20
 GET  /api/v1/inbound/quality-inspections/:id
 POST /api/v1/inbound/quality-inspections/:id/complete
+POST /api/v1/inbound/quality-inspections/:id/cancel
 
 GET  /api/v1/inbound/putaway-tasks?owner_id=<uuid>&warehouse_id=<uuid>&status_code=OPEN&page=1&page_size=20
 GET  /api/v1/inbound/putaway-tasks/:id
@@ -55,6 +56,16 @@ rule at the most specific configured owner/warehouse scope. The study master
 already configures `STUDY_STORAGE`; use `STUDY_BULK_01` as the target.
 
 Read the current source balance before every inventory-changing request:
+
+For quality inspections, `GET /api/v1/inbound/quality-inspections/:id` (and
+create/complete/cancel responses) includes `source_balance_version_no`,
+`base_uom_code`, `is_indivisible`, and optional `serial_no` / `handling_unit_barcode`.
+Use that source version as `expected_balance_version`, together with the
+inspection's `version_no` as `expected_version`. This remains protected by
+inbound owner/warehouse scope and does not require separate `INVENTORY.READ`
+permission. Refresh after a concurrency conflict; never silently overwrite it.
+
+For other inventory workflows, read the balance directly:
 
 ```text
 GET /api/v1/inventory/balances/<balance_id>
@@ -135,6 +146,20 @@ A serialized batch or a handling-unit batch cannot be split between pass and
 fail because one serial/HU cannot physically exist in two balances.
 
 ## 3. Execute the putaway task
+
+The frontend is available at `/inbound/putaway` (Inbound → Putaway tasks).
+Tasks are created by QC, not manually. An open task can be claimed by starting
+it, or assigned to another scoped account with effective `INBOUND.PUTAWAY`
+permission before it starts. An assigned task can only be started/completed by
+its assignee. Completion is a
+full-quantity physical move; partial completion is not supported.
+
+`GET /api/v1/inbound/putaway-tasks/:id` and transition responses include
+`source_balance_version_no` for completion/cancellation and, once completed,
+`result_balance_version_no` for reversal. Use these together with the task's
+`version_no`; no separate `INVENTORY.READ` permission is needed. Unit codes and
+assigned display names are included in task list/detail responses. Refresh
+after a concurrency conflict instead of silently adopting a newer version.
 
 Start the returned task using its current version:
 

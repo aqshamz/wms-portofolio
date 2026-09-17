@@ -20,3 +20,10 @@ func FromContext(ctx context.Context) (Principal, bool) {
 	principal, ok := ctx.Value(principalKey{}).(Principal)
 	return principal, ok
 }
+
+// IsUnrestricted only trusts the principal installed by authentication and does
+// not permit its privilege to be used when checking a different account.
+func IsUnrestricted(ctx context.Context, accountID string) bool {
+	principal, exists := FromContext(ctx)
+	return exists && principal.Unrestricted && accountID != "" && principal.AccountID == accountID
+}

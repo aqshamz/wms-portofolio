@@ -75,7 +75,7 @@ func (s *BootstrapService) Seed(ctx context.Context, cfg config.AuthConfig) erro
 		return nil
 	}
 	if existing, err := s.accounts.FindByUsername(ctx, cfg.BootstrapAdminUsername); err == nil {
-		return s.permissions.GrantAll(ctx, existing.ID)
+		return s.permissions.EnsureSuperadmin(ctx, existing.ID)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return fmt.Errorf("find bootstrap admin: %w", err)
 	}
@@ -110,5 +110,5 @@ func (s *BootstrapService) Seed(ctx context.Context, cfg config.AuthConfig) erro
 	if err := s.accounts.Create(ctx, &account); err != nil {
 		return err
 	}
-	return s.permissions.GrantAll(ctx, account.ID)
+	return s.permissions.EnsureSuperadmin(ctx, account.ID)
 }

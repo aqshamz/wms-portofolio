@@ -38,8 +38,14 @@ func NewWarehouseStructureService(
 	}
 }
 
+// DefaultDockLocationType represents a shared loading/unloading dock, not storage.
+func DefaultDockLocationType() model.LocationType {
+	return model.LocationType{Code: "DOCK", Name: "Dock", AllowsReceiving: true, AllowsShipping: true, IsActive: true}
+}
+
 func (s *WarehouseStructureService) SeedLocationTypes(ctx context.Context) error {
 	return s.locationTypes.Seed(ctx, []model.LocationType{
+		DefaultDockLocationType(),
 		{Code: "RECEIVING", Name: "Receiving", AllowsReceiving: true, IsActive: true},
 		{Code: "STORAGE", Name: "Storage", AllowsStorage: true, IsActive: true},
 		{Code: "PICK_FACE", Name: "Pick face", AllowsStorage: true, AllowsPicking: true, IsActive: true},

@@ -4,12 +4,16 @@ import (
 	"context"
 	"fmt"
 	"gorm.io/gorm"
+	"wms-api/requestscope"
 )
 
 type ScopeRepository struct{ db *gorm.DB }
 
 func NewScopeRepository(db *gorm.DB) *ScopeRepository { return &ScopeRepository{db: db} }
 func (r *ScopeRepository) Allowed(ctx context.Context, accountID, ownerID, warehouseID string) (bool, error) {
+	if requestscope.IsUnrestricted(ctx, accountID) {
+		return true, nil
+	}
 	var count int64
 	err := r.db.WithContext(ctx).Table("account_owner_access ao").Joins("JOIN account_warehouse_access aw ON aw.account_id=ao.account_id AND aw.warehouse_id=?", warehouseID).Joins("JOIN warehouse_owner wo ON wo.owner_id=ao.owner_id AND wo.warehouse_id=aw.warehouse_id AND wo.is_active").Where("ao.account_id=? AND ao.owner_id=?", accountID, ownerID).Count(&count).Error
 	return count > 0, Error(err)

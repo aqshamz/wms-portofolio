@@ -101,13 +101,34 @@ func (s *Service) validatePutawayTarget(ctx context.Context, ownerID, warehouseI
 	if err != nil || !locationType.IsActive || !locationType.AllowsStorage {
 		return target, invalid("putaway target must use an active storage location type")
 	}
+	rules, err := s.applicablePutawayRules(ctx, ownerID, warehouseID)
+	if err != nil {
+		return target, err
+	}
+	for _, rule := range rules {
+		if putawayRuleMatches(item, target, rule) {
+			return target, nil
+		}
+	}
+	return target, invalid("target location does not match the active putaway strategy")
+}
+
+func putawayRuleMatches(item mastermodel.Item, target mastermodel.WarehouseLocation, rule mastermodel.PutawayStrategyRule) bool {
+	return (rule.CategoryID == nil || (item.CategoryID != nil && *rule.CategoryID == *item.CategoryID)) &&
+		(rule.LocationTypeID == nil || *rule.LocationTypeID == target.LocationTypeID) &&
+		(rule.ZoneID == nil || *rule.ZoneID == target.ZoneID)
+}
+
+// Both the picker and posting validation use the highest-specificity strategy
+// scope. Less-specific strategies must not offer targets posting will reject.
+func (s *Service) applicablePutawayRules(ctx context.Context, ownerID, warehouseID string) ([]mastermodel.PutawayStrategyRule, error) {
 	active := true
 	strategies, _, err := s.repositories.Master.PutawayStrategy.List(ctx, masterrepository.OperationalFilter{Active: &active})
 	if err != nil {
-		return target, repository.Error(err)
+		return nil, repository.Error(err)
 	}
 	bestScore := -1
-	matched := false
+	matchingRules := make([]mastermodel.PutawayStrategyRule, 0)
 	for _, strategy := range strategies {
 		if !scopeMatch(strategy.OwnerID, ownerID) || !scopeMatch(strategy.WarehouseID, warehouseID) {
 			continue
@@ -123,31 +144,16 @@ func (s *Service) validatePutawayTarget(ctx context.Context, ownerID, warehouseI
 			continue
 		}
 		if score > bestScore {
-			bestScore, matched = score, false
+			bestScore, matchingRules = score, nil
 		}
 		rules, _, ruleErr := s.repositories.Master.PutawayStrategyRule.List(ctx, masterrepository.OperationalFilter{ParentID: strategy.ID, Active: &active})
 		if ruleErr != nil {
-			return target, repository.Error(ruleErr)
+			return nil, repository.Error(ruleErr)
 		}
-		for _, rule := range rules {
-			if rule.CategoryID != nil && (item.CategoryID == nil || *rule.CategoryID != *item.CategoryID) {
-				continue
-			}
-			if rule.LocationTypeID != nil && *rule.LocationTypeID != target.LocationTypeID {
-				continue
-			}
-			if rule.ZoneID != nil && *rule.ZoneID != target.ZoneID {
-				continue
-			}
-			matched = true
-			break
-		}
+		matchingRules = append(matchingRules, rules...)
 	}
 	if bestScore < 0 {
-		return target, state("no active putaway strategy is configured for the owner and warehouse")
+		return nil, state("no active putaway strategy is configured for the owner and warehouse")
 	}
-	if !matched {
-		return target, invalid("target location does not match the active putaway strategy")
-	}
-	return target, nil
+	return matchingRules, nil
 }

@@ -84,7 +84,7 @@ func (r *AccountPermissionRepository) Available(ctx context.Context) ([]Permissi
 
 func (r *AccountPermissionRepository) GrantAll(ctx context.Context, accountID string) error {
 	return r.db.WithContext(ctx).Exec(`INSERT INTO account_permission(account_id,permission_id,granted_by)
-		SELECT ?,permission_id,? FROM app_permission WHERE is_active
+		SELECT ?,permission_id,? FROM app_permission WHERE is_active AND code <> '*'
 		ON CONFLICT(account_id,permission_id) DO NOTHING`, accountID, accountID).Error
 }
 
@@ -102,7 +102,7 @@ func (r *AccountPermissionRepository) Revoke(ctx context.Context, accountID, per
 			Where("permission_id = ?", permissionID).Scan(&code).Error; err != nil {
 			return err
 		}
-		if code == "SECURITY.WRITE" {
+		if code == "SECURITY.WRITE" || code == "*" {
 			// The invariant is checked after deletion so role-derived access is
 			// considered as well as direct permission grants.
 		}
@@ -114,7 +114,7 @@ func (r *AccountPermissionRepository) Revoke(ctx context.Context, accountID, per
 		if result.RowsAffected != 1 {
 			return gorm.ErrRecordNotFound
 		}
-		if code == "SECURITY.WRITE" {
+		if code == "SECURITY.WRITE" || code == "*" {
 			return ensureSecurityAdministrator(tx)
 		}
 		return nil
@@ -137,14 +137,14 @@ func ensureSecurityAdministrator(db *gorm.DB) error {
 			SELECT direct.account_id
 			FROM account_permission direct
 			JOIN app_permission permission ON permission.permission_id = direct.permission_id
-			WHERE permission.code = 'SECURITY.WRITE' AND permission.is_active
+			WHERE permission.code IN ('SECURITY.WRITE', '*') AND permission.is_active
 			UNION
 			SELECT assignment.account_id
 			FROM account_role assignment
 			JOIN app_role role ON role.role_id = assignment.role_id AND role.is_active
 			JOIN role_permission role_grant ON role_grant.role_id = role.role_id
 			JOIN app_permission permission ON permission.permission_id = role_grant.permission_id
-			WHERE permission.code = 'SECURITY.WRITE' AND permission.is_active
+			WHERE permission.code IN ('SECURITY.WRITE', '*') AND permission.is_active
 		) effective
 		JOIN app_account account ON account.account_id = effective.account_id
 		JOIN account_status status ON status.account_status_id = account.account_status_id

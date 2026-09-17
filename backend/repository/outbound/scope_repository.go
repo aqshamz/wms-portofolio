@@ -3,6 +3,7 @@ package outbound
 import (
 	"context"
 	"fmt"
+	"wms-api/requestscope"
 
 	"gorm.io/gorm"
 )
@@ -14,6 +15,9 @@ func NewOutboundScopeRepository(db *gorm.DB) *OutboundScopeRepository {
 }
 
 func (r *OutboundScopeRepository) Allowed(ctx context.Context, accountID, ownerID, warehouseID string) (bool, error) {
+	if requestscope.IsUnrestricted(ctx, accountID) {
+		return true, nil
+	}
 	var count int64
 	err := r.db.WithContext(ctx).Table("account_owner_access ao").
 		Joins("JOIN account_warehouse_access aw ON aw.account_id=ao.account_id AND aw.warehouse_id=?", warehouseID).

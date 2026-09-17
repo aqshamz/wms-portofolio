@@ -5,6 +5,33 @@ session and the applicable SIS owner and Bandung warehouse scopes. `*` remains
 the administrator override. Legacy module permissions such as `INBOUND.WRITE`,
 `OUTBOUND.WRITE`, and `BILLING.WRITE` do not grant these protected actions.
 
+## Superadmin
+
+`SUPERADMIN` is the unrestricted system role. Its `*` permission authorizes all
+current and future menus/actions and removes account owner/warehouse scope
+restrictions for master data and inbound, outbound, and billing APIs. Individual
+scope grants are not required. Ordinary roles, including those with every named
+permission but without `*`, remain scoped. Login/account status, document-state
+rules, optimistic concurrency, stock validation, and assigned-task workflow
+rules still apply.
+
+Bootstrap administrators receive this role when bootstrap seeding is enabled.
+For an existing local development administrator, run from `backend`:
+
+```text
+go run ./cmd/seed-superadmin -account admin
+```
+
+This additive, repeatable command assigns only the named account, preserves its
+existing roles/grants, and refuses production or non-loopback databases. It does
+not reactivate a deliberately disabled role or permission. The wildcard grant
+is visible in Permissions as **Unrestricted system access**; only trusted system
+administrators should receive it. Deactivating/revoking its role removes the
+wildcard on the next authenticated request, and last-security-administrator
+protection includes wildcard grants. Bootstrap seeding restores missing grants
+for the configured bootstrap administrator; disable bootstrap recovery when
+managing those grants manually.
+
 ## Permission families
 
 | Area | Permission codes |

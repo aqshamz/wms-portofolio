@@ -158,6 +158,11 @@ type QualityInspectionResponse struct {
 	ReceiptInventoryID      string                  `json:"receipt_inventory_id"`
 	ParentInspectionID      *string                 `json:"parent_inspection_id"`
 	SourceBalanceID         *string                 `json:"source_balance_id"`
+	SourceBalanceVersionNo  *int64                  `json:"source_balance_version_no,omitempty"`
+	BaseUOMCode             string                  `json:"base_uom_code,omitempty"`
+	IsIndivisible           *bool                   `json:"is_indivisible,omitempty"`
+	SerialNo                *string                 `json:"serial_no,omitempty"`
+	HandlingUnitBarcode     *string                 `json:"handling_unit_barcode,omitempty"`
 	ReceiptID               string                  `json:"receipt_id"`
 	OwnerID                 string                  `json:"owner_id"`
 	WarehouseID             string                  `json:"warehouse_id"`
@@ -188,6 +193,10 @@ type PutawayTaskResponse struct {
 	InspectionID            string     `json:"inspection_id"`
 	ReceiptInventoryID      string     `json:"receipt_inventory_id"`
 	SourceBalanceID         string     `json:"source_balance_id"`
+	SourceBalanceVersionNo  *int64     `json:"source_balance_version_no,omitempty"`
+	ResultBalanceVersionNo  *int64     `json:"result_balance_version_no,omitempty"`
+	BaseUOMCode             string     `json:"base_uom_code,omitempty"`
+	AssignedDisplayName     *string    `json:"assigned_display_name,omitempty"`
 	OwnerID                 string     `json:"owner_id"`
 	WarehouseID             string     `json:"warehouse_id"`
 	ItemID                  string     `json:"item_id"`
@@ -216,6 +225,19 @@ type PutawayTaskResponse struct {
 	ReplacementInspectionID *string    `json:"replacement_inspection_id"`
 	VersionNo               int64      `json:"version_no"`
 	CreatedAt               time.Time  `json:"created_at"`
+}
+
+type PutawayAssigneeResponse struct {
+	AccountID   string `json:"account_id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+}
+
+type PutawayTargetResponse struct {
+	LocationID       string `json:"location_id"`
+	Code             string `json:"code"`
+	ZoneCode         string `json:"zone_code"`
+	LocationTypeCode string `json:"location_type_code"`
 }
 
 type QuarantineDispositionTypeResponse struct {

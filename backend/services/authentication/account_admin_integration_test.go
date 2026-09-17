@@ -227,4 +227,31 @@ func TestAccountAdministrationLifecyclePostgreSQL(t *testing.T) {
 	if worker.ActiveSessionCount != 0 {
 		t.Fatalf("expected no active sessions after revocation, got %d", worker.ActiveSessionCount)
 	}
+	// A role grant/revocation updates an already-open session; no hard-coded
+	// username or permanent session flag grants unrestricted access.
+	login, err = authentication.Login(ctx, dto.LoginRequest{Identifier: worker.Username, Password: newPassword}, ClientInfo{})
+	authOK(t, err)
+	authOK(t, permissions.EnsureSuperadmin(ctx, worker.AccountID))
+	authenticated, err = authentication.Authenticate(ctx, login.Token)
+	authOK(t, err)
+	if !hasPermissionCode(authenticated.Permissions, "*") {
+		t.Fatal("existing session did not acquire the superadmin role")
+	}
+	worker, err = accounts.Get(ctx, worker.AccountID)
+	authOK(t, err)
+	var superRoleID string
+	for _, assignedRole := range worker.Roles {
+		if assignedRole.Code == "SUPERADMIN" {
+			superRoleID = assignedRole.RoleID
+		}
+	}
+	if superRoleID == "" {
+		t.Fatal("superadmin role is not visible in account assignments")
+	}
+	authOK(t, roles.Revoke(ctx, worker.AccountID, superRoleID))
+	authenticated, err = authentication.Authenticate(ctx, login.Token)
+	authOK(t, err)
+	if hasPermissionCode(authenticated.Permissions, "*") {
+		t.Fatal("revoked superadmin role retained wildcard in the existing session")
+	}
 }

@@ -66,12 +66,12 @@ func (s *Service) AssignPutawayTask(ctx context.Context, id string, request dto.
 		if row.TaskStatusCode != "OPEN" && row.TaskStatusCode != "ASSIGNED" {
 			return state("only an OPEN or ASSIGNED putaway task can be assigned")
 		}
-		allowed, err := local.repositories.PutawayTask.AccountCanAccess(ctx, request.AccountID, task.OwnerID, task.WarehouseID)
+		allowed, err := local.repositories.PutawayTask.AccountCanPutaway(ctx, request.AccountID, task.OwnerID, task.WarehouseID)
 		if err != nil {
 			return err
 		}
 		if !allowed {
-			return invalid("assigned account lacks active owner and warehouse access")
+			return invalid("assigned account requires active owner and warehouse access and INBOUND.PUTAWAY permission")
 		}
 		assigned, err := local.taskStatus(ctx, "ASSIGNED")
 		if err != nil {
@@ -130,6 +130,9 @@ func (s *Service) CancelPutawayTask(ctx context.Context, id string, request dto.
 	reason, err := optional(&request.Reason, 4000, "reason")
 	if err != nil {
 		return dto.PutawayTaskResponse{}, err
+	}
+	if reason == nil {
+		return dto.PutawayTaskResponse{}, invalid("reason is required")
 	}
 	err = s.transaction(ctx, func(local *Service) error {
 		task, err := local.repositories.PutawayTask.Lock(ctx, id)
@@ -190,14 +193,15 @@ func (s *Service) CancelPutawayTask(ctx context.Context, id string, request dto.
 		if err != nil {
 			return err
 		}
-		if _, err := local.createChildInspection(ctx, parent, posted.ToBalance.ID, task.PlannedQty, reason, actor); err != nil {
+		inspectionID, err := local.createChildInspection(ctx, parent, posted.ToBalance.ID, task.PlannedQty, reason, actor)
+		if err != nil {
 			return err
 		}
 		cancelled, err := local.taskTransitionTarget(ctx, task.TaskStatusID, "CANCELLED")
 		if err != nil {
 			return err
 		}
-		if err := local.repositories.PutawayTask.Cancel(ctx, id, cancelled.ID, actor, task.VersionNo); err != nil {
+		if err := local.repositories.PutawayTask.Cancel(ctx, id, cancelled.ID, inspectionID, actor, task.VersionNo); err != nil {
 			return err
 		}
 		return local.recordException(ctx, task.OwnerID, task.WarehouseID, id, nil, "CANCELLATION", nil, nil, nil, reason, actor)
@@ -218,6 +222,9 @@ func (s *Service) ReversePutawayTask(ctx context.Context, id string, request dto
 	reason, err := optional(&request.Reason, 4000, "reason")
 	if err != nil {
 		return dto.PutawayTaskResponse{}, err
+	}
+	if reason == nil {
+		return dto.PutawayTaskResponse{}, invalid("reason is required")
 	}
 	err = s.transaction(ctx, func(local *Service) error {
 		task, err := local.repositories.PutawayTask.Lock(ctx, id)

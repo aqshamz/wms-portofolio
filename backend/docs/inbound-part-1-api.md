@@ -131,8 +131,12 @@ GET /api/v1/master/items?owner_id=<owner_uuid>&search=STUDY_COFFEE_250G&active=t
 GET /api/v1/master/warehouses/<warehouse_uuid>/locations
 ```
 
-Use the UUID of `EA` from the chosen item's `uoms`. Use `STUDY_RCV_01` as the
-dock location and `STUDY_QC_01` as the accepted-stock location.
+Use the UUID of `EA` from the chosen item's `uoms`. Use `STUDY_DOCK_01` as the
+dock location and `STUDY_RCV_01` as the accepted-stock location. Run
+`go run ./cmd/seed-dock` to add the shared Dock to an existing local study warehouse.
+Receipt headers require an active, unlocked `DOCK` that allows receiving;
+batch locations require active, unlocked receiving-enabled locations in the same
+warehouse. Both are revalidated at completion. Putaway destinations require storage.
 
 ### 1. Create the purchase order
 
@@ -219,7 +223,7 @@ POST /api/v1/inbound/receipts
   "inbound_id": "<inbound_id>",
   "business_date": "2026-09-07",
   "received_at": "2026-09-07T09:15:00+07:00",
-  "dock_location_id": "<STUDY_RCV_01_uuid>",
+  "dock_location_id": "<STUDY_DOCK_01_uuid>",
   "vehicle_number": "B 1234 STUDY",
   "delivery_note_no": "DN-STUDY-001",
   "lines": [
@@ -230,7 +234,7 @@ POST /api/v1/inbound/receipts
       "batches": [
         {
           "source_qty": "1",
-          "received_location_id": "<STUDY_QC_01_uuid>",
+          "received_location_id": "<STUDY_RCV_01_uuid>",
           "lot": {
             "lot_number": "STUDY-INB-LOT-001",
             "manufacture_date": "2026-08-01",
@@ -265,7 +269,7 @@ The result should contain:
 - receipt status `COMPLETED`;
 - a non-null batch `initial_balance_id`;
 - one `RECEIVE` movement for accepted base quantity;
-- a balance at `STUDY_QC_01` with status `QC_PENDING`;
+- a balance at `STUDY_RCV_01` with status `QC_PENDING`;
 - inbound and PO progress changed to `RECEIVED` when their full physical
   expected quantity has been accounted for.
 

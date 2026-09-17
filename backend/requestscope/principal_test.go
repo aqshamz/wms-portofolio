@@ -18,3 +18,24 @@ func TestMissingPrincipalIsExplicit(t *testing.T) {
 		t.Fatal("background context unexpectedly contained a principal")
 	}
 }
+
+func TestUnrestrictedRequiresMatchingAuthenticatedPrincipal(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		ctx       context.Context
+		accountID string
+		want      bool
+	}{
+		{"missing principal", context.Background(), "admin", false},
+		{"ordinary principal", WithPrincipal(context.Background(), Principal{AccountID: "admin"}), "admin", false},
+		{"superadmin", WithPrincipal(context.Background(), Principal{AccountID: "admin", Unrestricted: true}), "admin", true},
+		{"different account", WithPrincipal(context.Background(), Principal{AccountID: "admin", Unrestricted: true}), "worker", false},
+		{"empty identity", WithPrincipal(context.Background(), Principal{Unrestricted: true}), "", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := IsUnrestricted(test.ctx, test.accountID); got != test.want {
+				t.Fatalf("IsUnrestricted=%t, want %t", got, test.want)
+			}
+		})
+	}
+}

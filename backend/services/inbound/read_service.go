@@ -38,6 +38,29 @@ func (s *Service) GetQualityInspection(ctx context.Context, id string) (dto.Qual
 		return dto.QualityInspectionResponse{}, err
 	}
 	result := mapQualityInspection(row)
+	// Expose the scoped QC source version through inbound reads. Inspectors do
+	// not need unrelated INVENTORY.READ access to complete their inspection.
+	batch, err := s.repositories.ReceiptInventory.GetContext(ctx, row.ReceiptInventoryID)
+	if err != nil {
+		return result, err
+	}
+	result.BaseUOMCode = batch.BaseUOMCode
+	indivisible := batch.SerialID != nil || batch.HandlingUnitID != nil
+	result.IsIndivisible = &indivisible
+	result.SerialNo = batch.SerialNo
+	result.HandlingUnitBarcode = batch.HandlingUnitBarcode
+	sourceID := row.SourceBalanceID
+	if sourceID == nil {
+		sourceID = batch.InitialBalanceID
+	}
+	if sourceID != nil {
+		balance, balanceErr := s.repositories.Inventory.Balance.Get(ctx, *sourceID)
+		if balanceErr != nil {
+			return result, balanceErr
+		}
+		result.SourceBalanceID = sourceID
+		result.SourceBalanceVersionNo = &balance.VersionNo
+	}
 	if child, childErr := s.repositories.QualityInspection.GetChild(ctx, id); childErr == nil {
 		result.ReplacementInspectionID = &child.ID
 	} else if !errors.Is(childErr, repository.ErrNotFound) {
@@ -75,7 +98,23 @@ func (s *Service) GetPutawayTask(ctx context.Context, id string) (dto.PutawayTas
 		return dto.PutawayTaskResponse{}, invalid("invalid putaway_task_id")
 	}
 	row, err := s.repositories.PutawayTask.Get(ctx, id)
-	return mapPutawayTask(row), err
+	if err != nil {
+		return dto.PutawayTaskResponse{}, err
+	}
+	result := mapPutawayTask(row)
+	source, err := s.repositories.Inventory.Balance.Get(ctx, row.SourceBalanceID)
+	if err != nil {
+		return result, err
+	}
+	result.SourceBalanceVersionNo = &source.VersionNo
+	if row.ResultingBalanceID != nil {
+		balance, balanceErr := s.repositories.Inventory.Balance.Get(ctx, *row.ResultingBalanceID)
+		if balanceErr != nil {
+			return result, balanceErr
+		}
+		result.ResultBalanceVersionNo = &balance.VersionNo
+	}
+	return result, nil
 }
 
 func (s *Service) ListPutawayTasks(ctx context.Context, filter repository.ListFilter) (dto.PageResponse[dto.PutawayTaskResponse], error) {

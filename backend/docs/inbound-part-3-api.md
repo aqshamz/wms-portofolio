@@ -166,7 +166,33 @@ old inspection becomes `WAIVED`; the response contains
 
 ## Putaway assignment and retargeting
 
-Assign an account that has both owner and warehouse access:
+The task-scoped, paginated pickers are:
+
+```text
+GET /api/v1/inbound/putaway-tasks/:id/assignees?search=<name>&page=1&page_size=20
+GET /api/v1/inbound/putaway-tasks/:id/targets?search=<location-or-zone>&page=1&page_size=20
+```
+
+Both require `INBOUND.ASSIGN` and the task's owner/warehouse access scope.
+They accept only `search`, `page`, and `page_size`; clients cannot override
+owner/warehouse scope. Assignees expose only account ID, username, and display
+name, limited to login-enabled, unlocked accounts with both access grants and
+effective `INBOUND.PUTAWAY` permission (an active direct grant or an active role
+grant for an active permission). Filtering occurs before counting/pagination.
+Assignment rechecks the same eligibility; ineligible accounts are rejected even
+when submitted directly to the API. Active, unlocked Superadmins with effective
+`*` permission are also eligible without individual access-scope grants.
+An unassigned OPEN task can be claimed by a
+scoped worker with `INBOUND.PUTAWAY`; assigned tasks can only be started and
+completed by their assignee.
+
+Targets are active, unlocked storage-capable locations matching category,
+location-type, and zone rules at the most specific active putaway-strategy
+scope. Filtering happens before counting/pagination. The posting/retarget
+validator uses the same strategy selection, and always rechecks at execution.
+These pickers do not require unrelated security/master-read permissions.
+
+Assign an account with both owner/warehouse access and `INBOUND.PUTAWAY`:
 
 ```json
 {
@@ -207,6 +233,8 @@ POST /api/v1/inbound/putaway-tasks/<task_id>/cancel
 Cancellation moves the exact task quantity from `PUTAWAY_PENDING` back to
 `QC_PENDING`, marks the task `CANCELLED`, and creates a replacement child
 inspection. An in-progress task may be cancelled only by its assignee.
+Cancellation also persists and returns `replacement_inspection_id`, so the
+frontend can open that inspection even after a task refresh.
 
 ### Reverse after completion
 

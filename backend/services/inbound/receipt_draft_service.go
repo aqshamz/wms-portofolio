@@ -73,8 +73,8 @@ func (s *Service) UpdateReceipt(ctx context.Context, id string, request dto.Upda
 			return invalid("dock location is unavailable or belongs to another warehouse")
 		}
 		dockType, err := local.repositories.Master.LocationType.GetShared(ctx, dock.LocationTypeID)
-		if err != nil || !dockType.IsActive || !dockType.AllowsReceiving {
-			return invalid("dock location type does not allow receiving")
+		if err != nil || !dockType.IsActive || dockType.Code != "DOCK" || !dockType.AllowsReceiving {
+			return invalid("receiving dock must use an active DOCK location type that allows receiving")
 		}
 		if err := local.repositories.ReceiptLine.DeleteByReceipt(ctx, id); err != nil {
 			return err
@@ -218,6 +218,10 @@ func (s *Service) writeReceiptLines(ctx context.Context, receipt model.Receipt, 
 			location, err := s.repositories.Inventory.Location.GetShared(ctx, strings.ToLower(requestBatch.ReceivedLocationID))
 			if err != nil || location.WarehouseID != inbound.WarehouseID || !location.IsActive || location.IsLocked {
 				return invalid("received location is unavailable or belongs to another warehouse")
+			}
+			locationType, err := s.repositories.Master.LocationType.GetShared(ctx, location.LocationTypeID)
+			if err != nil || !locationType.IsActive || !locationType.AllowsReceiving {
+				return invalid("received location must use an active receiving location type")
 			}
 			lotID, err := s.ensureReceiptLot(ctx, inbound.OwnerID, item, requestBatch.Lot, actor)
 			if err != nil {

@@ -56,6 +56,8 @@ func registerInboundRoutes(api *gin.RouterGroup, controller *controller.Controll
 	group.POST("/quality-inspections/:id/cancel", cancel, controller.CancelQualityInspection)
 	group.GET("/putaway-tasks", read, controller.ListPutawayTasks)
 	group.GET("/putaway-tasks/:id", read, controller.GetPutawayTask)
+	group.GET("/putaway-tasks/:id/assignees", assign, controller.ListPutawayAssignees)
+	group.GET("/putaway-tasks/:id/targets", assign, controller.ListPutawayTargets)
 	group.POST("/putaway-tasks/:id/start", putaway, controller.StartPutawayTask)
 	group.POST("/putaway-tasks/:id/complete", putaway, controller.CompletePutawayTask)
 	group.POST("/putaway-tasks/:id/assign", assign, controller.AssignPutawayTask)

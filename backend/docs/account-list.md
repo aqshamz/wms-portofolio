@@ -1,7 +1,8 @@
 admin                   Admin@123456
-whm                     123456789012             
-receiver.warehouse      123456789012
-planner.warehouse	    Wm9!YItmTU6LTJwKMolOMIn41HfC
+whm                     123456789012   --approve po, orders          
+receiver.warehouse      123456789012    
+godown.warehouse        123456789012
+planner.warehouse	    Wm9!YItmTU6LTJwKMolOMIn41HfC --create po, orders
 qc.warehouse	        Wm9!ledC23ODPfHBjaLvacgFnOMz
 rework.warehouse	    Wm9!fDn8EukJfIkR16aiYnBvou06
 packer.warehouse	    Wm9!SSovU7y9YS4ly6YuUmaQTcqm
