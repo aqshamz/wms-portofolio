@@ -138,6 +138,22 @@ func (s *Service) GetQuarantineCase(ctx context.Context, id string) (dto.Quarant
 		return dto.QuarantineCaseResponse{}, err
 	}
 	result := mapQuarantineCase(row)
+	// Quarantine staff obtain the scoped stock snapshot through inbound reads.
+	balance, err := s.repositories.Inventory.Balance.Get(ctx, row.QuarantineBalanceID)
+	if err != nil {
+		return result, err
+	}
+	result.QuarantineBalanceVersionNo = &balance.VersionNo
+	result.AvailableQty = balance.AvailableQty
+	batch, err := s.repositories.ReceiptInventory.GetContext(ctx, row.ReceiptInventoryID)
+	if err != nil {
+		return result, err
+	}
+	result.BaseUOMCode = batch.BaseUOMCode
+	indivisible := batch.SerialID != nil || batch.HandlingUnitID != nil
+	result.IsIndivisible = &indivisible
+	result.SerialNo = batch.SerialNo
+	result.HandlingUnitBarcode = batch.HandlingUnitBarcode
 	dispositions, err := s.repositories.Disposition.ListByCase(ctx, id)
 	if err != nil {
 		return result, err

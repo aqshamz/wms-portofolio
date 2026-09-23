@@ -11,6 +11,7 @@ import (
 type QuarantineDispositionRow struct {
 	model.QuarantineDisposition
 	StatusCode, DispositionTypeCode string
+	TargetLocationCode              *string
 }
 
 type QuarantineDispositionRepository struct{ db *gorm.DB }
@@ -22,7 +23,7 @@ func (r *QuarantineDispositionRepository) Create(ctx context.Context, value *mod
 	return Error(r.db.WithContext(ctx).Create(value).Error)
 }
 func quarantineDispositionQuery(db *gorm.DB) *gorm.DB {
-	return db.Table("quarantine_disposition disposition").Select("disposition.*,status.code status_code,kind.code disposition_type_code").Joins("JOIN document_status status ON status.status_id=disposition.status_id").Joins("JOIN quarantine_disposition_type kind ON kind.quarantine_disposition_type_id=disposition.quarantine_disposition_type_id")
+	return db.Table("quarantine_disposition disposition").Select("disposition.*,status.code status_code,kind.code disposition_type_code,target.code target_location_code").Joins("JOIN document_status status ON status.status_id=disposition.status_id").Joins("JOIN quarantine_disposition_type kind ON kind.quarantine_disposition_type_id=disposition.quarantine_disposition_type_id").Joins("LEFT JOIN warehouse_location target ON target.location_id=disposition.target_location_id")
 }
 func (r *QuarantineDispositionRepository) Get(ctx context.Context, id string) (QuarantineDispositionRow, error) {
 	var value QuarantineDispositionRow

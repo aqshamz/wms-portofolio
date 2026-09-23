@@ -29,15 +29,24 @@ POST /api/v1/inbound/putaway-tasks/:id/cancel
 POST /api/v1/inbound/putaway-tasks/:id/reverse
 GET  /api/v1/inbound/exceptions
 GET  /api/v1/inbound/exceptions/:id
+GET  /api/v1/inbound/quarantine-cases/:id/targets
 GET  /api/v1/inbound/rework-tasks
 GET  /api/v1/inbound/rework-tasks/:id
 POST /api/v1/inbound/rework-tasks/:id/start
 POST /api/v1/inbound/rework-tasks/:id/complete
 ```
 
-There are 50 authenticated and owner/warehouse-scoped inbound routes in total.
+There are 53 inbound routes in total; operational resource routes are
+authenticated and owner/warehouse-scoped.
 The quarantine disposition-type lookup is global reference data and only
-requires authentication.
+requires authentication and `INBOUND.READ`, but no selected owner/warehouse.
+
+The quarantine target lookup requires `INBOUND.QUARANTINE_DISPOSE`. It accepts
+only `search`, `page`, and `page_size`, deriving owner/warehouse from the case.
+It returns active, unlocked storage-capable locations matching the item's
+highest-specificity active putaway strategy. Eligibility is filtered before
+counting and pagination, with the same response shape as putaway target lookup.
+It does not require a general master-data or inventory read permission.
 
 ## Receiving tolerances
 
@@ -252,6 +261,26 @@ units must still be an intact leaf HU containing one unreserved balance.
 
 ## Rework and reinspection
 
+Rework task responses include nullable `assigned_username` for display in the
+list and detail views. `assigned_to` remains the account ID used for assignment
+and authorization. An unassigned task has no username; no extra account lookup
+permission is required to display the assigned username.
+
+The frontend execution view is `/inbound/rework`. `INBOUND.READ` allows scoped
+lists and details; `INBOUND.REWORK` allows execution. Filters use `owner`,
+`warehouse`, `status`, `search`, and `page`; the `task` parameter opens a detail
+dialog. Quarantine history links directly to the corresponding task.
+
+The view supports the existing start and complete endpoints only. OPEN tasks
+are claimed when started; ASSIGNED tasks can be started only by their assignee,
+and IN_PROGRESS tasks can be completed only by that worker. Completion requires
+confirmation of the full planned base-unit quantity, allows optional result
+notes up to 4000 characters, and links to the generated child inspection.
+There is no partial completion, manual create, assignment, cancellation, or
+delete UI because the rework API does not expose those operations. Rework does
+not itself make stock available. Both actions send the current task version;
+on a concurrency error, refresh the task before retrying.
+
 Use `REWORK` on an open quarantine case:
 
 ```http
@@ -290,6 +319,14 @@ returned, disposed, or reworked again without losing lineage.
 
 ## Exception inquiry
 
+Exception list and detail responses include nullable `created_by_display_name`,
+`owner_name`, and `warehouse_name` for readable UI labels, without requiring
+additional account or master-data lookups. These are current reference names;
+the original `created_by`, `owner_id`, and `warehouse_id` remain unchanged as
+audit identifiers. Owner/warehouse access checks and the immutable records are
+unchanged. If a reference name is unavailable, the UI shows an unavailable label
+instead of exposing an internal UUID.
+
 ```text
 GET /api/v1/inbound/exceptions?owner_id=<uuid>&warehouse_id=<uuid>&status_code=UNDER_RECEIPT&page=1&page_size=100
 GET /api/v1/inbound/exceptions/<exception_id>
@@ -298,6 +335,20 @@ GET /api/v1/inbound/exceptions/<exception_id>
 For this inquiry, `status_code` filters `exception_type_code`. Supported values
 are `OVER_RECEIPT`, `UNDER_RECEIPT`, `REJECTED_AT_DOCK`, `DAMAGED`,
 `WRONG_ITEM`, `CANCELLATION`, and `REVERSAL`.
+
+The frontend inquiry is available at `/inbound/exceptions` and requires
+`INBOUND.READ`. It includes account-scoped warehouse/served-owner selection,
+exception-type filtering, source-document/line/notes search, pagination, and
+responsive desktop tables/mobile cards. The `exception` query parameter opens
+the detail dialog; `owner`, `warehouse`, `type`, `search`, and `page` preserve
+list filters in the URL. Switching scope clears the selected exception.
+
+Exception records are immutable audit evidence, not tasks with a resolution
+status. No create, edit, delete, or resolve action is exposed. Details preserve
+the recorded expected, actual, and signed variance quantities without assuming
+base units; document-level cancellation/reversal quantities may be absent.
+Reasons/notes, source references, timestamp, and recording account ID are shown.
+Follow-up actions belong to the original document's workflow.
 
 All mutation endpoints use optimistic document and/or balance versions. On a
 `409`, reload the document and affected balances before deciding whether the

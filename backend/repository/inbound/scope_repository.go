@@ -36,7 +36,7 @@ func (r *InboundScopeRepository) ResourceScope(ctx context.Context, kind, id str
 		"putaway-tasks":       "SELECT owner_id::text,warehouse_id::text FROM putaway_task WHERE putaway_task_id=?",
 		"quarantine-cases":    "SELECT owner_id::text,warehouse_id::text FROM quarantine_case WHERE quarantine_case_id=?",
 		"exceptions":          "SELECT owner_id::text,warehouse_id::text FROM inbound_exception WHERE inbound_exception_id=?",
-		"rework-tasks":        "SELECT owner_id::text,warehouse_id::text FROM rework_task WHERE rework_task_id=?",
+		"rework-tasks":        "SELECT quarantine.owner_id::text,quarantine.warehouse_id::text FROM rework_task task JOIN quarantine_disposition disposition ON disposition.quarantine_disposition_id=task.quarantine_disposition_id JOIN quarantine_case quarantine ON quarantine.quarantine_case_id=disposition.quarantine_case_id WHERE task.rework_task_id=?",
 	}
 	query, ok := queries[kind]
 	if !ok {

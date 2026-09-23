@@ -266,49 +266,60 @@ type QuarantineDispositionResponse struct {
 	InventoryMovementID     *string             `json:"inventory_movement_id"`
 	ResultingBalanceID      *string             `json:"resulting_balance_id"`
 	TargetLocationID        *string             `json:"target_location_id"`
+	TargetLocationCode      *string             `json:"target_location_code"`
 	CreatedAt               time.Time           `json:"created_at"`
 	ReworkTask              *ReworkTaskResponse `json:"rework_task,omitempty"`
 }
 
 type QuarantineCaseResponse struct {
-	ID                     string                          `json:"quarantine_case_id"`
-	ParentQuarantineCaseID *string                         `json:"parent_quarantine_case_id"`
-	InspectionID           string                          `json:"inspection_id"`
-	ReceiptInventoryID     string                          `json:"receipt_inventory_id"`
-	QuarantineBalanceID    string                          `json:"quarantine_balance_id"`
-	OwnerID                string                          `json:"owner_id"`
-	WarehouseID            string                          `json:"warehouse_id"`
-	ItemID                 string                          `json:"item_id"`
-	ItemCode               string                          `json:"item_code"`
-	LotNumber              string                          `json:"lot_number,omitempty"`
-	LocationCode           string                          `json:"location_code"`
-	StatusCode             string                          `json:"status_code"`
-	QuarantineQty          string                          `json:"quarantine_qty"`
-	DisposedQty            string                          `json:"disposed_qty"`
-	UOMID                  string                          `json:"uom_id"`
-	OpenedAt               time.Time                       `json:"opened_at"`
-	ClosedAt               *time.Time                      `json:"closed_at"`
-	Notes                  *string                         `json:"notes"`
-	VersionNo              int64                           `json:"version_no"`
-	Dispositions           []QuarantineDispositionResponse `json:"dispositions"`
+	QuarantineBalanceVersionNo *int64                          `json:"quarantine_balance_version_no,omitempty"`
+	AvailableQty               string                          `json:"available_qty,omitempty"`
+	BaseUOMCode                string                          `json:"base_uom_code,omitempty"`
+	IsIndivisible              *bool                           `json:"is_indivisible,omitempty"`
+	SerialNo                   *string                         `json:"serial_no,omitempty"`
+	HandlingUnitBarcode        *string                         `json:"handling_unit_barcode,omitempty"`
+	ID                         string                          `json:"quarantine_case_id"`
+	ParentQuarantineCaseID     *string                         `json:"parent_quarantine_case_id"`
+	InspectionID               string                          `json:"inspection_id"`
+	ReceiptInventoryID         string                          `json:"receipt_inventory_id"`
+	QuarantineBalanceID        string                          `json:"quarantine_balance_id"`
+	OwnerID                    string                          `json:"owner_id"`
+	WarehouseID                string                          `json:"warehouse_id"`
+	ItemID                     string                          `json:"item_id"`
+	ItemCode                   string                          `json:"item_code"`
+	LotNumber                  string                          `json:"lot_number,omitempty"`
+	LocationCode               string                          `json:"location_code"`
+	StatusCode                 string                          `json:"status_code"`
+	QuarantineQty              string                          `json:"quarantine_qty"`
+	DisposedQty                string                          `json:"disposed_qty"`
+	UOMID                      string                          `json:"uom_id"`
+	OpenedAt                   time.Time                       `json:"opened_at"`
+	ClosedAt                   *time.Time                      `json:"closed_at"`
+	Notes                      *string                         `json:"notes"`
+	VersionNo                  int64                           `json:"version_no"`
+	Dispositions               []QuarantineDispositionResponse `json:"dispositions"`
 }
 
 type InboundExceptionResponse struct {
-	ID                string    `json:"inbound_exception_id"`
-	OwnerID           string    `json:"owner_id"`
-	WarehouseID       string    `json:"warehouse_id"`
-	SourceDocumentID  string    `json:"source_document_id"`
-	SourceLineID      *string   `json:"source_line_id"`
-	ExceptionTypeCode string    `json:"exception_type_code"`
-	ExpectedQty       *string   `json:"expected_qty"`
-	ActualQty         *string   `json:"actual_qty"`
-	VarianceQty       *string   `json:"variance_qty"`
-	Notes             *string   `json:"notes"`
-	CreatedAt         time.Time `json:"created_at"`
-	CreatedBy         string    `json:"created_by"`
+	OwnerName            *string   `json:"owner_name"`
+	WarehouseName        *string   `json:"warehouse_name"`
+	CreatedByDisplayName *string   `json:"created_by_display_name"`
+	ID                   string    `json:"inbound_exception_id"`
+	OwnerID              string    `json:"owner_id"`
+	WarehouseID          string    `json:"warehouse_id"`
+	SourceDocumentID     string    `json:"source_document_id"`
+	SourceLineID         *string   `json:"source_line_id"`
+	ExceptionTypeCode    string    `json:"exception_type_code"`
+	ExpectedQty          *string   `json:"expected_qty"`
+	ActualQty            *string   `json:"actual_qty"`
+	VarianceQty          *string   `json:"variance_qty"`
+	Notes                *string   `json:"notes"`
+	CreatedAt            time.Time `json:"created_at"`
+	CreatedBy            string    `json:"created_by"`
 }
 
 type ReworkTaskResponse struct {
+	AssignedUsername        *string    `json:"assigned_username"`
 	ID                      string     `json:"rework_task_id"`
 	QuarantineDispositionID string     `json:"quarantine_disposition_id"`
 	QuarantineCaseID        string     `json:"quarantine_case_id"`

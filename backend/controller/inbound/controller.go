@@ -39,8 +39,11 @@ func fail(c *gin.Context, err error) {
 		utils.Failure(c, http.StatusInternalServerError, "unable to process inbound request", nil)
 	}
 }
-func listFilter(c *gin.Context) (repository.ListFilter, bool) {
+func listFilter(c *gin.Context, allowInspectionEligible ...bool) (repository.ListFilter, bool) {
 	allowed := map[string]bool{"owner_id": true, "warehouse_id": true, "status_code": true, "search": true, "page": true, "page_size": true}
+	if len(allowInspectionEligible) > 0 && allowInspectionEligible[0] {
+		allowed["inspection_eligible"] = true
+	}
 	for key, values := range c.Request.URL.Query() {
 		if !allowed[key] || len(values) != 1 {
 			utils.Failure(c, http.StatusBadRequest, "unknown or repeated query parameter: "+key, nil)
@@ -52,7 +55,13 @@ func listFilter(c *gin.Context) (repository.ListFilter, bool) {
 		utils.Failure(c, http.StatusBadRequest, err.Error(), nil)
 		return repository.ListFilter{}, false
 	}
-	return repository.ListFilter{OwnerID: strings.TrimSpace(c.Query("owner_id")), WarehouseID: strings.TrimSpace(c.Query("warehouse_id")), StatusCode: strings.TrimSpace(c.Query("status_code")), Search: strings.TrimSpace(c.Query("search")), Page: page, PageSize: size}, true
+	eligible := c.Query("inspection_eligible")
+	present := c.Request.URL.Query().Has("inspection_eligible")
+	if present && eligible != "true" && eligible != "false" {
+		utils.Failure(c, http.StatusBadRequest, "inspection_eligible must be true or false", nil)
+		return repository.ListFilter{}, false
+	}
+	return repository.ListFilter{OwnerID: strings.TrimSpace(c.Query("owner_id")), WarehouseID: strings.TrimSpace(c.Query("warehouse_id")), StatusCode: strings.TrimSpace(c.Query("status_code")), Search: strings.TrimSpace(c.Query("search")), Page: page, PageSize: size, InspectionEligible: eligible == "true"}, true
 }
 
 func (controller *Controller) CreatePurchaseOrder(c *gin.Context) {
@@ -252,7 +261,7 @@ func (controller *Controller) CreateReceipt(c *gin.Context) {
 	utils.Success(c, http.StatusCreated, "receipt opened", response)
 }
 func (controller *Controller) ListReceipts(c *gin.Context) {
-	filter, ok := listFilter(c)
+	filter, ok := listFilter(c, true)
 	if !ok {
 		return
 	}

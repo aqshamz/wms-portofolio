@@ -331,8 +331,25 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 		t.Fatalf("idempotent completion created %d movements", after)
 	}
 
+	eligibleFilter := repository.ListFilter{OwnerID: owner.ID, WarehouseID: warehouse.ID, Search: receipt.ID, Page: 1, PageSize: 1, InspectionEligible: true}
+	eligibleReceipts, err := service.ListReceipts(ctx, eligibleFilter)
+	inboundOK(t, err)
+	if eligibleReceipts.TotalItems != 1 || len(eligibleReceipts.Items) != 1 || eligibleReceipts.Items[0].ID != receipt.ID {
+		t.Fatalf("completed uninspected receipt should be eligible: %+v", eligibleReceipts)
+	}
 	inspection, err := service.CreateQualityInspection(ctx, dto.CreateQualityInspectionRequest{ReceiptInventoryID: receipt.Lines[0].Batches[0].ID}, account.ID)
 	inboundOK(t, err)
+	eligibleReceipts, err = service.ListReceipts(ctx, eligibleFilter)
+	inboundOK(t, err)
+	if eligibleReceipts.TotalItems != 0 || len(eligibleReceipts.Items) != 0 {
+		t.Fatalf("receipt with a pending inspection must leave the picker: %+v", eligibleReceipts)
+	}
+	eligibleFilter.InspectionEligible = false
+	historyReceipts, err := service.ListReceipts(ctx, eligibleFilter)
+	inboundOK(t, err)
+	if historyReceipts.TotalItems != 1 {
+		t.Fatal("inspection filtering must not hide receipt history")
+	}
 	if inspection.QualityStatusCode != "PENDING" || inspection.VersionNo != 1 {
 		t.Fatalf("unexpected open inspection: %+v", inspection)
 	}
@@ -377,19 +394,20 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	if task.SourceBalanceVersionNo == nil || task.BaseUOMCode != each.Code || task.AssignedDisplayName == nil {
 		t.Fatalf("putaway detail is missing scoped stock/unit/assignee metadata: %+v", task)
 	}
-	assignees, err := service.ListPutawayAssignees(ctx, task.ID, "", 1, 20)
+	// Isolate fixture workers: existing Superadmins legitimately qualify globally.
+	assignees, err := service.ListPutawayAssignees(ctx, task.ID, suffix, 1, 20)
 	inboundOK(t, err)
 	if assignees.TotalItems != 2 || len(assignees.Items) != 2 || assignees.Items[0].AccountID != account.ID || assignees.Items[1].AccountID != roleWorker.ID {
 		t.Fatalf("assignees must include only distinct scoped workers with active direct/role permission: %+v", assignees)
 	}
-	assigneePage, err := service.ListPutawayAssignees(ctx, task.ID, "", 2, 1)
+	assigneePage, err := service.ListPutawayAssignees(ctx, task.ID, suffix, 2, 1)
 	inboundOK(t, err)
 	if assigneePage.TotalItems != 2 || assigneePage.TotalPages != 2 || len(assigneePage.Items) != 1 || assigneePage.Items[0].AccountID != roleWorker.ID {
 		t.Fatalf("permission filtering must happen before pagination: %+v", assigneePage)
 	}
 	// Removing the role permission must immediately hide and reject the worker.
 	inboundOK(t, tx.Where("role_id=? AND permission_id=?", workerRole.ID, putawayPermission.ID).Delete(&authmodel.RolePermission{}).Error)
-	assignees, err = service.ListPutawayAssignees(ctx, task.ID, "", 1, 20)
+	assignees, err = service.ListPutawayAssignees(ctx, task.ID, suffix, 1, 20)
 	inboundOK(t, err)
 	if assignees.TotalItems != 1 || assignees.Items[0].AccountID != account.ID {
 		t.Fatalf("revoked role permission remained assignable: %+v", assignees)
@@ -398,7 +416,7 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	inboundWant(t, err, ErrInvalidInput)
 	inboundOK(t, tx.Create(&authmodel.RolePermission{RoleID: workerRole.ID, PermissionID: putawayPermission.ID}).Error)
 	inboundOK(t, tx.Model(&putawayPermission).Update("is_active", false).Error)
-	assignees, err = service.ListPutawayAssignees(ctx, task.ID, "", 1, 20)
+	assignees, err = service.ListPutawayAssignees(ctx, task.ID, suffix, 1, 20)
 	inboundOK(t, err)
 	if assignees.TotalItems != 0 {
 		t.Fatalf("inactive permission remained assignable: %+v", assignees)
@@ -474,23 +492,104 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	caseResult := *inspection.QuarantineCase
 	var quarantineBalance inventorymodel.InventoryBalance
 	inboundOK(t, tx.Where("balance_id=?", caseResult.QuarantineBalanceID).Take(&quarantineBalance).Error)
+	caseResult, err = service.GetQuarantineCase(ctx, caseResult.ID)
+	inboundOK(t, err)
+	if caseResult.QuarantineBalanceVersionNo == nil || *caseResult.QuarantineBalanceVersionNo != quarantineBalance.VersionNo || caseResult.AvailableQty != "2.000000" || caseResult.BaseUOMCode != each.Code || caseResult.IsIndivisible == nil || *caseResult.IsIndivisible {
+		t.Fatalf("quarantine detail is missing decision metadata: %+v", caseResult)
+	}
+	quarantineTargets, err := service.ListQuarantineTargets(ctx, caseResult.ID, "", 1, 1)
+	inboundOK(t, err)
+	if quarantineTargets.TotalItems != 2 || quarantineTargets.TotalPages != 2 || len(quarantineTargets.Items) != 1 || quarantineTargets.Items[0].LocationID != storage.ID {
+		t.Fatalf("quarantine target strategy/pagination mismatch: %+v", quarantineTargets)
+	}
+	quarantineTargets, err = service.ListQuarantineTargets(ctx, caseResult.ID, "", 2, 1)
+	inboundOK(t, err)
+	if len(quarantineTargets.Items) != 1 || quarantineTargets.Items[0].LocationID != storageTwo.ID {
+		t.Fatalf("quarantine target second page mismatch: %+v", quarantineTargets)
+	}
+	quarantineTargets, err = service.ListQuarantineTargets(ctx, caseResult.ID, "OTHER", 1, 20)
+	inboundOK(t, err)
+	if quarantineTargets.TotalItems != 0 {
+		t.Fatalf("quarantine lookup exposed an ineligible strategy zone: %+v", quarantineTargets)
+	}
+	_, err = service.CreateQuarantineDisposition(ctx, caseResult.ID, dto.CreateQuarantineDispositionRequest{ExpectedCaseVersion: caseResult.VersionNo, ExpectedBalanceVersion: quarantineBalance.VersionNo, DispositionTypeCode: "ACCEPT", DispositionQty: "1", BusinessDate: businessDate, DecidedAt: businessDate + "T11:00:00+07:00", TargetLocationID: &otherStorage.ID}, account.ID)
+	inboundWant(t, err, ErrInvalidInput)
+	// Verify direct acceptance and disposal, then restore the fixture for rework.
+	inboundOK(t, tx.SavePoint("quarantine_accept_check").Error)
+	acceptedCase, err := service.CreateQuarantineDisposition(ctx, caseResult.ID, dto.CreateQuarantineDispositionRequest{ExpectedCaseVersion: caseResult.VersionNo, ExpectedBalanceVersion: quarantineBalance.VersionNo, DispositionTypeCode: "ACCEPT", DispositionQty: "1", BusinessDate: businessDate, DecidedAt: businessDate + "T11:00:00+07:00", TargetLocationID: &storageTwo.ID}, account.ID)
+	inboundOK(t, err)
+	if acceptedCase.StatusCode != "PARTIALLY_DECIDED" || acceptedCase.AvailableQty != "1.000000" || len(acceptedCase.Dispositions) != 1 || acceptedCase.Dispositions[0].ResultingBalanceID == nil || acceptedCase.QuarantineBalanceVersionNo == nil {
+		t.Fatalf("acceptance did not immediately process stock: %+v", acceptedCase)
+	}
+	acceptedBalance, err := service.repositories.Inventory.Balance.Get(ctx, *acceptedCase.Dispositions[0].ResultingBalanceID)
+	if acceptedCase.Dispositions[0].TargetLocationCode == nil || *acceptedCase.Dispositions[0].TargetLocationCode != storageTwo.Code {
+		t.Fatalf("disposition history must expose the readable target location: %+v", acceptedCase.Dispositions[0])
+	}
+	inboundOK(t, err)
+	if acceptedBalance.InventoryStatusCode != "AVAILABLE" || acceptedBalance.LocationID != storageTwo.ID {
+		t.Fatalf("accepted stock was not moved directly to available storage: %+v", acceptedBalance)
+	}
+	_, err = service.CreateQuarantineDisposition(ctx, acceptedCase.ID, dto.CreateQuarantineDispositionRequest{ExpectedCaseVersion: acceptedCase.VersionNo, ExpectedBalanceVersion: quarantineBalance.VersionNo, DispositionTypeCode: "DISPOSE", DispositionQty: "1", BusinessDate: businessDate, DecidedAt: businessDate + "T11:00:00+07:00"}, account.ID)
+	inboundWant(t, err, repository.ErrConcurrentWrite)
+	disposedCase, err := service.CreateQuarantineDisposition(ctx, acceptedCase.ID, dto.CreateQuarantineDispositionRequest{ExpectedCaseVersion: acceptedCase.VersionNo, ExpectedBalanceVersion: *acceptedCase.QuarantineBalanceVersionNo, DispositionTypeCode: "DISPOSE", DispositionQty: "1", BusinessDate: businessDate, DecidedAt: businessDate + "T11:00:00+07:00"}, account.ID)
+	inboundOK(t, err)
+	if disposedCase.StatusCode != "CLOSED" || disposedCase.AvailableQty != "0.000000" || len(disposedCase.Dispositions) != 2 {
+		t.Fatalf("disposal did not close the fully processed case: %+v", disposedCase)
+	}
+	for _, disposition := range disposedCase.Dispositions {
+		if disposition.DispositionTypeCode == "DISPOSE" && disposition.TargetLocationCode != nil {
+			t.Fatal("disposal without a target must retain a null location code")
+		}
+	}
+	inboundOK(t, tx.RollbackTo("quarantine_accept_check").Error)
 	caseResult, err = service.CreateQuarantineDisposition(ctx, caseResult.ID, dto.CreateQuarantineDispositionRequest{ExpectedCaseVersion: caseResult.VersionNo, ExpectedBalanceVersion: quarantineBalance.VersionNo, DispositionTypeCode: "RETURN", DispositionQty: "1", BusinessDate: businessDate, DecidedAt: businessDate + "T11:00:00+07:00"}, account.ID)
 	inboundOK(t, err)
 	if caseResult.StatusCode != "PARTIALLY_DECIDED" || caseResult.DisposedQty != "1.000000" {
 		t.Fatalf("quarantine case was not partially decided: %+v", caseResult)
 	}
 	inboundOK(t, tx.Where("balance_id=?", caseResult.QuarantineBalanceID).Take(&quarantineBalance).Error)
+	if caseResult.QuarantineBalanceVersionNo == nil || *caseResult.QuarantineBalanceVersionNo != quarantineBalance.VersionNo || caseResult.AvailableQty != "1.000000" || len(caseResult.Dispositions) != 1 {
+		t.Fatalf("partial decision did not refresh the stock snapshot and history: %+v", caseResult)
+	}
 	caseResult, err = service.CreateQuarantineDisposition(ctx, caseResult.ID, dto.CreateQuarantineDispositionRequest{ExpectedCaseVersion: caseResult.VersionNo, ExpectedBalanceVersion: quarantineBalance.VersionNo, DispositionTypeCode: "REWORK", DispositionQty: "1", BusinessDate: businessDate, DecidedAt: businessDate + "T12:00:00+07:00", WorkInstructions: inboundPointer("Replace damaged seal and clean package")}, account.ID)
 	inboundOK(t, err)
 	if caseResult.StatusCode != "CLOSED" || caseResult.DisposedQty != "2.000000" || len(caseResult.Dispositions) != 2 {
 		t.Fatalf("quarantine case was not closed: %+v", caseResult)
 	}
+	if caseResult.AvailableQty != "0.000000" {
+		t.Fatalf("closed quarantine case still reports unprocessed stock: %+v", caseResult)
+	}
 	rework := caseResult.Dispositions[1].ReworkTask
 	if rework == nil {
 		t.Fatal("REWORK disposition did not create a rework task")
 	}
+	scopeOwner, scopeWarehouse, err = service.ResourceScope(ctx, "rework-tasks", rework.ID)
+	inboundOK(t, err)
+	if scopeOwner != owner.ID || scopeWarehouse != warehouse.ID {
+		t.Fatalf("rework scope must come from its linked quarantine case: %s %s", scopeOwner, scopeWarehouse)
+	}
+	allowed, err = service.CanAccess(ctx, account.ID, scopeOwner, scopeWarehouse)
+	inboundOK(t, err)
+	if !allowed {
+		t.Fatal("scoped worker was denied access to the linked rework task")
+	}
+	allowed, err = service.CanAccess(ctx, deniedAccount.ID, scopeOwner, scopeWarehouse)
+	inboundOK(t, err)
+	if allowed {
+		t.Fatal("unscoped worker was allowed access to the linked rework task")
+	}
+	_, _, err = service.ResourceScope(ctx, "rework-tasks", "RWK-MISSING-"+suffix)
+	inboundWant(t, err, repository.ErrNotFound)
 	reworkResult, err := service.StartReworkTask(ctx, rework.ID, dto.ReworkTransitionRequest{ExpectedVersion: rework.VersionNo}, account.ID)
 	inboundOK(t, err)
+	if reworkResult.AssignedUsername == nil || *reworkResult.AssignedUsername != account.Username {
+		t.Fatalf("rework detail must expose the assignee username: %+v", reworkResult)
+	}
+	reworkPage, err := service.ListReworkTasks(ctx, repository.ListFilter{OwnerID: owner.ID, WarehouseID: warehouse.ID, Search: rework.ID, Page: 1, PageSize: 10})
+	inboundOK(t, err)
+	if len(reworkPage.Items) != 1 || reworkPage.Items[0].AssignedUsername == nil || *reworkPage.Items[0].AssignedUsername != account.Username {
+		t.Fatalf("rework list must expose the assignee username: %+v", reworkPage)
+	}
 	reworkResult, err = service.CompleteReworkTask(ctx, reworkResult.ID, dto.CompleteReworkRequest{ExpectedVersion: reworkResult.VersionNo, ResultNotes: inboundPointer("Seal replaced")}, account.ID)
 	inboundOK(t, err)
 	if reworkResult.ReinspectionID == nil {
@@ -654,6 +753,16 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	inboundOK(t, err)
 	if exceptions.TotalItems < 11 {
 		t.Fatalf("expected lifecycle exception audit records, got %d", exceptions.TotalItems)
+	}
+	for _, record := range exceptions.Items {
+		if record.OwnerName == nil || *record.OwnerName != owner.Name || record.WarehouseName == nil || *record.WarehouseName != warehouse.Name || record.CreatedByDisplayName == nil || *record.CreatedByDisplayName != account.DisplayName {
+			t.Fatalf("exception list must expose readable names: %+v", record)
+		}
+	}
+	exceptionDetail, err := service.GetInboundException(ctx, exceptions.Items[0].ID)
+	inboundOK(t, err)
+	if exceptionDetail.OwnerName == nil || *exceptionDetail.OwnerName != owner.Name || exceptionDetail.WarehouseName == nil || *exceptionDetail.WarehouseName != warehouse.Name || exceptionDetail.CreatedByDisplayName == nil || *exceptionDetail.CreatedByDisplayName != account.DisplayName {
+		t.Fatalf("exception detail must expose readable names: %+v", exceptionDetail)
 	}
 
 	_, err = service.CreateInboundOrder(ctx, dto.CreateInboundOrderRequest{PurchaseOrderID: po.ID, BusinessDate: businessDate, Lines: []dto.InboundOrderLineRequest{{PurchaseOrderLineID: po.Lines[0].ID, ExpectedQty: "1"}}}, account.ID)

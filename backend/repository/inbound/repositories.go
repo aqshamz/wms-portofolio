@@ -36,6 +36,7 @@ func Error(err error) error {
 type ListFilter struct {
 	OwnerID, WarehouseID, StatusCode, Search string
 	Page, PageSize                           int
+	InspectionEligible                       bool
 }
 
 type Repositories struct {

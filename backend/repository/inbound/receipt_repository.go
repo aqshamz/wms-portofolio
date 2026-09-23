@@ -58,6 +58,26 @@ func (r *ReceiptRepository) List(ctx context.Context, filter ListFilter) ([]Rece
 	if filter.StatusCode != "" {
 		query = query.Where("status.code=?", filter.StatusCode)
 	}
+	if filter.InspectionEligible {
+		// Filter before counting/paging, and exclude batches with any inspection
+		// (including pending, cancelled, and replacement inspections).
+		query = query.Where("status.code='COMPLETED'").Where(`EXISTS (
+			SELECT 1 FROM receipt_line line
+			JOIN receipt_inventory batch ON batch.receipt_line_id=line.receipt_line_id
+			JOIN inventory_balance balance ON balance.balance_id=batch.initial_balance_id
+			JOIN inventory_status inventory_status ON inventory_status.inventory_status_id=balance.inventory_status_id
+			WHERE line.receipt_id=receipt.receipt_id
+			AND inventory_status.code='QC_PENDING'
+			AND balance.on_hand_qty-balance.reserved_qty >= batch.base_qty
+			AND (balance.on_hand_qty-balance.reserved_qty = batch.base_qty OR (
+				batch.handling_unit_id IS NULL AND NOT EXISTS (
+					SELECT 1 FROM receipt_line_serial serial WHERE serial.receipt_inventory_id=batch.receipt_inventory_id
+				)))
+			AND NOT EXISTS (
+				SELECT 1 FROM quality_inspection inspection WHERE inspection.receipt_inventory_id=batch.receipt_inventory_id
+			)
+		)`)
+	}
 	if filter.Search != "" {
 		like := "%" + filter.Search + "%"
 		query = query.Where("receipt.receipt_id ILIKE ? OR receipt.delivery_note_no ILIKE ? OR receipt.vehicle_number ILIKE ?", like, like, like)
