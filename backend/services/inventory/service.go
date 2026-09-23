@@ -18,11 +18,24 @@ import (
 )
 
 var ErrInvalidInput = errors.New("invalid inventory identity")
+var ErrForbidden = errors.New("inventory owner or warehouse access denied")
 
 type Service struct{ repositories *repository.Repositories }
 
 func NewService(r *repository.Repositories) *Service { return &Service{repositories: r} }
-func invalid(message string) error                   { return fmt.Errorf("%w: %s", ErrInvalidInput, message) }
+func (s *Service) CanAccess(ctx context.Context, accountID, ownerID, warehouseID string) (bool, error) {
+	if !uuid(accountID) || !uuid(ownerID) || !uuid(warehouseID) {
+		return false, invalid("owner_id and warehouse_id are required for inventory access")
+	}
+	return s.repositories.Scope.Allowed(ctx, accountID, ownerID, warehouseID)
+}
+func (s *Service) ResourceScope(ctx context.Context, resource, id string) (string, string, error) {
+	if !identityID(id, 160) {
+		return "", "", invalid("invalid inventory resource id")
+	}
+	return s.repositories.Scope.ResourceScope(ctx, resource, id)
+}
+func invalid(message string) error { return fmt.Errorf("%w: %s", ErrInvalidInput, message) }
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
 var identityPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)

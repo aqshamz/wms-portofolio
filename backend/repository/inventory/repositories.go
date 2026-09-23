@@ -100,6 +100,7 @@ type Repositories struct {
 	Movement       *InventoryMovementRepository
 	SerialState    *SerialInventoryRepository
 	MovementType   *MovementTypeRepository
+	Scope          *InventoryScopeRepository
 	Catalog        *master.CatalogRepositories
 	Owner          *master.OrganizationRepository
 	Warehouse      *master.WarehouseRepository
@@ -111,7 +112,7 @@ type Repositories struct {
 
 func NewRepositories(db *gorm.DB) *Repositories {
 	return &Repositories{db: db, Lot: NewInventoryLotRepository(db), Serial: NewSerialNumberRepository(db), HandlingUnit: NewHandlingUnitRepository(db),
-		Balance: NewInventoryBalanceRepository(db), Movement: NewInventoryMovementRepository(db), SerialState: NewSerialInventoryRepository(db), MovementType: NewMovementTypeRepository(db),
+		Balance: NewInventoryBalanceRepository(db), Movement: NewInventoryMovementRepository(db), SerialState: NewSerialInventoryRepository(db), MovementType: NewMovementTypeRepository(db), Scope: NewInventoryScopeRepository(db),
 		Catalog: master.NewCatalogRepositories(db), Owner: master.NewOrganizationRepository(db), Warehouse: master.NewWarehouseRepository(db),
 		WarehouseOwner: master.NewWarehouseOwnerRepository(db), Location: master.NewWarehouseLocationRepository(db),
 		Zone: master.NewWarehouseZoneRepository(db), LocationType: master.NewLocationTypeRepository(db)}

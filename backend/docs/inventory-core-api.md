@@ -81,8 +81,15 @@ upper bound is exclusive. Example: `2026-09-07T00:00:00+07:00`.
 All collection endpoints use `page=1`, `page_size=20` by default and return
 `data.items`, `total_items`, and `total_pages`. UUID filters are validated.
 Unknown/repeated parameters, invalid booleans and invalid timestamps return 400.
-The current session guards still do not enforce account owner/warehouse scopes;
-that authorization layer must be added before production multi-tenant exposure.
+
+Balance, movement and serial-state list requests require both `owner_id` and
+`warehouse_id`. The account
+must hold grants for both and the owner must have an active relationship with
+the warehouse. Detail authorization is derived from the stored balance or
+movement, so query parameters cannot override its scope. Unrestricted
+superadmins can read every balance, movement and serial state. Scope enforcement
+for the remaining inventory identity APIs is still pending and must be completed
+with their corresponding UI sections.
 
 ## Internal posting contract
 

@@ -43,6 +43,8 @@ func fail(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, service.ErrInvalidInput):
 		utils.Failure(c, 400, err.Error(), nil)
+	case errors.Is(err, service.ErrForbidden):
+		utils.Failure(c, 403, err.Error(), nil)
 	case errors.Is(err, repository.ErrConstraint):
 		utils.Failure(c, 400, "identity references invalid or incompatible data", nil)
 	case errors.Is(err, repository.ErrNotFound):
