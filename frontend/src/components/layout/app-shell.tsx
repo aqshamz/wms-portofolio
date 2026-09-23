@@ -62,6 +62,11 @@ interface InboundNavigationItem {
   href: string;
 }
 
+interface InventoryNavigationItem {
+  label: string;
+  href: string;
+}
+
 const navigation: NavigationGroup[] = [
   {
     label: "Workspace",
@@ -127,6 +132,12 @@ const inboundNavigation: InboundNavigationItem[] = [
   { label: "Quarantine", href: "/inbound/quarantine" },
   { label: "Exceptions", href: "/inbound/exceptions" },
   { label: "Rework tasks", href: "/inbound/rework" },
+];
+
+const inventoryNavigation: InventoryNavigationItem[] = [
+  { label: "Balances", href: "/inventory/balances" },
+  { label: "Movements", href: "/inventory/movements" },
+  { label: "Serial states", href: "/inventory/serials" },
 ];
 
 const masterDataNavigation: MasterDataNavigationItem[] = [
@@ -304,11 +315,15 @@ function SidebarNavigation({
   const [inboundOpen, setInboundOpen] = useState(
     pathname.startsWith("/inbound"),
   );
+  const [inventoryOpen, setInventoryOpen] = useState(
+    pathname.startsWith("/inventory"),
+  );
   const [masterDataOpen, setMasterDataOpen] = useState(
     pathname.startsWith("/master-data"),
   );
   const reportsActive = pathname.startsWith("/reports");
   const inboundActive = pathname.startsWith("/inbound");
+  const inventoryActive = pathname.startsWith("/inventory");
   const masterDataActive = pathname.startsWith("/master-data");
   const canViewMasterData = canAccess(MODULE_ACCESS.MASTER.READ);
   const canViewReports = canAccess(MODULE_ACCESS.REPORTING.READ);
@@ -427,6 +442,78 @@ function SidebarNavigation({
                             className="mt-1 ml-5 space-y-0.5 border-l border-white/10 pl-4"
                           >
                             {inboundNavigation.map((entry) => {
+                              const active = isSectionActive(
+                                pathname,
+                                entry.href,
+                              );
+                              return (
+                                <li key={entry.href}>
+                                  <Link
+                                    href={entry.href}
+                                    onClick={onNavigate}
+                                    aria-current={active ? "page" : undefined}
+                                    className={cn(
+                                      "flex min-h-9 items-center rounded-lg px-3 text-sm transition-colors",
+                                      active
+                                        ? "bg-white/10 font-semibold text-white"
+                                        : "text-slate-400 hover:bg-white/[0.06] hover:text-white",
+                                    )}
+                                  >
+                                    {entry.label}
+                                  </Link>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : null}
+                      </li>
+                    );
+                  }
+
+                  if (item.label === "Inventory") {
+                    return (
+                      <li key={item.label}>
+                        <button
+                          type="button"
+                          aria-expanded={!collapsed && inventoryOpen}
+                          aria-controls="inventory-navigation"
+                          aria-label={collapsed ? "Inventory" : undefined}
+                          title={collapsed ? "Inventory" : undefined}
+                          onClick={() => {
+                            if (collapsed) {
+                              onToggleCollapsed?.();
+                              setInventoryOpen(true);
+                            } else {
+                              setInventoryOpen((open) => !open);
+                            }
+                          }}
+                          className={cn(
+                            "flex min-h-11 w-full items-center gap-3 rounded-xl text-left text-sm font-medium transition-colors",
+                            collapsed ? "justify-center px-2" : "px-3",
+                            inventoryActive
+                              ? "bg-cyan-400 text-slate-950"
+                              : "text-slate-300 hover:bg-white/[0.07] hover:text-white",
+                          )}
+                        >
+                          <Boxes className="size-[18px] shrink-0" />
+                          <span className={collapsed ? "sr-only" : "flex-1"}>
+                            Inventory
+                          </span>
+                          {!collapsed ? (
+                            <ChevronDown
+                              className={cn(
+                                "size-4 transition-transform",
+                                inventoryOpen && "rotate-180",
+                              )}
+                            />
+                          ) : null}
+                        </button>
+                        {inventoryOpen && !collapsed ? (
+                          <ul
+                            id="inventory-navigation"
+                            className="mt-1 ml-5 space-y-0.5 border-l border-white/10 pl-4"
+                          >
+                            {inventoryNavigation.map((entry) => {
                               const active = isSectionActive(
                                 pathname,
                                 entry.href,
