@@ -3,6 +3,23 @@ import { describe, expect, it } from "vitest";
 import { receiptListPath } from "@/features/receipts/receipt-api";
 
 describe("receiptListPath", () => {
+  it("requests inspection eligibility only for the inspection picker", () => {
+    const filters = {
+      ownerId: "owner-1",
+      warehouseId: "wh-1",
+      status: "COMPLETED",
+      search: "",
+      page: 1,
+      pageSize: 10,
+    };
+    expect(receiptListPath({ ...filters, inspectionEligible: true })).toContain(
+      "inspection_eligible=true",
+    );
+    expect(receiptListPath(filters)).not.toContain("inspection_eligible");
+    expect(
+      receiptListPath({ ...filters, inspectionEligible: false }),
+    ).not.toContain("inspection_eligible");
+  });
   it("encodes operational scope and receipt filters", () => {
     expect(
       receiptListPath({

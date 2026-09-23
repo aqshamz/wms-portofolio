@@ -94,7 +94,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-async function setup() {
+function renderDialog() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
@@ -110,6 +110,11 @@ async function setup() {
       />
     </QueryClientProvider>,
   );
+  return { client, onCreated };
+}
+
+async function setup() {
+  const { client, onCreated } = renderDialog();
   const user = userEvent.setup();
   const select = screen.getByRole("combobox", { name: "Completed receipt" });
   await waitFor(() => expect(select).toBeEnabled());
@@ -124,17 +129,19 @@ async function setup() {
       "RCV-1",
     ),
   );
-  return { user, onCreated };
+  return { user, onCreated, client };
 }
 
 describe("starting quality inspection", () => {
   it("excludes inspected batches and uses base quantities when starting QC", async () => {
-    const { user, onCreated } = await setup();
+    const { user, onCreated, client } = await setup();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
     expect(listReceipts).toHaveBeenCalledWith(
       expect.objectContaining({
         ownerId: "owner-1",
         warehouseId: "wh-1",
         status: "COMPLETED",
+        inspectionEligible: true,
       }),
     );
     const select = screen.getByRole("combobox", { name: "Receipt batch" });
@@ -156,6 +163,81 @@ describe("starting quality inspection", () => {
       }),
     );
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith("QC-1"));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["receipts", "list"] });
+  });
+  it("explains an empty eligible receipt list without allowing inspection", async () => {
+    vi.mocked(listReceipts).mockResolvedValue({
+      items: [],
+      page: 1,
+      page_size: 10,
+      total_items: 0,
+      total_pages: 0,
+    });
+    renderDialog();
+    expect(
+      await screen.findByText(/No receipts with uninspected batches match/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Start inspection" }),
+    ).toBeDisabled();
+    expect(getReceipt).not.toHaveBeenCalled();
+  });
+  it("keeps an eligible selection when browsing another receipt page", async () => {
+    vi.mocked(listReceipts).mockImplementation(async (filters) => ({
+      items:
+        filters.page === 1 ? [receipt] : [{ ...receipt, receipt_id: "RCV-2" }],
+      page: filters.page,
+      page_size: 10,
+      total_items: 11,
+      total_pages: 2,
+    }));
+    const { user } = await setup();
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() =>
+      expect(listReceipts).toHaveBeenCalledWith(
+        expect.objectContaining({ page: 2, inspectionEligible: true }),
+      ),
+    );
+    const select = screen.getByRole("combobox", { name: "Completed receipt" });
+    select.focus();
+    await user.keyboard(" ");
+    expect(
+      await screen.findByRole("option", { name: /RCV-2/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /RCV-1/ })).toBeInTheDocument();
+    await user.keyboard("[Escape]");
+  });
+  it("does not reinsert a fully inspected selection across receipt searches", async () => {
+    vi.mocked(listReceiptInspections).mockResolvedValue([
+      { receipt_inventory_id: "batch-1" } as QualityInspection,
+      { receipt_inventory_id: "batch-2" } as QualityInspection,
+    ]);
+    const { user } = await setup();
+    expect(
+      await screen.findByText(/No uninspected batches remain/),
+    ).toBeInTheDocument();
+    vi.mocked(listReceipts).mockResolvedValue({
+      items: [],
+      page: 1,
+      page_size: 10,
+      total_items: 0,
+      total_pages: 0,
+    });
+    await user.type(
+      screen.getByLabelText("Search completed receipts"),
+      "other",
+    );
+    await screen.findByText(/No receipts with uninspected batches match/);
+    const select = screen.getByRole("combobox", { name: "Completed receipt" });
+    select.focus();
+    await user.keyboard(" ");
+    expect(
+      screen.queryByRole("option", { name: /RCV-1/ }),
+    ).not.toBeInTheDocument();
+    await user.keyboard("[Escape]");
+    expect(
+      screen.getByRole("button", { name: "Start inspection" }),
+    ).toBeDisabled();
   });
   it("does not allow starting QC for a receipt outside the selected scope", async () => {
     vi.mocked(getReceipt).mockResolvedValue({

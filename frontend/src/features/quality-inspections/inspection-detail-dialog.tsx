@@ -585,6 +585,12 @@ export function InspectionDetailDialog({
                   {inspection.base_uom_code} ·{" "}
                   {inspection.quarantine_case.status_code}
                 </p>
+                <Link
+                  className="mt-3 inline-block text-sm font-semibold text-cyan-900 underline"
+                  href={`/inbound/quarantine?${new URLSearchParams({ owner: inspection.owner_id, warehouse: inspection.warehouse_id, case: inspection.quarantine_case.quarantine_case_id })}`}
+                >
+                  Open quarantine case
+                </Link>
               </section>
             ) : null}
             {inspection.cancelled_at ? (

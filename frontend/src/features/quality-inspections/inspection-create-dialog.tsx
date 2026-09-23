@@ -44,6 +44,7 @@ export function InspectionCreateDialog({
     ownerId,
     warehouseId,
     status: "COMPLETED",
+    inspectionEligible: true,
     search,
     page,
     pageSize: 10,
@@ -96,13 +97,22 @@ export function InspectionCreateDialog({
     (batch) => batch.receipt_inventory_id === batchId,
   );
   const ready = inScope && existing.isSuccess && Boolean(selected);
-  const receiptOptions = (receipts.data?.items ?? []).map((row) => ({
-    value: row.receipt_id,
-    label: `${row.receipt_id} · ${row.delivery_note_no || row.business_date}`,
-  }));
+  const receiptOptions = (receipts.data?.items ?? [])
+    .filter(
+      (row) =>
+        row.receipt_id !== receiptId ||
+        !existing.isSuccess ||
+        !receipt.isSuccess ||
+        (inScope && batches.length > 0),
+    )
+    .map((row) => ({
+      value: row.receipt_id,
+      label: `${row.receipt_id} · ${row.delivery_note_no || row.business_date}`,
+    }));
   if (
     inScope &&
     receipt.data &&
+    (!existing.isSuccess || batches.length > 0) &&
     !receiptOptions.some((option) => option.value === receiptId)
   ) {
     receiptOptions.unshift({
@@ -122,7 +132,10 @@ export function InspectionCreateDialog({
       });
     },
     onSuccess: async (inspection) => {
-      await queryClient.invalidateQueries({ queryKey: inspectionKeys.all });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: inspectionKeys.all }),
+        queryClient.invalidateQueries({ queryKey: receiptKeys.lists() }),
+      ]);
       toast.success("Quality inspection opened.");
       onCreated(inspection.inspection_id);
     },
@@ -211,7 +224,8 @@ export function InspectionCreateDialog({
             ) : null}
             {receipts.isSuccess && !receipts.data.items.length ? (
               <p className="mt-2 text-sm text-slate-600">
-                No completed receipts match. Complete a receipt first.
+                No receipts with uninspected batches match. Pending inspections
+                and inspection history are available in the main list.
               </p>
             ) : null}
           </FormField>

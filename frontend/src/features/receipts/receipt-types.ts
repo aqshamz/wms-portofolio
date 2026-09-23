@@ -112,6 +112,7 @@ export interface UpdateReceiptRequest {
 }
 
 export interface ReceiptListFilters {
+  inspectionEligible?: boolean;
   ownerId: string;
   warehouseId: string;
   status: string;

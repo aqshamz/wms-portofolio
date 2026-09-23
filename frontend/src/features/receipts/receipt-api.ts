@@ -28,6 +28,7 @@ export function receiptListPath(filters: ReceiptListFilters) {
     page_size: String(filters.pageSize),
   });
   if (filters.status) query.set("status_code", filters.status);
+  if (filters.inspectionEligible) query.set("inspection_eligible", "true");
   if (filters.search.trim()) query.set("search", filters.search.trim());
   return `${basePath}?${query}`;
 }
