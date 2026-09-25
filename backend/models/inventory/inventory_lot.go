@@ -9,7 +9,6 @@ type InventoryLot struct {
 	LotNumber       string     `gorm:"column:lot_number;size:100;not null"`
 	ManufactureDate *time.Time `gorm:"column:manufacture_date;type:date"`
 	ExpiryDate      *time.Time `gorm:"column:expiry_date;type:date"`
-	QualityStatusID *string    `gorm:"column:quality_status_id;type:uuid"`
 	CreatedAt       time.Time  `gorm:"column:created_at;not null;default:clock_timestamp()"`
 	CreatedBy       *string    `gorm:"column:created_by;type:uuid"`
 }

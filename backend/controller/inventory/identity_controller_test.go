@@ -13,6 +13,7 @@ func TestStrictJSON(t *testing.T) {
 	for _, body := range []string{
 		"{}", "null", "{", `{"owner_id":"not-uuid","item_id":"not-uuid","lot_number":"A"}`,
 		`{"owner_id":"11111111-1111-4111-8111-111111111111","item_id":"11111111-1111-4111-8111-111111111111","lot_number":"A","lot_id":"injected"}`,
+		`{"owner_id":"11111111-1111-4111-8111-111111111111","item_id":"11111111-1111-4111-8111-111111111111","lot_number":"A","quality_status_id":"11111111-1111-4111-8111-111111111111"}`,
 		`{"owner_id":"11111111-1111-4111-8111-111111111111","item_id":"11111111-1111-4111-8111-111111111111","lot_number":"A"} {}`,
 		strings.Repeat(" ", (1<<20)+1),
 	} {

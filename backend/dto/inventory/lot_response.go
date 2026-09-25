@@ -9,7 +9,6 @@ type LotResponse struct {
 	LotNumber       string    `json:"lot_number"`
 	ManufactureDate *string   `json:"manufacture_date"`
 	ExpiryDate      *string   `json:"expiry_date"`
-	QualityStatusID *string   `json:"quality_status_id"`
 	CreatedAt       time.Time `json:"created_at"`
 	CreatedBy       *string   `json:"created_by"`
 }

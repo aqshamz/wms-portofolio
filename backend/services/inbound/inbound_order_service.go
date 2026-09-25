@@ -112,6 +112,10 @@ func (s *Service) CreateInboundOrder(ctx context.Context, request dto.CreateInbo
 			if !ok || new(big.Rat).Add(scheduledNumber, expectedNumber).Cmp(orderedNumber) > 0 {
 				return invalid("inbound expected quantity exceeds unscheduled purchase order quantity")
 			}
+			_, expectedBaseQty, err := inboundQuantitySnapshot(expectedNumber, poLine.UOMConversionToBase)
+			if err != nil {
+				return err
+			}
 			customerReference, err := optional(requestLine.CustomerLineReference, 100, "customer_line_reference")
 			if err != nil {
 				return err
@@ -122,7 +126,7 @@ func (s *Service) CreateInboundOrder(ctx context.Context, request dto.CreateInbo
 			}
 			lineNo := index + 1
 			poLineID := poLine.ID
-			line := model.InboundOrderLine{ID: fmt.Sprintf("%s-L%04d", documentID, lineNo), InboundID: documentID, PurchaseOrderLineID: &poLineID, LineNo: lineNo, ItemID: poLine.ItemID, ExpectedQty: expected, UOMID: poLine.UOMID, ExpectedLotNo: poLine.ExpectedLotNo, ExpectedExpiryDate: poLine.ExpectedExpiryDate, CustomerLineReference: customerReference, Notes: lineNotes, CreatedBy: actor}
+			line := model.InboundOrderLine{ID: fmt.Sprintf("%s-L%04d", documentID, lineNo), InboundID: documentID, PurchaseOrderLineID: &poLineID, LineNo: lineNo, ItemID: poLine.ItemID, ExpectedQty: expected, UOMConversionToBase: poLine.UOMConversionToBase, ExpectedBaseQty: expectedBaseQty, BaseUOMID: poLine.BaseUOMID, UOMID: poLine.UOMID, ExpectedLotNo: poLine.ExpectedLotNo, ExpectedExpiryDate: poLine.ExpectedExpiryDate, CustomerLineReference: customerReference, Notes: lineNotes, CreatedBy: actor}
 			if err := local.repositories.InboundOrderLine.Create(ctx, &line); err != nil {
 				return err
 			}

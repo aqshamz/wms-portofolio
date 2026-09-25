@@ -19,6 +19,13 @@ in one transaction. Putaway completion is atomic and safely retryable after the
 task is final. Quarantine dispositions are atomic and protected by case and
 balance versions, so a stale retry is rejected instead of being applied twice.
 
+All quantities after receipt completion are canonical base-unit quantities.
+The receipt batch's `base_qty` and `base_uom_id` become the inspection quantity;
+passed stock becomes the putaway task quantity, failed stock becomes the
+quarantine quantity, and rework/reinspection retain that same unit. Detail and
+list responses expose `base_uom_code` so clients do not need to infer the unit
+from the current Item-UOM configuration.
+
 Quarantine disposition responses include nullable `target_location_code` for
 readable history labels. `target_location_id` remains the internal identifier
 used by requests. Decisions without a target location return a null code.
@@ -304,6 +311,8 @@ GET /api/v1/inventory/movements?owner_id=<owner_uuid>&search=<document_id>&page=
 GET /api/v1/inventory/balances?owner_id=<owner_uuid>&warehouse_id=<warehouse_uuid>&item_id=<item_uuid>&include_zero=true&page=1&page_size=100
 ```
 
-The automated PostgreSQL workflow test covers partial QC, putaway, partial
+The automated PostgreSQL workflow test starts with a non-base receipt UOM and
+verifies its converted base quantity through partial QC, putaway, quarantine,
+rework, reinspection, and final available inventory. It also covers partial
 return, accepted quarantine stock, final case closure, retry safety, and total
 inventory conservation against both existing and fresh schemas.

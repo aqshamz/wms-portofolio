@@ -23,6 +23,12 @@ var ErrForbidden = errors.New("inventory owner or warehouse access denied")
 type Service struct{ repositories *repository.Repositories }
 
 func NewService(r *repository.Repositories) *Service { return &Service{repositories: r} }
+func (s *Service) CanAccessOwner(ctx context.Context, accountID, ownerID string) (bool, error) {
+	if !uuid(accountID) || !uuid(ownerID) {
+		return false, invalid("owner_id is required for inventory access")
+	}
+	return s.repositories.Scope.OwnerAllowed(ctx, accountID, ownerID)
+}
 func (s *Service) CanAccess(ctx context.Context, accountID, ownerID, warehouseID string) (bool, error) {
 	if !uuid(accountID) || !uuid(ownerID) || !uuid(warehouseID) {
 		return false, invalid("owner_id and warehouse_id are required for inventory access")
@@ -137,7 +143,7 @@ func dateText(v *time.Time) *string {
 	return &text
 }
 func mapLot(v model.InventoryLot) dto.LotResponse {
-	return dto.LotResponse{ID: v.ID, OwnerID: v.OwnerID, ItemID: v.ItemID, LotNumber: v.LotNumber, ManufactureDate: dateText(v.ManufactureDate), ExpiryDate: dateText(v.ExpiryDate), QualityStatusID: v.QualityStatusID, CreatedAt: v.CreatedAt, CreatedBy: v.CreatedBy}
+	return dto.LotResponse{ID: v.ID, OwnerID: v.OwnerID, ItemID: v.ItemID, LotNumber: v.LotNumber, ManufactureDate: dateText(v.ManufactureDate), ExpiryDate: dateText(v.ExpiryDate), CreatedAt: v.CreatedAt, CreatedBy: v.CreatedBy}
 }
 func mapSerial(v model.SerialNumber) dto.SerialResponse {
 	return dto.SerialResponse{ID: v.ID, OwnerID: v.OwnerID, ItemID: v.ItemID, SerialNo: v.SerialNo, CreatedAt: v.CreatedAt, CreatedBy: v.CreatedBy}

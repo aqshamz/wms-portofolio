@@ -10,8 +10,8 @@ import (
 
 type PurchaseOrderLineRow struct {
 	model.PurchaseOrderLine
-	ItemCode, ItemName, UOMCode       string
-	ScheduledQty, CompletedReceiptQty string
+	ItemCode, ItemName, UOMCode, BaseUOMCode                   string
+	ScheduledQty, CompletedReceiptQty, CompletedReceiptBaseQty string
 }
 
 type PurchaseOrderLineRepository struct{ db *gorm.DB }
@@ -59,10 +59,11 @@ func (r *PurchaseOrderLineRepository) Get(ctx context.Context, id string) (model
 }
 
 func purchaseOrderLineQuery(db *gorm.DB) *gorm.DB {
-	return db.Table("purchase_order_line line").Select(`line.*,item.code item_code,item.name item_name,uom.code uom_code,
- COALESCE((SELECT sum(CASE WHEN inbound_status.code='CANCELLED' THEN COALESCE((SELECT sum(cancelled_receipt_line.received_qty) FROM receipt_line cancelled_receipt_line JOIN receipt cancelled_receipt ON cancelled_receipt.receipt_id=cancelled_receipt_line.receipt_id JOIN document_status cancelled_receipt_status ON cancelled_receipt_status.status_id=cancelled_receipt.status_id WHERE cancelled_receipt_line.inbound_line_id=inbound_line.inbound_line_id AND cancelled_receipt_status.code='COMPLETED'),0) ELSE inbound_line.expected_qty END) FROM inbound_order_line inbound_line JOIN inbound_order inbound ON inbound.inbound_id=inbound_line.inbound_id JOIN document_status inbound_status ON inbound_status.status_id=inbound.status_id WHERE inbound_line.purchase_order_line_id=line.purchase_order_line_id),0) scheduled_qty,
- COALESCE((SELECT sum(receipt_line.received_qty) FROM inbound_order_line inbound_line JOIN receipt_line ON receipt_line.inbound_line_id=inbound_line.inbound_line_id JOIN receipt ON receipt.receipt_id=receipt_line.receipt_id JOIN document_status receipt_status ON receipt_status.status_id=receipt.status_id WHERE inbound_line.purchase_order_line_id=line.purchase_order_line_id AND receipt_status.code='COMPLETED'),0) completed_receipt_qty`).
-		Joins("JOIN item ON item.item_id=line.item_id").Joins("JOIN uom ON uom.uom_id=line.uom_id")
+	return db.Table("purchase_order_line line").Select(`line.*,item.code item_code,item.name item_name,uom.code uom_code,base_uom.code base_uom_code,
+ round(COALESCE((SELECT sum(CASE WHEN inbound_status.code='CANCELLED' THEN COALESCE((SELECT sum(cancelled_receipt_line.received_base_qty) FROM receipt_line cancelled_receipt_line JOIN receipt cancelled_receipt ON cancelled_receipt.receipt_id=cancelled_receipt_line.receipt_id JOIN document_status cancelled_receipt_status ON cancelled_receipt_status.status_id=cancelled_receipt.status_id WHERE cancelled_receipt_line.inbound_line_id=inbound_line.inbound_line_id AND cancelled_receipt_status.code='COMPLETED'),0)/line.uom_conversion_to_base ELSE inbound_line.expected_qty END) FROM inbound_order_line inbound_line JOIN inbound_order inbound ON inbound.inbound_id=inbound_line.inbound_id JOIN document_status inbound_status ON inbound_status.status_id=inbound.status_id WHERE inbound_line.purchase_order_line_id=line.purchase_order_line_id),0),6)::text scheduled_qty,
+ round(COALESCE((SELECT sum(receipt_line.received_base_qty) FROM inbound_order_line inbound_line JOIN receipt_line ON receipt_line.inbound_line_id=inbound_line.inbound_line_id JOIN receipt ON receipt.receipt_id=receipt_line.receipt_id JOIN document_status receipt_status ON receipt_status.status_id=receipt.status_id WHERE inbound_line.purchase_order_line_id=line.purchase_order_line_id AND receipt_status.code='COMPLETED'),0)/line.uom_conversion_to_base,6)::text completed_receipt_qty,
+ round(COALESCE((SELECT sum(receipt_line.received_base_qty) FROM inbound_order_line inbound_line JOIN receipt_line ON receipt_line.inbound_line_id=inbound_line.inbound_line_id JOIN receipt ON receipt.receipt_id=receipt_line.receipt_id JOIN document_status receipt_status ON receipt_status.status_id=receipt.status_id WHERE inbound_line.purchase_order_line_id=line.purchase_order_line_id AND receipt_status.code='COMPLETED'),0),6)::text completed_receipt_base_qty`).
+		Joins("JOIN item ON item.item_id=line.item_id").Joins("JOIN uom ON uom.uom_id=line.uom_id").Joins("JOIN uom base_uom ON base_uom.uom_id=line.base_uom_id")
 }
 
 func (r *PurchaseOrderLineRepository) List(ctx context.Context, purchaseOrderID string) ([]PurchaseOrderLineRow, error) {

@@ -116,6 +116,7 @@ type ReceiptBatchRequest struct {
 
 type ReceiptLineRequest struct {
 	InboundLineID     string                `json:"inbound_line_id" binding:"required,max=150"`
+	UOMID             *string               `json:"uom_id" binding:"omitempty,uuid"`
 	ReceivedQty       string                `json:"received_qty" binding:"required,max=30"`
 	RejectedQty       string                `json:"rejected_qty" binding:"required,max=30"`
 	Batches           []ReceiptBatchRequest `json:"batches" binding:"max=1000,dive"`

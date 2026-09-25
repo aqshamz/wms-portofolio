@@ -19,12 +19,37 @@ putaway, and negative outcomes.
 - A purchase order belongs to one owner, supplier, and warehouse.
 - An inbound order is the ASN/expected-arrival document created from selected
   purchase-order lines. Multiple inbound orders may split a PO quantity.
+- Every purchase-order, inbound-order, and receipt line freezes its
+  `uom_conversion_to_base`, calculated base quantity, `base_uom_id`, and
+  `base_uom_code`. Later Item-UOM configuration changes therefore cannot alter
+  historical document quantities. Inbound lines inherit the PO snapshot.
+  Receipt lines snapshot the active receiving UOM selected by `uom_id`; when
+  omitted on create, it defaults to the inbound line UOM. On draft update,
+  omitting it or sending the same UOM preserves the receipt's saved conversion.
 - A receipt can split an accepted line across lots, handling units, serials,
   and receiving/QC locations.
+- A selected handling unit must belong to the receipt owner and warehouse, be
+  open, empty, root-level, and currently located at the batch's receiving
+  location. One HU can be used by only one batch in the receipt. The web UI
+  presents eligible HUs by barcode; clients still submit the internal
+  `handling_unit_id`.
+- A serial-controlled item must be received in its base UOM and requires one
+  batch per accepted base unit and one
+  non-empty serial number on each batch. Serial numbers must be unique for the
+  item within the receipt. A pre-registered identity may be used if it has
+  never entered inventory, but an identity already linked to another receipt
+  or inventory movement cannot be received again. Editing an unposted `OPEN`
+  receipt may retain serials already linked to that same receipt. Fully
+  rejected quantity creates no batch and therefore requires no serial number.
 - `received_qty` is the physical quantity counted at the dock.
   `rejected_qty` is the portion rejected immediately at the dock.
 - Accepted quantity is `received_qty - rejected_qty`. Batch source quantities
-  must equal accepted quantity exactly.
+  use the receipt line UOM and must equal accepted quantity exactly.
+- Over/under tolerance and document completion are evaluated in base units,
+  so receipts recorded in EA, BOX, or another receiving UOM contribute to the
+  same physical total. `completed_receipt_qty` remains normalized to the
+  purchase/inbound line UOM; `completed_receipt_base_qty` exposes the canonical
+  base total.
 - A fully rejected line uses `batches: []` and creates no inventory.
 - Creating an `OPEN` receipt does not change inventory. Completing it performs
   all RECEIVE postings and status transitions in one database transaction.
@@ -165,7 +190,9 @@ POST /api/v1/inbound/purchase-orders
 ```
 
 The study 250 g item converts `1 BOX = 24 EA`; two boxes will eventually post
-48 EA. Save `data.purchase_order_id`, `data.version_no`, and
+48 EA. The returned line records `uom_conversion_to_base: "24.000000"`,
+`ordered_base_qty: "48.000000"`, and the EA base-UOM identity. Save
+`data.purchase_order_id`, `data.version_no`, and
 `data.lines[0].purchase_order_line_id`.
 
 ### 2. Approve the PO
@@ -229,12 +256,14 @@ POST /api/v1/inbound/receipts
   "lines": [
     {
       "inbound_line_id": "<inbound_line_id>",
+      "uom_id": "<box_uom_uuid>",
       "received_qty": "2",
       "rejected_qty": "1",
       "batches": [
         {
           "source_qty": "1",
           "received_location_id": "<STUDY_RCV_01_uuid>",
+          "handling_unit_id": "<optional_empty_root_hu_id>",
           "lot": {
             "lot_number": "STUDY-INB-LOT-001",
             "manufacture_date": "2026-08-01",
@@ -270,6 +299,8 @@ The result should contain:
 - a non-null batch `initial_balance_id`;
 - one `RECEIVE` movement for accepted base quantity;
 - a balance at `STUDY_RCV_01` with status `QC_PENDING`;
+- when `handling_unit_id` was supplied, that movement and balance are attached
+  to the selected HU;
 - inbound and PO progress changed to `RECEIVED` when their full physical
   expected quantity has been accounted for.
 

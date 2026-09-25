@@ -17,8 +17,13 @@ type PurchaseOrderLineResponse struct {
 	ItemCode                 string  `json:"item_code"`
 	ItemName                 string  `json:"item_name"`
 	OrderedQty               string  `json:"ordered_qty"`
+	UOMConversionToBase      string  `json:"uom_conversion_to_base"`
+	OrderedBaseQty           string  `json:"ordered_base_qty"`
+	BaseUOMID                string  `json:"base_uom_id"`
+	BaseUOMCode              string  `json:"base_uom_code"`
 	ScheduledQty             string  `json:"scheduled_qty"`
 	CompletedReceiptQty      string  `json:"completed_receipt_qty"`
+	CompletedReceiptBaseQty  string  `json:"completed_receipt_base_qty"`
 	OverReceiptTolerancePct  string  `json:"over_receipt_tolerance_pct"`
 	UnderReceiptTolerancePct string  `json:"under_receipt_tolerance_pct"`
 	UOMID                    string  `json:"uom_id"`
@@ -52,20 +57,25 @@ type PurchaseOrderResponse struct {
 }
 
 type InboundOrderLineResponse struct {
-	ID                    string  `json:"inbound_line_id"`
-	PurchaseOrderLineID   *string `json:"purchase_order_line_id"`
-	LineNo                int     `json:"line_no"`
-	ItemID                string  `json:"item_id"`
-	ItemCode              string  `json:"item_code"`
-	ItemName              string  `json:"item_name"`
-	ExpectedQty           string  `json:"expected_qty"`
-	CompletedReceiptQty   string  `json:"completed_receipt_qty"`
-	UOMID                 string  `json:"uom_id"`
-	UOMCode               string  `json:"uom_code"`
-	ExpectedLotNo         *string `json:"expected_lot_no"`
-	ExpectedExpiryDate    *string `json:"expected_expiry_date"`
-	CustomerLineReference *string `json:"customer_line_reference"`
-	Notes                 *string `json:"notes"`
+	ID                      string  `json:"inbound_line_id"`
+	PurchaseOrderLineID     *string `json:"purchase_order_line_id"`
+	LineNo                  int     `json:"line_no"`
+	ItemID                  string  `json:"item_id"`
+	ItemCode                string  `json:"item_code"`
+	ItemName                string  `json:"item_name"`
+	ExpectedQty             string  `json:"expected_qty"`
+	UOMConversionToBase     string  `json:"uom_conversion_to_base"`
+	ExpectedBaseQty         string  `json:"expected_base_qty"`
+	BaseUOMID               string  `json:"base_uom_id"`
+	BaseUOMCode             string  `json:"base_uom_code"`
+	CompletedReceiptQty     string  `json:"completed_receipt_qty"`
+	CompletedReceiptBaseQty string  `json:"completed_receipt_base_qty"`
+	UOMID                   string  `json:"uom_id"`
+	UOMCode                 string  `json:"uom_code"`
+	ExpectedLotNo           *string `json:"expected_lot_no"`
+	ExpectedExpiryDate      *string `json:"expected_expiry_date"`
+	CustomerLineReference   *string `json:"customer_line_reference"`
+	Notes                   *string `json:"notes"`
 }
 
 type InboundOrderResponse struct {
@@ -114,21 +124,26 @@ type ReceiptBatchResponse struct {
 }
 
 type ReceiptLineResponse struct {
-	ID                string                 `json:"receipt_line_id"`
-	InboundLineID     *string                `json:"inbound_line_id"`
-	LineNo            int                    `json:"line_no"`
-	ItemID            string                 `json:"item_id"`
-	ItemCode          string                 `json:"item_code"`
-	ItemName          string                 `json:"item_name"`
-	ReceivedQty       string                 `json:"received_qty"`
-	RejectedQty       string                 `json:"rejected_qty"`
-	ExceptionNotes    *string                `json:"exception_notes"`
-	ExceptionTypeCode *string                `json:"exception_type_code"`
-	AcceptedQty       string                 `json:"accepted_qty"`
-	BatchedQty        string                 `json:"batched_qty"`
-	UOMID             string                 `json:"uom_id"`
-	UOMCode           string                 `json:"uom_code"`
-	Batches           []ReceiptBatchResponse `json:"batches"`
+	ID                  string                 `json:"receipt_line_id"`
+	InboundLineID       *string                `json:"inbound_line_id"`
+	LineNo              int                    `json:"line_no"`
+	ItemID              string                 `json:"item_id"`
+	ItemCode            string                 `json:"item_code"`
+	ItemName            string                 `json:"item_name"`
+	ReceivedQty         string                 `json:"received_qty"`
+	RejectedQty         string                 `json:"rejected_qty"`
+	UOMConversionToBase string                 `json:"uom_conversion_to_base"`
+	ReceivedBaseQty     string                 `json:"received_base_qty"`
+	RejectedBaseQty     string                 `json:"rejected_base_qty"`
+	BaseUOMID           string                 `json:"base_uom_id"`
+	BaseUOMCode         string                 `json:"base_uom_code"`
+	ExceptionNotes      *string                `json:"exception_notes"`
+	ExceptionTypeCode   *string                `json:"exception_type_code"`
+	AcceptedQty         string                 `json:"accepted_qty"`
+	BatchedQty          string                 `json:"batched_qty"`
+	UOMID               string                 `json:"uom_id"`
+	UOMCode             string                 `json:"uom_code"`
+	Batches             []ReceiptBatchResponse `json:"batches"`
 }
 
 type ReceiptResponse struct {
@@ -333,6 +348,7 @@ type ReworkTaskResponse struct {
 	PlannedQty              string     `json:"planned_qty"`
 	CompletedQty            string     `json:"completed_qty"`
 	UOMID                   string     `json:"uom_id"`
+	BaseUOMCode             string     `json:"base_uom_code"`
 	AssignedTo              *string    `json:"assigned_to"`
 	WorkInstructions        *string    `json:"work_instructions"`
 	ResultNotes             *string    `json:"result_notes"`

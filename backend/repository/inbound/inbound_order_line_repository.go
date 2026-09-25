@@ -10,8 +10,8 @@ import (
 
 type InboundOrderLineRow struct {
 	model.InboundOrderLine
-	ItemCode, ItemName, UOMCode string
-	CompletedReceiptQty         string
+	ItemCode, ItemName, UOMCode, BaseUOMCode     string
+	CompletedReceiptQty, CompletedReceiptBaseQty string
 }
 
 type InboundOrderLineRepository struct{ db *gorm.DB }
@@ -53,9 +53,10 @@ func (r *InboundOrderLineRepository) Get(ctx context.Context, id string) (model.
 	return value, Error(err)
 }
 func inboundOrderLineQuery(db *gorm.DB) *gorm.DB {
-	return db.Table("inbound_order_line line").Select(`line.*,item.code item_code,item.name item_name,uom.code uom_code,
- COALESCE((SELECT sum(receipt_line.received_qty) FROM receipt_line JOIN receipt ON receipt.receipt_id=receipt_line.receipt_id JOIN document_status receipt_status ON receipt_status.status_id=receipt.status_id WHERE receipt_line.inbound_line_id=line.inbound_line_id AND receipt_status.code='COMPLETED'),0) completed_receipt_qty`).
-		Joins("JOIN item ON item.item_id=line.item_id").Joins("JOIN uom ON uom.uom_id=line.uom_id")
+	return db.Table("inbound_order_line line").Select(`line.*,item.code item_code,item.name item_name,uom.code uom_code,base_uom.code base_uom_code,
+ round(COALESCE((SELECT sum(receipt_line.received_base_qty) FROM receipt_line JOIN receipt ON receipt.receipt_id=receipt_line.receipt_id JOIN document_status receipt_status ON receipt_status.status_id=receipt.status_id WHERE receipt_line.inbound_line_id=line.inbound_line_id AND receipt_status.code='COMPLETED'),0)/line.uom_conversion_to_base,6)::text completed_receipt_qty,
+ round(COALESCE((SELECT sum(receipt_line.received_base_qty) FROM receipt_line JOIN receipt ON receipt.receipt_id=receipt_line.receipt_id JOIN document_status receipt_status ON receipt_status.status_id=receipt.status_id WHERE receipt_line.inbound_line_id=line.inbound_line_id AND receipt_status.code='COMPLETED'),0),6)::text completed_receipt_base_qty`).
+		Joins("JOIN item ON item.item_id=line.item_id").Joins("JOIN uom ON uom.uom_id=line.uom_id").Joins("JOIN uom base_uom ON base_uom.uom_id=line.base_uom_id")
 }
 func (r *InboundOrderLineRepository) List(ctx context.Context, inboundID string) ([]InboundOrderLineRow, error) {
 	rows := make([]InboundOrderLineRow, 0)
@@ -69,12 +70,12 @@ func (r *InboundOrderLineRepository) Count(ctx context.Context, inboundID string
 }
 func (r *InboundOrderLineRepository) ScheduledForPurchaseOrderLine(ctx context.Context, purchaseOrderLineID string) (string, error) {
 	var total string
-	err := r.db.WithContext(ctx).Table("inbound_order_line line").Select(`COALESCE(sum(CASE WHEN status.code='CANCELLED' THEN COALESCE((SELECT sum(receipt_line.received_qty) FROM receipt_line JOIN receipt ON receipt.receipt_id=receipt_line.receipt_id JOIN document_status receipt_status ON receipt_status.status_id=receipt.status_id WHERE receipt_line.inbound_line_id=line.inbound_line_id AND receipt_status.code='COMPLETED'),0) ELSE line.expected_qty END),0)::text`).Joins("JOIN inbound_order inbound ON inbound.inbound_id=line.inbound_id").Joins("JOIN document_status status ON status.status_id=inbound.status_id").Where("line.purchase_order_line_id=?", purchaseOrderLineID).Scan(&total).Error
+	err := r.db.WithContext(ctx).Table("inbound_order_line line").Select(`round(COALESCE(sum(CASE WHEN status.code='CANCELLED' THEN COALESCE((SELECT sum(receipt_line.received_base_qty) FROM receipt_line JOIN receipt ON receipt.receipt_id=receipt_line.receipt_id JOIN document_status receipt_status ON receipt_status.status_id=receipt.status_id WHERE receipt_line.inbound_line_id=line.inbound_line_id AND receipt_status.code='COMPLETED'),0)/line.uom_conversion_to_base ELSE line.expected_qty END),0),6)::text`).Joins("JOIN inbound_order inbound ON inbound.inbound_id=line.inbound_id").Joins("JOIN document_status status ON status.status_id=inbound.status_id").Where("line.purchase_order_line_id=?", purchaseOrderLineID).Scan(&total).Error
 	return total, Error(err)
 }
 
 func (r *InboundOrderLineRepository) ScheduledExcept(ctx context.Context, purchaseOrderLineID, excludedInboundLineID string) (string, error) {
 	var total string
-	err := r.db.WithContext(ctx).Table("inbound_order_line line").Select(`COALESCE(sum(CASE WHEN status.code='CANCELLED' THEN COALESCE((SELECT sum(receipt_line.received_qty) FROM receipt_line JOIN receipt ON receipt.receipt_id=receipt_line.receipt_id JOIN document_status receipt_status ON receipt_status.status_id=receipt.status_id WHERE receipt_line.inbound_line_id=line.inbound_line_id AND receipt_status.code='COMPLETED'),0) ELSE line.expected_qty END),0)::text`).Joins("JOIN inbound_order inbound ON inbound.inbound_id=line.inbound_id").Joins("JOIN document_status status ON status.status_id=inbound.status_id").Where("line.purchase_order_line_id=? AND line.inbound_line_id<>?", purchaseOrderLineID, excludedInboundLineID).Scan(&total).Error
+	err := r.db.WithContext(ctx).Table("inbound_order_line line").Select(`round(COALESCE(sum(CASE WHEN status.code='CANCELLED' THEN COALESCE((SELECT sum(receipt_line.received_base_qty) FROM receipt_line JOIN receipt ON receipt.receipt_id=receipt_line.receipt_id JOIN document_status receipt_status ON receipt_status.status_id=receipt.status_id WHERE receipt_line.inbound_line_id=line.inbound_line_id AND receipt_status.code='COMPLETED'),0)/line.uom_conversion_to_base ELSE line.expected_qty END),0),6)::text`).Joins("JOIN inbound_order inbound ON inbound.inbound_id=line.inbound_id").Joins("JOIN document_status status ON status.status_id=inbound.status_id").Where("line.purchase_order_line_id=? AND line.inbound_line_id<>?", purchaseOrderLineID, excludedInboundLineID).Scan(&total).Error
 	return total, Error(err)
 }

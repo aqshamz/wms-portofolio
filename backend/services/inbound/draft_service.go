@@ -63,7 +63,7 @@ func (s *Service) validatePurchaseOrderLine(ctx context.Context, local *Service,
 	if !inboundUUID(request.ItemID) || !inboundUUID(request.UOMID) {
 		return model.PurchaseOrderLine{}, invalid("line item_id and uom_id must be UUIDs")
 	}
-	quantity, _, err := inboundQuantity(request.OrderedQty, "ordered_qty", false)
+	quantity, quantityNumber, err := inboundQuantity(request.OrderedQty, "ordered_qty", false)
 	if err != nil {
 		return model.PurchaseOrderLine{}, err
 	}
@@ -83,6 +83,10 @@ func (s *Service) validatePurchaseOrderLine(ctx context.Context, local *Service,
 	if err != nil || !unit.IsActive || !unit.IsReceivingUOM {
 		return model.PurchaseOrderLine{}, invalid("line UOM is not an active receiving UOM for the item")
 	}
+	conversion, orderedBaseQty, err := inboundQuantitySnapshot(quantityNumber, unit.ConversionToBase)
+	if err != nil {
+		return model.PurchaseOrderLine{}, err
+	}
 	expiry, err := inboundOptionalDate(request.ExpectedExpiryDate, "expected_expiry_date")
 	if err != nil {
 		return model.PurchaseOrderLine{}, err
@@ -99,7 +103,7 @@ func (s *Service) validatePurchaseOrderLine(ctx context.Context, local *Service,
 	if err != nil {
 		return model.PurchaseOrderLine{}, err
 	}
-	return model.PurchaseOrderLine{OwnerID: ownerID, ItemID: item.ID, OrderedQty: quantity, OverReceiptTolerancePct: over, UnderReceiptTolerancePct: under, UOMID: unit.UOMID, VendorItemCode: vendorCode, ExpectedLotNo: lot, ExpectedExpiryDate: expiry, Notes: notes}, nil
+	return model.PurchaseOrderLine{OwnerID: ownerID, ItemID: item.ID, OrderedQty: quantity, UOMConversionToBase: conversion, OrderedBaseQty: orderedBaseQty, BaseUOMID: item.BaseUOMID, OverReceiptTolerancePct: over, UnderReceiptTolerancePct: under, UOMID: unit.UOMID, VendorItemCode: vendorCode, ExpectedLotNo: lot, ExpectedExpiryDate: expiry, Notes: notes}, nil
 }
 
 func (s *Service) AddPurchaseOrderLine(ctx context.Context, id string, request dto.AddPurchaseOrderLineRequest, actor string) (dto.PurchaseOrderResponse, error) {
@@ -145,7 +149,7 @@ func (s *Service) UpdatePurchaseOrderLine(ctx context.Context, id, lineID string
 	if !inboundID(id, 120) || !inboundID(lineID, 150) || !inboundUUID(actor) || request.ExpectedVersion < 1 {
 		return dto.PurchaseOrderResponse{}, invalid("invalid draft purchase-order line update")
 	}
-	qty, _, err := inboundQuantity(request.OrderedQty, "ordered_qty", false)
+	qty, qtyNumber, err := inboundQuantity(request.OrderedQty, "ordered_qty", false)
 	if err != nil {
 		return dto.PurchaseOrderResponse{}, err
 	}
@@ -188,7 +192,15 @@ func (s *Service) UpdatePurchaseOrderLine(ctx context.Context, id, lineID string
 		if header.VersionNo != request.ExpectedVersion {
 			return repository.ErrConcurrentWrite
 		}
-		if err := local.repositories.PurchaseOrderLine.UpdateDraft(ctx, lineID, id, map[string]interface{}{"ordered_qty": qty, "over_receipt_tolerance_pct": over, "under_receipt_tolerance_pct": under, "vendor_item_code": vendorCode, "expected_lot_no": lot, "expected_expiry_date": expiry, "notes": notes}); err != nil {
+		line, err := local.repositories.PurchaseOrderLine.Get(ctx, lineID)
+		if err != nil || line.PurchaseOrderID != id {
+			return repository.ErrNotFound
+		}
+		_, orderedBaseQty, err := inboundQuantitySnapshot(qtyNumber, line.UOMConversionToBase)
+		if err != nil {
+			return err
+		}
+		if err := local.repositories.PurchaseOrderLine.UpdateDraft(ctx, lineID, id, map[string]interface{}{"ordered_qty": qty, "ordered_base_qty": orderedBaseQty, "over_receipt_tolerance_pct": over, "under_receipt_tolerance_pct": under, "vendor_item_code": vendorCode, "expected_lot_no": lot, "expected_expiry_date": expiry, "notes": notes}); err != nil {
 			return err
 		}
 		return local.repositories.PurchaseOrder.UpdateDraft(ctx, id, actor, request.ExpectedVersion, map[string]interface{}{})
@@ -279,14 +291,14 @@ func (s *Service) UpdateInboundOrder(ctx context.Context, id string, request dto
 	return s.GetInboundOrder(ctx, id)
 }
 
-func validateInboundExpectedQty(ctx context.Context, local *Service, poLine model.PurchaseOrderLine, excludedLineID, requested string) (string, error) {
+func validateInboundExpectedQty(ctx context.Context, local *Service, poLine model.PurchaseOrderLine, excludedLineID, requested string) (string, string, error) {
 	expected, expectedNumber, err := inboundQuantity(requested, "expected_qty", false)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	ordered, ok := new(big.Rat).SetString(poLine.OrderedQty)
 	if !ok {
-		return "", state("stored purchase order quantity is invalid")
+		return "", "", state("stored purchase order quantity is invalid")
 	}
 	var scheduledText string
 	if excludedLineID == "" {
@@ -295,13 +307,14 @@ func validateInboundExpectedQty(ctx context.Context, local *Service, poLine mode
 		scheduledText, err = local.repositories.InboundOrderLine.ScheduledExcept(ctx, poLine.ID, excludedLineID)
 	}
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	scheduled, ok := new(big.Rat).SetString(scheduledText)
 	if !ok || new(big.Rat).Add(scheduled, expectedNumber).Cmp(ordered) > 0 {
-		return "", invalid("inbound expected quantity exceeds unscheduled purchase order quantity")
+		return "", "", invalid("inbound expected quantity exceeds unscheduled purchase order quantity")
 	}
-	return expected, nil
+	_, expectedBaseQty, err := inboundQuantitySnapshot(expectedNumber, poLine.UOMConversionToBase)
+	return expected, expectedBaseQty, err
 }
 
 func (s *Service) AddInboundOrderLine(ctx context.Context, id string, request dto.AddInboundOrderLineRequest, actor string) (dto.InboundOrderResponse, error) {
@@ -340,7 +353,7 @@ func (s *Service) AddInboundOrderLine(ctx context.Context, id string, request dt
 				return invalid("purchase_order_line_id is repeated")
 			}
 		}
-		expected, err := validateInboundExpectedQty(ctx, local, poLine, "", request.ExpectedQty)
+		expected, expectedBaseQty, err := validateInboundExpectedQty(ctx, local, poLine, "", request.ExpectedQty)
 		if err != nil {
 			return err
 		}
@@ -357,7 +370,7 @@ func (s *Service) AddInboundOrderLine(ctx context.Context, id string, request dt
 			return err
 		}
 		poLineID := poLine.ID
-		line := model.InboundOrderLine{ID: fmt.Sprintf("%s-L%04d", id, lineNo), InboundID: id, PurchaseOrderLineID: &poLineID, LineNo: lineNo, ItemID: poLine.ItemID, ExpectedQty: expected, UOMID: poLine.UOMID, ExpectedLotNo: poLine.ExpectedLotNo, ExpectedExpiryDate: poLine.ExpectedExpiryDate, CustomerLineReference: reference, Notes: notes, CreatedBy: actor}
+		line := model.InboundOrderLine{ID: fmt.Sprintf("%s-L%04d", id, lineNo), InboundID: id, PurchaseOrderLineID: &poLineID, LineNo: lineNo, ItemID: poLine.ItemID, ExpectedQty: expected, UOMConversionToBase: poLine.UOMConversionToBase, ExpectedBaseQty: expectedBaseQty, BaseUOMID: poLine.BaseUOMID, UOMID: poLine.UOMID, ExpectedLotNo: poLine.ExpectedLotNo, ExpectedExpiryDate: poLine.ExpectedExpiryDate, CustomerLineReference: reference, Notes: notes, CreatedBy: actor}
 		if err := local.repositories.InboundOrderLine.Create(ctx, &line); err != nil {
 			return err
 		}
@@ -396,7 +409,7 @@ func (s *Service) UpdateInboundOrderLine(ctx context.Context, id, lineID string,
 		if err != nil {
 			return err
 		}
-		expected, err := validateInboundExpectedQty(ctx, local, poLine, lineID, request.ExpectedQty)
+		expected, expectedBaseQty, err := validateInboundExpectedQty(ctx, local, poLine, lineID, request.ExpectedQty)
 		if err != nil {
 			return err
 		}
@@ -408,7 +421,7 @@ func (s *Service) UpdateInboundOrderLine(ctx context.Context, id, lineID string,
 		if err != nil {
 			return err
 		}
-		if err := local.repositories.InboundOrderLine.UpdateDraft(ctx, lineID, id, map[string]interface{}{"expected_qty": expected, "customer_line_reference": reference, "notes": notes}); err != nil {
+		if err := local.repositories.InboundOrderLine.UpdateDraft(ctx, lineID, id, map[string]interface{}{"expected_qty": expected, "expected_base_qty": expectedBaseQty, "customer_line_reference": reference, "notes": notes}); err != nil {
 			return err
 		}
 		return local.repositories.InboundOrder.UpdateDraft(ctx, id, actor, request.ExpectedVersion, map[string]interface{}{})

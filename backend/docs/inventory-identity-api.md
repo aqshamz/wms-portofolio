@@ -17,9 +17,10 @@ Log in using `POST /api/v1/auth/login` with `identifier` and `password`, then pu
 For POST/PUT requests, set `Content-Type: application/json`.
 
 These routes use the same database-session authentication as masters. Logout
-revokes that session and subsequent identity requests return 401. Account role
-permissions and owner/warehouse access-scope enforcement are still not implemented;
-do not expose this backend as a production multi-tenant API yet.
+revokes that session and subsequent identity requests return 401. Inventory
+permissions protect every route. Lot and serial identities enforce owner grants;
+handling units enforce both owner and warehouse grants plus their active
+warehouse-owner relationship.
 
 ## Endpoints
 
@@ -64,9 +65,9 @@ Both owner and item must be active, the item must belong to that owner, and
 precede manufacture. No expiry is invented and no receiving shelf-life decision
 is performed during identity registration; those belong to receiving later.
 
-Optional `quality_status_id` accepts an active quality-status UUID obtained from
-`GET /api/v1/master/quality-statuses`. Omitting it leaves quality unclassified
-(`null`), not automatically PASSED. There is no QC transition endpoint in this slice.
+Lots do not carry a quality status. One lot can have passed, pending and failed
+stock at the same time, so quality truth belongs to inspection results and each
+inventory balance's status. Lot identity remains immutable metadata only.
 
 Retrieve it with either:
 
@@ -121,6 +122,30 @@ reserved for audited inventory workflows, to avoid bypassing balance updates.
 The type's capacity fields are master configuration, not capacity enforcement
 for physical contents in this slice.
 
+The handling-unit response includes `positive_balance_count` and `child_count`.
+These are operational summary values, not stored counters. The web application
+uses them to distinguish an empty receiving container from one that already
+contains stock or nested HUs. Its detail view loads positive inventory balances
+by `handling_unit_id` and shows their item, lot, inventory status, location,
+quantity and reservation.
+
+The first operational HU workflow is intentionally strict:
+
+- Inventory -> Handling units can register an empty root HU by barcode, type,
+  warehouse and current location.
+- A receipt batch may select an open, empty root HU at that batch's receiving
+  location. The same HU cannot be assigned to two batches in one receipt.
+- The service repeats every check during create, edit and complete, so a stale
+  or crafted client cannot receive into a closed, nested, occupied, foreign, or
+  differently located HU.
+- Receipt completion attaches the new balance and movement to that HU.
+
+Nested identity registration remains available through the API, but pack,
+unpack and atomic relocation of a multi-balance or nested HU are later audited
+workflows. Existing movement flows therefore retain their conservative rule:
+whole-HU relocation is only supported when the HU has no children and exactly
+one positive balance.
+
 ## 3. Register an individual serial
 
 The coffee study items are NOT serial-controlled, so a serial registration for
@@ -172,10 +197,21 @@ No generic PUT/DELETE/deactivate exists for identities: traceability keys and
 metadata are immutable in this implementation. Inactive master references do
 not hide historical identities from GET.
 
+Lot and serial list/creation requests require an `owner_id` granted to the
+account. Detail authorization is derived from the stored identity, so query
+parameters cannot override its owner. Both are owner-wide identities rather
+than warehouse records; unrestricted superadmins can access every owner.
+
+Handling-unit list and creation requests require both `owner_id` and
+`warehouse_id` within the account's active scope. Detail authorization derives
+both values from the stored handling unit. Unrestricted superadmins bypass these
+scope restrictions.
+
 | Status | Meaning |
 | --- | --- |
 | 400 | Invalid fields, missing/inactive references, wrong scope or control flags |
 | 401 | Missing/expired/revoked bearer session |
+| 403 | Account is not granted to the identity's owner and warehouse scope |
 | 404 | Requested identity ID does not exist |
 | 409 | Duplicate lot/serial business key or HU barcode |
 | 500 | Unexpected internal failure (database details not exposed) |

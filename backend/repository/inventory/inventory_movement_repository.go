@@ -46,6 +46,13 @@ func (r *InventoryMovementRepository) GetByOperationKey(ctx context.Context, key
 	err := movementQuery(r.db.WithContext(ctx)).Where("m.operation_key=?", key).Take(&v).Error
 	return v, Error(err)
 }
+
+func (r *InventoryMovementRepository) HasSerialHistory(ctx context.Context, serialID string) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.InventoryMovement{}).Where("serial_id=?", serialID).Limit(1).Count(&count).Error
+	return count != 0, Error(err)
+}
+
 func (r *InventoryMovementRepository) List(ctx context.Context, f MovementFilter) ([]MovementRow, int64, error) {
 	q := movementQuery(r.db.WithContext(ctx))
 	for col, val := range map[string]string{"m.owner_id": f.OwnerID, "m.warehouse_id": f.WarehouseID, "m.item_id": f.ItemID, "m.movement_type_id": f.MovementTypeID, "m.source_document_id": f.SourceDocumentID, "m.operation_key": f.OperationKey} {

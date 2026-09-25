@@ -9,6 +9,9 @@ type InboundOrderLine struct {
 	LineNo                int        `gorm:"column:line_no;not null;uniqueIndex:uq_inbound_line_no,priority:2"`
 	ItemID                string     `gorm:"column:item_id;type:uuid;not null"`
 	ExpectedQty           string     `gorm:"column:expected_qty;type:numeric(20,6);not null"`
+	UOMConversionToBase   string     `gorm:"column:uom_conversion_to_base;type:numeric(20,6);not null"`
+	ExpectedBaseQty       string     `gorm:"column:expected_base_qty;type:numeric(20,6);not null"`
+	BaseUOMID             string     `gorm:"column:base_uom_id;type:uuid;not null"`
 	UOMID                 string     `gorm:"column:uom_id;type:uuid;not null"`
 	ExpectedLotNo         *string    `gorm:"column:expected_lot_no;size:100"`
 	ExpectedExpiryDate    *time.Time `gorm:"column:expected_expiry_date;type:date"`

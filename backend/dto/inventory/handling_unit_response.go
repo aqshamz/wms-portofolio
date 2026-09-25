@@ -11,6 +11,8 @@ type HandlingUnitResponse struct {
 	CurrentLocationID    *string   `json:"current_location_id"`
 	Barcode              string    `json:"barcode"`
 	IsClosed             bool      `json:"is_closed"`
+	PositiveBalanceCount int64     `json:"positive_balance_count"`
+	ChildCount           int64     `json:"child_count"`
 	CreatedAt            time.Time `json:"created_at"`
 	CreatedBy            *string   `json:"created_by"`
 }

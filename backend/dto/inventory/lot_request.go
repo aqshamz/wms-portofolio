@@ -6,5 +6,4 @@ type CreateLotRequest struct {
 	LotNumber       string  `json:"lot_number" binding:"required,max=100"`
 	ManufactureDate *string `json:"manufacture_date"`
 	ExpiryDate      *string `json:"expiry_date"`
-	QualityStatusID *string `json:"quality_status_id" binding:"omitempty,uuid"`
 }

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,6 +50,9 @@ func TestInventoryHTTPScopePostgreSQL(t *testing.T) {
 		"CREATE TABLE inventory_balance (balance_id text PRIMARY KEY, owner_id uuid NOT NULL, warehouse_id uuid NOT NULL)",
 		"CREATE TABLE inventory_movement (movement_id text PRIMARY KEY, owner_id uuid NOT NULL, warehouse_id uuid NOT NULL)",
 		"CREATE TABLE serial_inventory (serial_id text PRIMARY KEY, owner_id uuid NOT NULL, balance_id text NOT NULL)",
+		"CREATE TABLE inventory_lot (lot_id text PRIMARY KEY, owner_id uuid NOT NULL)",
+		"CREATE TABLE serial_number (serial_id text PRIMARY KEY, owner_id uuid NOT NULL)",
+		"CREATE TABLE handling_unit (handling_unit_id text PRIMARY KEY, owner_id uuid NOT NULL, warehouse_id uuid NOT NULL)",
 		"CREATE TABLE account_owner_access (account_id uuid, owner_id uuid)",
 		"CREATE TABLE account_warehouse_access (account_id uuid, warehouse_id uuid)",
 		"CREATE TABLE warehouse_owner (owner_id uuid, warehouse_id uuid, is_active boolean)",
@@ -62,6 +66,9 @@ func TestInventoryHTTPScopePostgreSQL(t *testing.T) {
 	check(tx.Exec("INSERT INTO inventory_balance VALUES ('BAL-1',?,?)", owner, warehouse).Error)
 	check(tx.Exec("INSERT INTO inventory_movement VALUES ('MOV-1',?,?)", owner, warehouse).Error)
 	check(tx.Exec("INSERT INTO serial_inventory VALUES ('SER-1',?,'BAL-1')", owner).Error)
+	check(tx.Exec("INSERT INTO inventory_lot VALUES ('LOT-1',?)", owner).Error)
+	check(tx.Exec("INSERT INTO serial_number VALUES ('SER-1',?)", owner).Error)
+	check(tx.Exec("INSERT INTO handling_unit VALUES ('HU-1',?,?)", owner, warehouse).Error)
 	check(tx.Exec("INSERT INTO account_owner_access VALUES (?,?)", worker, owner).Error)
 	check(tx.Exec("INSERT INTO account_warehouse_access VALUES (?,?)", worker, warehouse).Error)
 	check(tx.Exec("INSERT INTO warehouse_owner VALUES (?,?,true)", owner, warehouse).Error)
@@ -88,6 +95,18 @@ func TestInventoryHTTPScopePostgreSQL(t *testing.T) {
 		{"denied serial-state list", denied, "/api/v1/inventory/serial-states?owner_id=" + owner + "&warehouse_id=" + warehouse, false, http.StatusForbidden},
 		{"granted serial-state detail", worker, "/api/v1/inventory/serial-states/SER-1", false, http.StatusNoContent},
 		{"denied serial-state detail", denied, "/api/v1/inventory/serial-states/SER-1", false, http.StatusForbidden},
+		{"granted lot list", worker, "/api/v1/inventory/lots?owner_id=" + owner, false, http.StatusNoContent},
+		{"denied lot list", denied, "/api/v1/inventory/lots?owner_id=" + owner, false, http.StatusForbidden},
+		{"granted lot detail", worker, "/api/v1/inventory/lots/LOT-1", false, http.StatusNoContent},
+		{"denied lot detail", denied, "/api/v1/inventory/lots/LOT-1", false, http.StatusForbidden},
+		{"granted serial list", worker, "/api/v1/inventory/serials?owner_id=" + owner, false, http.StatusNoContent},
+		{"denied serial list", denied, "/api/v1/inventory/serials?owner_id=" + owner, false, http.StatusForbidden},
+		{"granted serial detail", worker, "/api/v1/inventory/serials/SER-1", false, http.StatusNoContent},
+		{"denied serial detail", denied, "/api/v1/inventory/serials/SER-1", false, http.StatusForbidden},
+		{"granted handling-unit list", worker, "/api/v1/inventory/handling-units?owner_id=" + owner + "&warehouse_id=" + warehouse, false, http.StatusNoContent},
+		{"denied handling-unit list", denied, "/api/v1/inventory/handling-units?owner_id=" + owner + "&warehouse_id=" + warehouse, false, http.StatusForbidden},
+		{"granted handling-unit detail", worker, "/api/v1/inventory/handling-units/HU-1", false, http.StatusNoContent},
+		{"denied handling-unit detail", denied, "/api/v1/inventory/handling-units/HU-1", false, http.StatusForbidden},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			router := gin.New()
@@ -121,8 +140,77 @@ func TestInventoryHTTPScopePostgreSQL(t *testing.T) {
 				reached = true
 				c.Status(http.StatusNoContent)
 			})
+			router.GET("/api/v1/inventory/lots", controller.RequireLotScope(), func(c *gin.Context) {
+				reached = true
+				c.Status(http.StatusNoContent)
+			})
+			router.GET("/api/v1/inventory/lots/:id", controller.RequireLotScope(), func(c *gin.Context) {
+				reached = true
+				c.Status(http.StatusNoContent)
+			})
+			router.GET("/api/v1/inventory/serials", controller.RequireSerialScope(), func(c *gin.Context) {
+				reached = true
+				c.Status(http.StatusNoContent)
+			})
+			router.GET("/api/v1/inventory/serials/:id", controller.RequireSerialScope(), func(c *gin.Context) {
+				reached = true
+				c.Status(http.StatusNoContent)
+			})
+			router.GET("/api/v1/inventory/handling-units", controller.RequireHandlingUnitScope(), func(c *gin.Context) {
+				reached = true
+				c.Status(http.StatusNoContent)
+			})
+			router.GET("/api/v1/inventory/handling-units/:id", controller.RequireHandlingUnitScope(), func(c *gin.Context) {
+				reached = true
+				c.Status(http.StatusNoContent)
+			})
 			response := httptest.NewRecorder()
 			router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, test.path, nil))
+			if response.Code != test.want || reached != (test.want == http.StatusNoContent) {
+				t.Fatalf("status=%d reached=%t want=%d body=%s", response.Code, reached, test.want, response.Body.String())
+			}
+		})
+	}
+
+	for _, test := range []struct {
+		name, actor string
+		want        int
+	}{
+		{"granted lot create", worker, http.StatusNoContent},
+		{"denied lot create", denied, http.StatusForbidden},
+		{"granted serial create", worker, http.StatusNoContent},
+		{"denied serial create", denied, http.StatusForbidden},
+		{"granted handling-unit create", worker, http.StatusNoContent},
+		{"denied handling-unit create", denied, http.StatusForbidden},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			router := gin.New()
+			router.Use(func(c *gin.Context) {
+				c.Set(middleware.ContextUserKey, authdto.UserResponse{AccountID: test.actor})
+				c.Request = c.Request.WithContext(requestscope.WithPrincipal(c.Request.Context(), requestscope.Principal{AccountID: test.actor}))
+				c.Next()
+			})
+			reached := false
+			path := "/api/v1/inventory/lots"
+			guard := controller.RequireLotScope()
+			if strings.Contains(test.name, "serial") {
+				path = "/api/v1/inventory/serials"
+				guard = controller.RequireSerialScope()
+			} else if strings.Contains(test.name, "handling-unit") {
+				path = "/api/v1/inventory/handling-units"
+				guard = controller.RequireHandlingUnitScope()
+			}
+			router.POST(path, guard, func(c *gin.Context) {
+				reached = true
+				c.Status(http.StatusNoContent)
+			})
+			response := httptest.NewRecorder()
+			body := `{"owner_id":"` + owner + `"}`
+			if strings.Contains(test.name, "handling-unit") {
+				body = `{"owner_id":"` + owner + `","warehouse_id":"` + warehouse + `"}`
+			}
+			request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+			router.ServeHTTP(response, request)
 			if response.Code != test.want || reached != (test.want == http.StatusNoContent) {
 				t.Fatalf("status=%d reached=%t want=%d body=%s", response.Code, reached, test.want, response.Body.String())
 			}

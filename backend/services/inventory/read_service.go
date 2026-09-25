@@ -3,6 +3,7 @@ package inventory
 import (
 	"context"
 	dto "wms-api/dto/inventory"
+	model "wms-api/models/inventory"
 	repository "wms-api/repository/inventory"
 )
 
@@ -47,7 +48,10 @@ func (s *Service) GetHandlingUnit(ctx context.Context, id string) (dto.HandlingU
 		return dto.HandlingUnitResponse{}, invalid("invalid identity ID")
 	}
 	v, err := s.repositories.HandlingUnit.Get(ctx, id)
-	return mapHandlingUnit(v), err
+	if err != nil {
+		return dto.HandlingUnitResponse{}, err
+	}
+	return s.handlingUnitResponse(ctx, v)
 }
 func (s *Service) ListHandlingUnit(ctx context.Context, f repository.Filter) (dto.PageResponse[dto.HandlingUnitResponse], error) {
 	if err := validateFilter(&f, true); err != nil {
@@ -56,7 +60,26 @@ func (s *Service) ListHandlingUnit(ctx context.Context, f repository.Filter) (dt
 	rows, total, err := s.repositories.HandlingUnit.List(ctx, f)
 	items := make([]dto.HandlingUnitResponse, 0, len(rows))
 	for _, v := range rows {
-		items = append(items, mapHandlingUnit(v))
+		mapped, mappingErr := s.handlingUnitResponse(ctx, v)
+		if mappingErr != nil {
+			return dto.PageResponse[dto.HandlingUnitResponse]{}, mappingErr
+		}
+		items = append(items, mapped)
 	}
 	return page(items, f, total), err
+}
+
+func (s *Service) handlingUnitResponse(ctx context.Context, value model.HandlingUnit) (dto.HandlingUnitResponse, error) {
+	response := mapHandlingUnit(value)
+	positiveBalances, err := s.repositories.Balance.CountPositiveForHandlingUnit(ctx, value.ID)
+	if err != nil {
+		return dto.HandlingUnitResponse{}, err
+	}
+	children, err := s.repositories.HandlingUnit.CountChildren(ctx, value.ID)
+	if err != nil {
+		return dto.HandlingUnitResponse{}, err
+	}
+	response.PositiveBalanceCount = positiveBalances
+	response.ChildCount = children
+	return response, nil
 }

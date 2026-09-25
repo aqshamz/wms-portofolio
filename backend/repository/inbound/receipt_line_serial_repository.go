@@ -21,3 +21,9 @@ func (r *ReceiptLineSerialRepository) GetByBatch(ctx context.Context, batchID st
 	err := r.db.WithContext(ctx).Where("receipt_inventory_id=?", batchID).Take(&value).Error
 	return value, Error(err)
 }
+
+func (r *ReceiptLineSerialRepository) GetBySerial(ctx context.Context, serialID string) (model.ReceiptLineSerial, error) {
+	var value model.ReceiptLineSerial
+	err := r.db.WithContext(ctx).Where("serial_id=?", serialID).Take(&value).Error
+	return value, Error(err)
+}

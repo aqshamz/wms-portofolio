@@ -69,10 +69,22 @@ func (r *ReceiptRepository) List(ctx context.Context, filter ListFilter) ([]Rece
 			WHERE line.receipt_id=receipt.receipt_id
 			AND inventory_status.code='QC_PENDING'
 			AND balance.on_hand_qty-balance.reserved_qty >= batch.base_qty
-			AND (balance.on_hand_qty-balance.reserved_qty = batch.base_qty OR (
-				batch.handling_unit_id IS NULL AND NOT EXISTS (
+			-- A handling unit is indivisible and must still own the whole balance.
+			-- Serialized receipt batches may share an aggregate balance, so verify
+			-- the individual serial still points at that balance instead.
+			AND (batch.handling_unit_id IS NULL OR balance.on_hand_qty-balance.reserved_qty = batch.base_qty)
+			AND (
+				NOT EXISTS (
 					SELECT 1 FROM receipt_line_serial serial WHERE serial.receipt_inventory_id=batch.receipt_inventory_id
-				)))
+				)
+				OR EXISTS (
+					SELECT 1
+					FROM receipt_line_serial serial
+					JOIN serial_inventory serial_state ON serial_state.serial_id=serial.serial_id
+					WHERE serial.receipt_inventory_id=batch.receipt_inventory_id
+					AND serial_state.balance_id=balance.balance_id
+				)
+			)
 			AND NOT EXISTS (
 				SELECT 1 FROM quality_inspection inspection WHERE inspection.receipt_inventory_id=batch.receipt_inventory_id
 			)

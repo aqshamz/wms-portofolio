@@ -9,6 +9,9 @@ type PurchaseOrderLine struct {
 	LineNo                   int        `gorm:"column:line_no;not null;uniqueIndex:uq_purchase_order_line_no,priority:2"`
 	ItemID                   string     `gorm:"column:item_id;type:uuid;not null"`
 	OrderedQty               string     `gorm:"column:ordered_qty;type:numeric(20,6);not null"`
+	UOMConversionToBase      string     `gorm:"column:uom_conversion_to_base;type:numeric(20,6);not null"`
+	OrderedBaseQty           string     `gorm:"column:ordered_base_qty;type:numeric(20,6);not null"`
+	BaseUOMID                string     `gorm:"column:base_uom_id;type:uuid;not null"`
 	OverReceiptTolerancePct  string     `gorm:"column:over_receipt_tolerance_pct;type:numeric(7,4);not null;default:0"`
 	UnderReceiptTolerancePct string     `gorm:"column:under_receipt_tolerance_pct;type:numeric(7,4);not null;default:0"`
 	UOMID                    string     `gorm:"column:uom_id;type:uuid;not null"`

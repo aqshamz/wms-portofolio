@@ -29,18 +29,11 @@ func (s *Service) CreateLot(ctx context.Context, q dto.CreateLotRequest, actor s
 	if manufactured != nil && expires != nil && expires.Before(*manufactured) {
 		return dto.LotResponse{}, invalid("expiry_date cannot precede manufacture_date")
 	}
-	if q.QualityStatusID != nil {
-		if !uuid(*q.QualityStatusID) {
-			return dto.LotResponse{}, invalid("quality_status_id must be a UUID")
-		}
-		id := strings.ToLower(*q.QualityStatusID)
-		q.QualityStatusID = &id
-	}
 	id, err := newID("LOT")
 	if err != nil {
 		return dto.LotResponse{}, err
 	}
-	v := model.InventoryLot{ID: id, OwnerID: q.OwnerID, ItemID: q.ItemID, LotNumber: number, ManufactureDate: manufactured, ExpiryDate: expires, QualityStatusID: q.QualityStatusID, CreatedBy: &actor}
+	v := model.InventoryLot{ID: id, OwnerID: q.OwnerID, ItemID: q.ItemID, LotNumber: number, ManufactureDate: manufactured, ExpiryDate: expires, CreatedBy: &actor}
 	err = s.repositories.Transaction(ctx, func(r *repository.Repositories) error {
 		item, e := requireItem(ctx, r, q.OwnerID, q.ItemID)
 		if e != nil {
@@ -48,15 +41,6 @@ func (s *Service) CreateLot(ctx context.Context, q dto.CreateLotRequest, actor s
 		}
 		if !item.LotControlled {
 			return invalid("item is not lot-controlled")
-		}
-		if q.QualityStatusID != nil {
-			quality, e := r.Catalog.QualityStatus.GetShared(ctx, *q.QualityStatusID)
-			if e != nil {
-				return reference(e, "quality status")
-			}
-			if !quality.IsActive {
-				return invalid("quality status is inactive")
-			}
 		}
 		return r.Lot.Create(ctx, &v)
 	})

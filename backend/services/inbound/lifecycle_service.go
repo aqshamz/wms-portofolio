@@ -217,8 +217,8 @@ func (s *Service) CloseInboundOrder(ctx context.Context, id string, request dto.
 			return err
 		}
 		for _, line := range lines {
-			expected, e1 := storedRatio(line.ExpectedQty)
-			actual, e2 := storedRatio(line.CompletedReceiptQty)
+			expected, e1 := storedRatio(line.ExpectedBaseQty)
+			actual, e2 := storedRatio(line.CompletedReceiptBaseQty)
 			if e1 != nil || e2 != nil {
 				return state("stored inbound quantity is invalid")
 			}
@@ -235,8 +235,13 @@ func (s *Service) CloseInboundOrder(ctx context.Context, id string, request dto.
 				tolerance = parsed
 			}
 			if shortageExceedsTolerance(expected, actual, tolerance) {
-				variance := new(big.Rat).Sub(actual, expected).FloatString(6)
 				expectedText, actualText := line.ExpectedQty, line.CompletedReceiptQty
+				expectedSource, expectedSourceOK := new(big.Rat).SetString(expectedText)
+				actualSource, actualSourceOK := new(big.Rat).SetString(actualText)
+				if !expectedSourceOK || !actualSourceOK {
+					return state("stored inbound quantity is invalid")
+				}
+				variance := new(big.Rat).Sub(actualSource, expectedSource).FloatString(6)
 				if err := local.recordException(ctx, header.OwnerID, header.WarehouseID, id, &line.ID, "UNDER_RECEIPT", &expectedText, &actualText, &variance, reason, actor); err != nil {
 					return err
 				}
@@ -289,15 +294,20 @@ func (s *Service) ClosePurchaseOrder(ctx context.Context, id string, request dto
 			return err
 		}
 		for _, line := range lines {
-			expected, e1 := storedRatio(line.OrderedQty)
-			actual, e2 := storedRatio(line.CompletedReceiptQty)
+			expected, e1 := storedRatio(line.OrderedBaseQty)
+			actual, e2 := storedRatio(line.CompletedReceiptBaseQty)
 			tolerance, ok := new(big.Rat).SetString(line.UnderReceiptTolerancePct)
 			if e1 != nil || e2 != nil || !ok {
 				return state("stored purchase-order quantity is invalid")
 			}
 			if shortageExceedsTolerance(expected, actual, tolerance) {
-				variance := new(big.Rat).Sub(actual, expected).FloatString(6)
 				expectedText, actualText := line.OrderedQty, line.CompletedReceiptQty
+				expectedSource, expectedSourceOK := new(big.Rat).SetString(expectedText)
+				actualSource, actualSourceOK := new(big.Rat).SetString(actualText)
+				if !expectedSourceOK || !actualSourceOK {
+					return state("stored purchase-order quantity is invalid")
+				}
+				variance := new(big.Rat).Sub(actualSource, expectedSource).FloatString(6)
 				if err := local.recordException(ctx, header.OwnerID, header.WarehouseID, id, &line.ID, "UNDER_RECEIPT", &expectedText, &actualText, &variance, reason, actor); err != nil {
 					return err
 				}

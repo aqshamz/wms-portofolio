@@ -2,6 +2,7 @@ package inbound
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -28,6 +29,40 @@ func (s *Service) inventoryStatus(ctx context.Context, code string) (mastermodel
 		}
 	}
 	return mastermodel.InventoryStatus{}, state("inventory status " + code + " is not configured")
+}
+
+func (s *Service) receiptUnit(ctx context.Context, item mastermodel.Item, inboundLine model.InboundOrderLine, requestedUOMID *string, existing *model.ReceiptLine) (string, string, *big.Rat, error) {
+	uomID := inboundLine.UOMID
+	if requestedUOMID == nil && existing != nil {
+		uomID = existing.UOMID
+	} else if requestedUOMID != nil {
+		uomID = strings.ToLower(strings.TrimSpace(*requestedUOMID))
+	}
+	if !inboundUUID(uomID) {
+		return "", "", nil, invalid("receipt uom_id must be a UUID")
+	}
+	if item.SerialControlled && uomID != item.BaseUOMID {
+		return "", "", nil, invalid("serialized receipts must use the item's base UOM")
+	}
+	if existing != nil && existing.ItemID == item.ID && existing.UOMID == uomID && existing.BaseUOMID == inboundLine.BaseUOMID {
+		conversion, conversionNumber, err := inboundQuantity(existing.UOMConversionToBase, "receipt UOM conversion", false)
+		if err != nil {
+			return "", "", nil, state("stored receipt UOM conversion is invalid")
+		}
+		return existing.UOMID, conversion, conversionNumber, nil
+	}
+	if item.BaseUOMID != inboundLine.BaseUOMID {
+		return "", "", nil, state("item base UOM no longer matches the inbound quantity snapshot")
+	}
+	unit, err := s.repositories.Master.Catalog.ItemUOM.ForUnit(ctx, item.ID, uomID)
+	if err != nil || !unit.IsActive || !unit.IsReceivingUOM {
+		return "", "", nil, invalid("receipt UOM is not an active receiving UOM for the item")
+	}
+	conversion, conversionNumber, err := inboundQuantity(unit.ConversionToBase, "receipt UOM conversion", false)
+	if err != nil {
+		return "", "", nil, state("stored receipt UOM conversion is invalid")
+	}
+	return unit.UOMID, conversion, conversionNumber, nil
 }
 
 func (s *Service) qualityStatus(ctx context.Context, code string) (mastermodel.QualityStatus, error) {
@@ -68,18 +103,18 @@ func (s *Service) ensureReceiptLot(ctx context.Context, ownerID string, item mas
 	if len(rows) == 1 {
 		return &rows[0].ID, nil
 	}
-	pending, err := s.qualityStatus(ctx, "PENDING")
-	if err != nil {
-		return nil, err
-	}
-	created, err := inventoryservice.NewService(s.repositories.Inventory).CreateLot(ctx, inventorydto.CreateLotRequest{OwnerID: ownerID, ItemID: item.ID, LotNumber: lotNumber, ManufactureDate: request.ManufactureDate, ExpiryDate: request.ExpiryDate, QualityStatusID: &pending.ID}, actor)
+	created, err := inventoryservice.NewService(s.repositories.Inventory).CreateLot(ctx, inventorydto.CreateLotRequest{OwnerID: ownerID, ItemID: item.ID, LotNumber: lotNumber, ManufactureDate: request.ManufactureDate, ExpiryDate: request.ExpiryDate}, actor)
 	if err != nil {
 		return nil, err
 	}
 	return &created.ID, nil
 }
 
-func (s *Service) ensureReceiptSerial(ctx context.Context, ownerID string, item mastermodel.Item, serialNo *string, actor string) (*string, error) {
+func receiptSerialKey(itemID, serialNo string) string {
+	return itemID + "\x00" + serialNo
+}
+
+func (s *Service) ensureReceiptSerial(ctx context.Context, ownerID string, item mastermodel.Item, serialNo *string, actor string, seen map[string]bool, allowedExisting map[string]string) (*string, error) {
 	if !item.SerialControlled {
 		if serialNo != nil {
 			return nil, invalid("serial_no is not allowed for a non-serialized item")
@@ -93,6 +128,10 @@ func (s *Service) ensureReceiptSerial(ctx context.Context, ownerID string, item 
 	if err != nil {
 		return nil, err
 	}
+	key := receiptSerialKey(item.ID, number)
+	if seen[key] {
+		return nil, invalid("serial_no is repeated for the same item in this receipt")
+	}
 	rows, total, err := s.repositories.Inventory.Serial.List(ctx, inventoryrepository.Filter{OwnerID: ownerID, ItemID: item.ID, Number: number, Page: 1, PageSize: 2})
 	if err != nil {
 		return nil, err
@@ -101,12 +140,35 @@ func (s *Service) ensureReceiptSerial(ctx context.Context, ownerID string, item 
 		return nil, repository.ErrConflict
 	}
 	if len(rows) == 1 {
+		if allowedExisting[key] == rows[0].ID {
+			seen[key] = true
+			return &rows[0].ID, nil
+		}
+		if _, lookupErr := s.repositories.ReceiptLineSerial.GetBySerial(ctx, rows[0].ID); lookupErr == nil {
+			return nil, invalid("serial_no is already linked to another receipt")
+		} else if !errors.Is(lookupErr, repository.ErrNotFound) {
+			return nil, lookupErr
+		}
+		if _, lookupErr := s.repositories.Inventory.SerialState.Get(ctx, rows[0].ID); lookupErr == nil {
+			return nil, invalid("serial_no is already in inventory")
+		} else if !errors.Is(lookupErr, inventoryrepository.ErrNotFound) {
+			return nil, lookupErr
+		}
+		hasHistory, lookupErr := s.repositories.Inventory.Movement.HasSerialHistory(ctx, rows[0].ID)
+		if lookupErr != nil {
+			return nil, lookupErr
+		}
+		if hasHistory {
+			return nil, invalid("serial_no has already entered inventory")
+		}
+		seen[key] = true
 		return &rows[0].ID, nil
 	}
 	created, err := inventoryservice.NewService(s.repositories.Inventory).CreateSerial(ctx, inventorydto.CreateSerialRequest{OwnerID: ownerID, ItemID: item.ID, SerialNo: number}, actor)
 	if err != nil {
 		return nil, err
 	}
+	seen[key] = true
 	return &created.ID, nil
 }
 
@@ -146,8 +208,10 @@ func (s *Service) CreateReceipt(ctx context.Context, request dto.CreateReceiptRe
 		return dto.ReceiptResponse{}, invalid("invalid supersedes_receipt_id")
 	}
 	seenLines := make(map[string]bool, len(request.Lines))
+	seenHandlingUnits := make(map[string]bool)
 	var receiptID string
 	err = s.transaction(ctx, func(local *Service) error {
+		seenSerials := make(map[string]bool)
 		inbound, err := local.repositories.InboundOrder.Lock(ctx, request.InboundID)
 		if err != nil {
 			return err
@@ -242,14 +306,31 @@ func (s *Service) CreateReceipt(ctx context.Context, request dto.CreateReceiptRe
 				code := "REJECTED_AT_DOCK"
 				exceptionType = &code
 			}
-			alreadyReceivedText, err := local.repositories.ReceiptLine.ReceivedForInboundLine(ctx, inboundLine.ID)
+			item, err := local.repositories.Master.Catalog.Item.Get(ctx, inboundLine.ItemID)
+			if err != nil || !item.IsActive || item.OwnerID != inbound.OwnerID {
+				return invalid("receipt item is unavailable")
+			}
+			receiptUOMID, conversion, conversionNumber, err := local.receiptUnit(ctx, item, inboundLine, requestLine.UOMID, nil)
+			if err != nil {
+				return err
+			}
+			_, receivedBaseQty, err := inboundQuantitySnapshot(receivedNumber, conversion)
+			if err != nil {
+				return err
+			}
+			_, rejectedBaseQty, err := inboundQuantitySnapshot(rejectedNumber, conversion)
+			if err != nil {
+				return err
+			}
+			receivedBaseNumber := new(big.Rat).Mul(receivedNumber, conversionNumber)
+			alreadyReceivedText, err := local.repositories.ReceiptLine.ReceivedBaseForInboundLine(ctx, inboundLine.ID)
 			if err != nil {
 				return err
 			}
 			alreadyReceived, ok := new(big.Rat).SetString(alreadyReceivedText)
-			expected, expectedOK := new(big.Rat).SetString(inboundLine.ExpectedQty)
+			expected, expectedOK := new(big.Rat).SetString(inboundLine.ExpectedBaseQty)
 			if !ok || !expectedOK {
-				return state("stored inbound receipt quantity is invalid")
+				return state("stored inbound base quantity is invalid")
 			}
 			tolerance := new(big.Rat)
 			if inboundLine.PurchaseOrderLineID != nil {
@@ -264,7 +345,7 @@ func (s *Service) CreateReceipt(ctx context.Context, request dto.CreateReceiptRe
 				}
 			}
 			allowed := new(big.Rat).Mul(expected, new(big.Rat).Add(big.NewRat(1, 1), new(big.Rat).Quo(tolerance, big.NewRat(100, 1))))
-			newTotal := new(big.Rat).Add(alreadyReceived, receivedNumber)
+			newTotal := new(big.Rat).Add(alreadyReceived, receivedBaseNumber)
 			if newTotal.Cmp(allowed) > 0 {
 				return invalid("received_qty exceeds the configured over-receipt tolerance")
 			}
@@ -294,28 +375,16 @@ func (s *Service) CreateReceipt(ctx context.Context, request dto.CreateReceiptRe
 			if batchTotal.Cmp(accepted) != 0 {
 				return invalid("batch source quantities must equal received_qty minus rejected_qty")
 			}
-			item, err := local.repositories.Master.Catalog.Item.Get(ctx, inboundLine.ItemID)
-			if err != nil || !item.IsActive || item.OwnerID != inbound.OwnerID {
-				return invalid("receipt item is unavailable")
-			}
-			unit, err := local.repositories.Master.Catalog.ItemUOM.ForUnit(ctx, item.ID, inboundLine.UOMID)
-			if err != nil || !unit.IsActive || !unit.IsReceivingUOM {
-				return invalid("receipt UOM is unavailable")
-			}
-			conversion, ok := new(big.Rat).SetString(unit.ConversionToBase)
-			if !ok || conversion.Sign() <= 0 {
-				return state("stored item UOM conversion is invalid")
-			}
 			lineNo := lineIndex + 1
 			receiptLineID := fmt.Sprintf("%s-L%04d", receiptID, lineNo)
 			inboundLineID := inboundLine.ID
-			receiptLine := model.ReceiptLine{ID: receiptLineID, ReceiptID: receiptID, InboundLineID: &inboundLineID, LineNo: lineNo, ItemID: item.ID, ReceivedQty: receivedQty, RejectedQty: rejectedQty, ExceptionNotes: exceptionNotes, ExceptionTypeCode: exceptionType, UOMID: inboundLine.UOMID, CreatedBy: actor}
+			receiptLine := model.ReceiptLine{ID: receiptLineID, ReceiptID: receiptID, InboundLineID: &inboundLineID, LineNo: lineNo, ItemID: item.ID, ReceivedQty: receivedQty, RejectedQty: rejectedQty, UOMConversionToBase: conversion, ReceivedBaseQty: receivedBaseQty, RejectedBaseQty: rejectedBaseQty, BaseUOMID: inboundLine.BaseUOMID, ExceptionNotes: exceptionNotes, ExceptionTypeCode: exceptionType, UOMID: receiptUOMID, CreatedBy: actor}
 			if err := local.repositories.ReceiptLine.Create(ctx, &receiptLine); err != nil {
 				return err
 			}
 			for batchIndex, requestBatch := range requestLine.Batches {
 				sourceQty := batchNumbers[batchIndex].FloatString(6)
-				baseQty, baseNumber, err := inboundMultiply(batchNumbers[batchIndex], conversion)
+				baseQty, baseNumber, err := inboundMultiply(batchNumbers[batchIndex], conversionNumber)
 				if err != nil {
 					return err
 				}
@@ -341,12 +410,12 @@ func (s *Service) CreateReceipt(ctx context.Context, request dto.CreateReceiptRe
 						return invalid("lot expiry does not meet the item's minimum receive days")
 					}
 				}
-				serialID, err := local.ensureReceiptSerial(ctx, inbound.OwnerID, item, requestBatch.SerialNo, actor)
-				if err != nil {
-					return err
-				}
 				if item.SerialControlled && baseNumber.Cmp(big.NewRat(1, 1)) != 0 {
 					return invalid("each serialized receipt batch must convert to exactly 1 base unit")
+				}
+				serialID, err := local.ensureReceiptSerial(ctx, inbound.OwnerID, item, requestBatch.SerialNo, actor, seenSerials, nil)
+				if err != nil {
+					return err
 				}
 				var handlingUnitID *string
 				if requestBatch.HandlingUnitID != nil {
@@ -354,19 +423,40 @@ func (s *Service) CreateReceipt(ctx context.Context, request dto.CreateReceiptRe
 					if !inboundID(id, 120) {
 						return invalid("invalid handling_unit_id")
 					}
+					if seenHandlingUnits[id] {
+						return invalid("a handling unit can only be assigned to one receipt batch")
+					}
 					handlingUnit, err := local.repositories.Inventory.HandlingUnit.Get(ctx, id)
-					if err != nil || handlingUnit.OwnerID != inbound.OwnerID || handlingUnit.WarehouseID != inbound.WarehouseID || handlingUnit.CurrentLocationID == nil || *handlingUnit.CurrentLocationID != location.ID || handlingUnit.IsClosed {
+					if err != nil || handlingUnit.OwnerID != inbound.OwnerID || handlingUnit.WarehouseID != inbound.WarehouseID || handlingUnit.CurrentLocationID == nil || *handlingUnit.CurrentLocationID != location.ID || handlingUnit.ParentHandlingUnitID != nil || handlingUnit.IsClosed {
 						return invalid("handling unit is unavailable or is not at the received location")
 					}
+					positiveBalances, err := local.repositories.Inventory.Balance.CountPositiveForHandlingUnit(ctx, id)
+					if err != nil {
+						return err
+					}
+					if positiveBalances != 0 {
+						return invalid("handling unit must be empty before receiving stock into it")
+					}
+					children, err := local.repositories.Inventory.HandlingUnit.CountChildren(ctx, id)
+					if err != nil {
+						return err
+					}
+					if children != 0 {
+						return invalid("handling unit must not contain child handling units before receiving stock into it")
+					}
+					seenHandlingUnits[id] = true
 					handlingUnitID = &id
 				}
 				batchNo := batchIndex + 1
-				batch := model.ReceiptInventory{ID: fmt.Sprintf("%s-B%04d", receiptLineID, batchNo), ReceiptLineID: receiptLineID, ItemID: item.ID, SourceQty: sourceQty, SourceUOMID: inboundLine.UOMID, BaseQty: baseQty, BaseUOMID: item.BaseUOMID, LotID: lotID, HandlingUnitID: handlingUnitID, ReceivedLocationID: location.ID, InitialInventoryStatusID: qcPending.ID, CreatedBy: actor}
+				batch := model.ReceiptInventory{ID: fmt.Sprintf("%s-B%04d", receiptLineID, batchNo), ReceiptLineID: receiptLineID, ItemID: item.ID, SourceQty: sourceQty, SourceUOMID: receiptUOMID, BaseQty: baseQty, BaseUOMID: inboundLine.BaseUOMID, LotID: lotID, HandlingUnitID: handlingUnitID, ReceivedLocationID: location.ID, InitialInventoryStatusID: qcPending.ID, CreatedBy: actor}
 				if err := local.repositories.ReceiptInventory.Create(ctx, &batch); err != nil {
 					return err
 				}
 				if serialID != nil {
 					if err := local.repositories.ReceiptLineSerial.Create(ctx, &model.ReceiptLineSerial{ReceiptInventoryID: batch.ID, SerialID: *serialID}); err != nil {
+						if errors.Is(err, repository.ErrConflict) {
+							return invalid("serial_no is already linked to another receipt")
+						}
 						return err
 					}
 				}
@@ -444,13 +534,13 @@ func (s *Service) CompleteReceipt(ctx context.Context, id string, request dto.Tr
 				if lookupErr != nil {
 					return lookupErr
 				}
-				priorText, lookupErr := local.repositories.ReceiptLine.CompletedBeforeReceipt(ctx, inboundLine.ID, header.ID)
+				priorText, lookupErr := local.repositories.ReceiptLine.CompletedBaseBeforeReceipt(ctx, inboundLine.ID, header.ID)
 				if lookupErr != nil {
 					return lookupErr
 				}
 				prior, parseOK := new(big.Rat).SetString(priorText)
-				expected, expectedOK := new(big.Rat).SetString(inboundLine.ExpectedQty)
-				current, currentOK := new(big.Rat).SetString(line.ReceivedQty)
+				expected, expectedOK := new(big.Rat).SetString(inboundLine.ExpectedBaseQty)
+				current, currentOK := new(big.Rat).SetString(line.ReceivedBaseQty)
 				if !parseOK || !expectedOK || !currentOK {
 					return state("stored receipt quantity is invalid")
 				}
@@ -462,7 +552,15 @@ func (s *Service) CompleteReceipt(ctx context.Context, id string, request dto.Tr
 				if newOver.Sign() > 0 {
 					increment := new(big.Rat).Sub(newOver, priorOver)
 					if increment.Sign() > 0 {
-						expectedText, actualText, varianceText := inboundLine.ExpectedQty, new(big.Rat).Add(prior, current).FloatString(6), increment.FloatString(6)
+						actualText, conversionErr := inboundBaseToSource(new(big.Rat).Add(prior, current), inboundLine.UOMConversionToBase)
+						if conversionErr != nil {
+							return conversionErr
+						}
+						varianceText, conversionErr := inboundBaseToSource(increment, inboundLine.UOMConversionToBase)
+						if conversionErr != nil {
+							return conversionErr
+						}
+						expectedText := inboundLine.ExpectedQty
 						if err := local.recordException(ctx, header.OwnerID, header.WarehouseID, header.ID, &line.ID, "OVER_RECEIPT", &expectedText, &actualText, &varianceText, line.ExceptionNotes, actor); err != nil {
 							return err
 						}
@@ -544,11 +642,11 @@ func (s *Service) updateReceiptProgress(ctx context.Context, receipt model.Recei
 	received := new(big.Rat)
 	poIDs := make(map[string]bool)
 	for _, line := range inboundLines {
-		lineExpected, err := storedRatio(line.ExpectedQty)
+		lineExpected, err := storedRatio(line.ExpectedBaseQty)
 		if err != nil {
 			return err
 		}
-		lineReceived, err := storedRatio(line.CompletedReceiptQty)
+		lineReceived, err := storedRatio(line.CompletedReceiptBaseQty)
 		if err != nil {
 			return err
 		}
@@ -598,11 +696,11 @@ func (s *Service) updateReceiptProgress(ctx context.Context, receipt model.Recei
 		ordered := new(big.Rat)
 		completed := new(big.Rat)
 		for _, line := range lines {
-			lineOrdered, err := storedRatio(line.OrderedQty)
+			lineOrdered, err := storedRatio(line.OrderedBaseQty)
 			if err != nil {
 				return err
 			}
-			lineCompleted, err := storedRatio(line.CompletedReceiptQty)
+			lineCompleted, err := storedRatio(line.CompletedReceiptBaseQty)
 			if err != nil {
 				return err
 			}

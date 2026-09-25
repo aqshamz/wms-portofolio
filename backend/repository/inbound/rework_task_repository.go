@@ -11,8 +11,8 @@ import (
 
 type ReworkTaskRow struct {
 	model.ReworkTask
-	TaskStatusCode, TaskPriorityCode, QuarantineCaseID, OwnerID, WarehouseID, ItemID, ItemCode string
-	AssignedUsername                                                                           *string
+	TaskStatusCode, TaskPriorityCode, QuarantineCaseID, OwnerID, WarehouseID, ItemID, ItemCode, BaseUOMCode string
+	AssignedUsername                                                                                        *string
 }
 
 type ReworkTaskRepository struct{ db *gorm.DB }
@@ -30,13 +30,14 @@ func (r *ReworkTaskRepository) Lock(ctx context.Context, id string) (model.Rewor
 }
 
 func reworkTaskQuery(db *gorm.DB) *gorm.DB {
-	return db.Table("rework_task task").Select(`task.*,status.code task_status_code,priority.code task_priority_code,disposition.quarantine_case_id,quarantine.owner_id,quarantine.warehouse_id,batch.item_id,item.code item_code,assignee.username assigned_username`).
+	return db.Table("rework_task task").Select(`task.*,status.code task_status_code,priority.code task_priority_code,disposition.quarantine_case_id,quarantine.owner_id,quarantine.warehouse_id,batch.item_id,item.code item_code,uom.code base_uom_code,assignee.username assigned_username`).
 		Joins("JOIN task_status status ON status.task_status_id=task.task_status_id").
 		Joins("JOIN task_priority priority ON priority.task_priority_id=task.task_priority_id").
 		Joins("JOIN quarantine_disposition disposition ON disposition.quarantine_disposition_id=task.quarantine_disposition_id").
 		Joins("JOIN quarantine_case quarantine ON quarantine.quarantine_case_id=disposition.quarantine_case_id").
 		Joins("JOIN receipt_inventory batch ON batch.receipt_inventory_id=quarantine.receipt_inventory_id").
 		Joins("JOIN item ON item.item_id=batch.item_id").
+		Joins("JOIN uom ON uom.uom_id=task.uom_id").
 		Joins("LEFT JOIN app_account assignee ON assignee.account_id=task.assigned_to")
 }
 

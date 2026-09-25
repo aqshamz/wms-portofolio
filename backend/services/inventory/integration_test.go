@@ -70,6 +70,9 @@ func testIdentity(t *testing.T, fresh bool) {
 	ok(t, masterrepo.MigrateCatalog(tx))
 	ok(t, repository.Migrate(tx))
 	ok(t, repository.Migrate(tx))
+	if tx.Migrator().HasColumn(&model.InventoryLot{}, "quality_status_id") {
+		t.Fatal("obsolete inventory_lot.quality_status_id column still exists")
+	}
 	ctx := context.Background()
 	repos := repository.NewRepositories(tx)
 	s := NewService(repos)
@@ -117,14 +120,12 @@ func testIdentity(t *testing.T, fresh bool) {
 	otherLocation := master.WarehouseLocation{WarehouseID: elsewhere.ID, ZoneID: otherZone.ID, LocationTypeID: locationType.ID, Code: "B"}
 	ok(t, tx.Create(&location).Error)
 	ok(t, tx.Create(&otherLocation).Error)
-	quality := master.QualityStatus{Code: "IQ_" + suffix, Name: "Pending"}
-	ok(t, tx.Create(&quality).Error)
 	available := master.InventoryStatus{Code: "IA_" + suffix, Name: "Available", IsAllocatable: true, IsPickable: true}
 	hold := master.InventoryStatus{Code: "IH_" + suffix, Name: "Hold"}
 	ok(t, tx.Create(&available).Error)
 	ok(t, tx.Create(&hold).Error)
 
-	q := dto.CreateLotRequest{OwnerID: strings.ToUpper(owner.ID), ItemID: item.ID, LotNumber: " Batch-a ", ManufactureDate: ptr("2026-09-01"), ExpiryDate: ptr("2027-09-01"), QualityStatusID: &quality.ID}
+	q := dto.CreateLotRequest{OwnerID: strings.ToUpper(owner.ID), ItemID: item.ID, LotNumber: " Batch-a ", ManufactureDate: ptr("2026-09-01"), ExpiryDate: ptr("2027-09-01")}
 	lot, err := s.CreateLot(ctx, q, account.ID)
 	ok(t, err)
 	if lot.LotNumber != "Batch-a" || lot.OwnerID != owner.ID || *lot.ManufactureDate != "2026-09-01" || lot.CreatedBy == nil || *lot.CreatedBy != account.ID {
@@ -148,7 +149,7 @@ func testIdentity(t *testing.T, fresh bool) {
 	q.OwnerID = owner.ID
 	for _, target := range []struct{ table, key, id, field string }{
 		{"organization", "organization_id", owner.ID, "is_active"}, {"item", "item_id", item.ID, "is_active"},
-		{"item", "item_id", item.ID, "lot_controlled"}, {"quality_status", "quality_status_id", quality.ID, "is_active"},
+		{"item", "item_id", item.ID, "lot_controlled"},
 	} {
 		ok(t, tx.Table(target.table).Where(target.key+" = ?", target.id).Update(target.field, false).Error)
 		_, err = s.CreateLot(ctx, q, account.ID)
@@ -340,6 +341,11 @@ func testIdentity(t *testing.T, fresh bool) {
 	if hus.TotalItems != 1 || hus.Items[0].ID != child.ID {
 		t.Fatal("HU parent filter")
 	}
+	huWithChild, err := s.GetHandlingUnit(ctx, hu.ID)
+	ok(t, err)
+	if huWithChild.ChildCount != 1 || huWithChild.PositiveBalanceCount != 0 {
+		t.Fatalf("HU operational counts are incorrect: %+v", huWithChild)
+	}
 	// Document workflows may relocate a whole, unreserved leaf HU atomically.
 	relocationTarget := master.WarehouseLocation{WarehouseID: warehouse.ID, ZoneID: zone.ID, LocationTypeID: locationType.ID, Code: "C"}
 	ok(t, tx.Create(&relocationTarget).Error)
@@ -357,7 +363,7 @@ func testIdentity(t *testing.T, fresh bool) {
 	}
 	relocationHURead, err := s.GetHandlingUnit(ctx, relocationHU.ID)
 	ok(t, err)
-	if relocationHURead.CurrentLocationID == nil || *relocationHURead.CurrentLocationID != relocationTarget.ID {
+	if relocationHURead.CurrentLocationID == nil || *relocationHURead.CurrentLocationID != relocationTarget.ID || relocationHURead.PositiveBalanceCount != 1 || relocationHURead.ChildCount != 0 {
 		t.Fatal("HU location was not relocated with inventory")
 	}
 	// Legacy imports may contain cycles. Reject them without hanging.

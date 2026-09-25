@@ -86,19 +86,6 @@ func (s *Service) studyInventoryStatus(ctx context.Context, code string) (model.
 	return model.InventoryStatus{}, studyDataError("inventory status "+code, nil)
 }
 
-func (s *Service) studyQualityStatus(ctx context.Context, code string) (model.QualityStatus, error) {
-	rows, _, err := s.repositories.Catalog.QualityStatus.List(ctx, masterrepository.CatalogFilter{Search: code, Page: 1, PageSize: 100})
-	if err != nil {
-		return model.QualityStatus{}, studyDataError("quality status "+code, err)
-	}
-	for _, row := range rows {
-		if row.Code == code {
-			return row, nil
-		}
-	}
-	return model.QualityStatus{}, studyDataError("quality status "+code, nil)
-}
-
 func (s *Service) studyHandlingUnitType(ctx context.Context, code string) (model.HandlingUnitType, error) {
 	rows, _, err := s.repositories.Catalog.HandlingUnitType.List(ctx, masterrepository.CatalogFilter{Search: code, Page: 1, PageSize: 100})
 	if err != nil {
@@ -218,14 +205,6 @@ func (s *Service) SeedStudyInventory(ctx context.Context, actor string) (dto.Stu
 	if err != nil {
 		return dto.StudySeedResponse{}, err
 	}
-	passed, err := s.studyQualityStatus(ctx, "PASSED")
-	if err != nil {
-		return dto.StudySeedResponse{}, err
-	}
-	pending, err := s.studyQualityStatus(ctx, "PENDING")
-	if err != nil {
-		return dto.StudySeedResponse{}, err
-	}
 	palletType, err := s.studyHandlingUnitType(ctx, "PALLET")
 	if err != nil {
 		return dto.StudySeedResponse{}, err
@@ -246,19 +225,19 @@ func (s *Service) SeedStudyInventory(ctx context.Context, actor string) (dto.Stu
 		}
 	}
 
-	lot250A, created, err := s.ensureStudyLot(ctx, dto.CreateLotRequest{OwnerID: owner.ID, ItemID: coffee250.ID, LotNumber: "STUDY-250G-2026-08-A", ManufactureDate: studyTextPointer("2026-08-01"), ExpiryDate: studyTextPointer("2027-08-01"), QualityStatusID: &passed.ID}, actor)
+	lot250A, created, err := s.ensureStudyLot(ctx, dto.CreateLotRequest{OwnerID: owner.ID, ItemID: coffee250.ID, LotNumber: "STUDY-250G-2026-08-A", ManufactureDate: studyTextPointer("2026-08-01"), ExpiryDate: studyTextPointer("2027-08-01")}, actor)
 	if err != nil {
 		return dto.StudySeedResponse{}, err
 	}
 	countIdentity(created)
 	result.Lots["coffee_250g_lot_a"] = lot250A.ID
-	lot250B, created, err := s.ensureStudyLot(ctx, dto.CreateLotRequest{OwnerID: owner.ID, ItemID: coffee250.ID, LotNumber: "STUDY-250G-2026-08-B", ManufactureDate: studyTextPointer("2026-08-15"), ExpiryDate: studyTextPointer("2027-08-15"), QualityStatusID: &passed.ID}, actor)
+	lot250B, created, err := s.ensureStudyLot(ctx, dto.CreateLotRequest{OwnerID: owner.ID, ItemID: coffee250.ID, LotNumber: "STUDY-250G-2026-08-B", ManufactureDate: studyTextPointer("2026-08-15"), ExpiryDate: studyTextPointer("2027-08-15")}, actor)
 	if err != nil {
 		return dto.StudySeedResponse{}, err
 	}
 	countIdentity(created)
 	result.Lots["coffee_250g_lot_b"] = lot250B.ID
-	lot1KG, created, err := s.ensureStudyLot(ctx, dto.CreateLotRequest{OwnerID: owner.ID, ItemID: coffee1KG.ID, LotNumber: "STUDY-1KG-2026-09-A", ManufactureDate: studyTextPointer("2026-09-01"), ExpiryDate: studyTextPointer("2027-09-01"), QualityStatusID: &pending.ID}, actor)
+	lot1KG, created, err := s.ensureStudyLot(ctx, dto.CreateLotRequest{OwnerID: owner.ID, ItemID: coffee1KG.ID, LotNumber: "STUDY-1KG-2026-09-A", ManufactureDate: studyTextPointer("2026-09-01"), ExpiryDate: studyTextPointer("2027-09-01")}, actor)
 	if err != nil {
 		return dto.StudySeedResponse{}, err
 	}

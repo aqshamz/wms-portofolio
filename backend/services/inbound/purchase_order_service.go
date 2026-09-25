@@ -111,7 +111,7 @@ func (s *Service) CreatePurchaseOrder(ctx context.Context, request dto.CreatePur
 			if !inboundUUID(requestLine.ItemID) || !inboundUUID(requestLine.UOMID) {
 				return invalid("line item_id and uom_id must be UUIDs")
 			}
-			quantity, _, err := inboundQuantity(requestLine.OrderedQty, "ordered_qty", false)
+			quantity, quantityNumber, err := inboundQuantity(requestLine.OrderedQty, "ordered_qty", false)
 			if err != nil {
 				return err
 			}
@@ -131,6 +131,10 @@ func (s *Service) CreatePurchaseOrder(ctx context.Context, request dto.CreatePur
 			if err != nil || !unit.IsActive || !unit.IsReceivingUOM {
 				return invalid("line UOM is not an active receiving UOM for the item")
 			}
+			conversion, orderedBaseQty, err := inboundQuantitySnapshot(quantityNumber, unit.ConversionToBase)
+			if err != nil {
+				return err
+			}
 			expiry, err := inboundOptionalDate(requestLine.ExpectedExpiryDate, "expected_expiry_date")
 			if err != nil {
 				return err
@@ -148,7 +152,7 @@ func (s *Service) CreatePurchaseOrder(ctx context.Context, request dto.CreatePur
 				return err
 			}
 			lineNo := index + 1
-			line := model.PurchaseOrderLine{ID: fmt.Sprintf("%s-L%04d", documentID, lineNo), PurchaseOrderID: documentID, OwnerID: request.OwnerID, LineNo: lineNo, ItemID: item.ID, OrderedQty: quantity, OverReceiptTolerancePct: overTolerance, UnderReceiptTolerancePct: underTolerance, UOMID: unit.UOMID, VendorItemCode: vendorCode, ExpectedLotNo: expectedLot, ExpectedExpiryDate: expiry, Notes: lineNotes, CreatedBy: actor}
+			line := model.PurchaseOrderLine{ID: fmt.Sprintf("%s-L%04d", documentID, lineNo), PurchaseOrderID: documentID, OwnerID: request.OwnerID, LineNo: lineNo, ItemID: item.ID, OrderedQty: quantity, UOMConversionToBase: conversion, OrderedBaseQty: orderedBaseQty, BaseUOMID: item.BaseUOMID, OverReceiptTolerancePct: overTolerance, UnderReceiptTolerancePct: underTolerance, UOMID: unit.UOMID, VendorItemCode: vendorCode, ExpectedLotNo: expectedLot, ExpectedExpiryDate: expiry, Notes: lineNotes, CreatedBy: actor}
 			if err := local.repositories.PurchaseOrderLine.Create(ctx, &line); err != nil {
 				return err
 			}

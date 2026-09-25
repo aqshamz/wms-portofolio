@@ -75,6 +75,9 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	inboundOK(t, authrepository.MigratePermissions(tx))
 	inboundOK(t, authrepository.MigrateAdministration(tx))
 	inboundOK(t, inventoryrepository.Migrate(tx))
+	if !fresh {
+		inboundOK(t, repository.MigrateQuantitySnapshots(tx))
+	}
 	inboundOK(t, repository.Migrate(tx))
 	inboundOK(t, repository.SeedReferenceData(tx))
 
@@ -151,10 +154,13 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	inboundOK(t, tx.Create(&mastermodel.BusinessPartnerType{PartnerID: vendor.ID, PartnerTypeID: supplierType.ID}).Error)
 	var each mastermodel.UOM
 	inboundOK(t, tx.Where("code = ?", "EA").Take(&each).Error)
+	var box mastermodel.UOM
+	inboundOK(t, tx.Where("code = ?", "BOX").Take(&box).Error)
 	minimumReceiveDays := 10
 	item := mastermodel.Item{OwnerID: owner.ID, Code: "ITEM_" + suffix, Name: "Lot item", BaseUOMID: each.ID, LotControlled: true, MinimumReceiveDays: &minimumReceiveDays}
 	inboundOK(t, tx.Create(&item).Error)
 	inboundOK(t, tx.Create(&mastermodel.ItemUOM{ItemID: item.ID, UOMID: each.ID, ConversionToBase: "1", IsReceivingUOM: true, IsPickingUOM: true}).Error)
+	inboundOK(t, tx.Create(&mastermodel.ItemUOM{ItemID: item.ID, UOMID: box.ID, ConversionToBase: "2", IsReceivingUOM: true, IsPickingUOM: true}).Error)
 	strategy := mastermodel.PutawayStrategy{OwnerID: &owner.ID, WarehouseID: &warehouse.ID, Code: "IBP_" + suffix, Name: "Inbound storage"}
 	inboundOK(t, tx.Create(&strategy).Error)
 	inboundOK(t, tx.Create(&mastermodel.PutawayStrategyRule{PutawayStrategyID: strategy.ID, SequenceNo: 10, LocationTypeID: &storageType.ID, ZoneID: &zone.ID, IsActive: true}).Error)
@@ -214,6 +220,12 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	if po.StatusCode != "APPROVED" || po.VersionNo != 6 {
 		t.Fatalf("purchase order was not approved: %+v", po)
 	}
+	if po.Lines[0].UOMConversionToBase != "1.000000" || po.Lines[0].OrderedBaseQty != "10.000000" || po.Lines[0].BaseUOMID != each.ID || po.Lines[0].BaseUOMCode != each.Code {
+		t.Fatalf("purchase-order quantity snapshot is incorrect: %+v", po.Lines[0])
+	}
+	// A later Item-UOM edit must not change the conversion already captured by
+	// the purchase order or the inbound order created from it.
+	inboundOK(t, tx.Model(&mastermodel.ItemUOM{}).Where("item_id = ? AND uom_id = ?", item.ID, each.ID).Update("conversion_to_base", "2").Error)
 
 	inboundOrder, err := service.CreateInboundOrder(ctx, dto.CreateInboundOrderRequest{
 		PurchaseOrderID: po.ID, BusinessDate: businessDate,
@@ -231,6 +243,140 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	if inboundOrder.StatusCode != "RELEASED" || inboundOrder.VersionNo != 5 {
 		t.Fatalf("inbound order was not released: %+v", inboundOrder)
 	}
+	if inboundOrder.Lines[0].UOMConversionToBase != "1.000000" || inboundOrder.Lines[0].ExpectedBaseQty != "10.000000" || inboundOrder.Lines[0].BaseUOMID != each.ID || inboundOrder.Lines[0].BaseUOMCode != each.Code {
+		t.Fatalf("inbound-order quantity snapshot did not preserve the purchase-order conversion: %+v", inboundOrder.Lines[0])
+	}
+	inboundOK(t, tx.Model(&mastermodel.ItemUOM{}).Where("item_id = ? AND uom_id = ?", item.ID, each.ID).Update("conversion_to_base", "1").Error)
+
+	serialItem := mastermodel.Item{OwnerID: owner.ID, Code: "SERIAL_" + suffix, Name: "Serialized item", BaseUOMID: each.ID, SerialControlled: true}
+	inboundOK(t, tx.Create(&serialItem).Error)
+	inboundOK(t, tx.Create(&mastermodel.ItemUOM{ItemID: serialItem.ID, UOMID: each.ID, ConversionToBase: "1", IsReceivingUOM: true, IsPickingUOM: true}).Error)
+	inboundOK(t, tx.Create(&mastermodel.ItemUOM{ItemID: serialItem.ID, UOMID: box.ID, ConversionToBase: "2", IsReceivingUOM: true, IsPickingUOM: true}).Error)
+	serialPO, err := service.CreatePurchaseOrder(ctx, dto.CreatePurchaseOrderRequest{OwnerID: owner.ID, VendorID: vendor.ID, WarehouseID: warehouse.ID, BusinessDate: businessDate, PurchaseOrderNo: "SERIAL-PO-" + suffix, OrderedAt: orderedAt, Lines: []dto.PurchaseOrderLineRequest{{ItemID: serialItem.ID, OrderedQty: "3", UOMID: each.ID}}}, account.ID)
+	inboundOK(t, err)
+	serialPO, err = service.ApprovePurchaseOrder(ctx, serialPO.ID, dto.TransitionRequest{ExpectedVersion: serialPO.VersionNo}, account.ID)
+	inboundOK(t, err)
+	serialInbound, err := service.CreateInboundOrder(ctx, dto.CreateInboundOrderRequest{PurchaseOrderID: serialPO.ID, BusinessDate: businessDate, Lines: []dto.InboundOrderLineRequest{{PurchaseOrderLineID: serialPO.Lines[0].ID, ExpectedQty: "2"}}}, account.ID)
+	inboundOK(t, err)
+	serialInbound, err = service.ReleaseInboundOrder(ctx, serialInbound.ID, dto.TransitionRequest{ExpectedVersion: serialInbound.VersionNo}, account.ID)
+	inboundOK(t, err)
+	reuseInbound, err := service.CreateInboundOrder(ctx, dto.CreateInboundOrderRequest{PurchaseOrderID: serialPO.ID, BusinessDate: businessDate, Lines: []dto.InboundOrderLineRequest{{PurchaseOrderLineID: serialPO.Lines[0].ID, ExpectedQty: "1"}}}, account.ID)
+	inboundOK(t, err)
+	reuseInbound, err = service.ReleaseInboundOrder(ctx, reuseInbound.ID, dto.TransitionRequest{ExpectedVersion: reuseInbound.VersionNo}, account.ID)
+	inboundOK(t, err)
+	serialOne, serialTwo := "SN-A-"+suffix, "SN-B-"+suffix
+	preRegisteredSerial := inventorymodel.SerialNumber{ID: "SER-PRE-" + suffix, OwnerID: owner.ID, ItemID: serialItem.ID, SerialNo: serialOne, CreatedBy: &account.ID}
+	inboundOK(t, tx.Create(&preRegisteredSerial).Error)
+	boxSerialOne, boxSerialTwo := "SN-BOX-A-"+suffix, "SN-BOX-B-"+suffix
+	_, err = service.CreateReceipt(ctx, dto.CreateReceiptRequest{InboundID: serialInbound.ID, BusinessDate: businessDate, ReceivedAt: businessDate + "T08:15:00+07:00", DockLocationID: dock.ID, Lines: []dto.ReceiptLineRequest{{InboundLineID: serialInbound.Lines[0].ID, UOMID: &box.ID, ReceivedQty: "1", RejectedQty: "0", Batches: []dto.ReceiptBatchRequest{{SourceQty: "0.5", ReceivedLocationID: qc.ID, SerialNo: &boxSerialOne}, {SourceQty: "0.5", ReceivedLocationID: qc.ID, SerialNo: &boxSerialTwo}}}}}, account.ID)
+	inboundWant(t, err, ErrInvalidInput)
+	_, err = service.CreateReceipt(ctx, dto.CreateReceiptRequest{InboundID: serialInbound.ID, BusinessDate: businessDate, ReceivedAt: businessDate + "T08:15:00+07:00", DockLocationID: dock.ID, Lines: []dto.ReceiptLineRequest{{InboundLineID: serialInbound.Lines[0].ID, ReceivedQty: "2", RejectedQty: "0", Batches: []dto.ReceiptBatchRequest{{SourceQty: "2", ReceivedLocationID: qc.ID, SerialNo: &serialOne}}}}}, account.ID)
+	inboundWant(t, err, ErrInvalidInput)
+	_, err = service.CreateReceipt(ctx, dto.CreateReceiptRequest{InboundID: serialInbound.ID, BusinessDate: businessDate, ReceivedAt: businessDate + "T08:15:00+07:00", DockLocationID: dock.ID, Lines: []dto.ReceiptLineRequest{{InboundLineID: serialInbound.Lines[0].ID, ReceivedQty: "2", RejectedQty: "0", Batches: []dto.ReceiptBatchRequest{{SourceQty: "1", ReceivedLocationID: qc.ID, SerialNo: &serialOne}, {SourceQty: "1", ReceivedLocationID: qc.ID, SerialNo: &serialOne}}}}}, account.ID)
+	inboundWant(t, err, ErrInvalidInput)
+	var rolledBackSerials int64
+	inboundOK(t, tx.Model(&inventorymodel.SerialNumber{}).Where("owner_id = ? AND item_id = ? AND serial_no = ?", owner.ID, serialItem.ID, serialOne).Count(&rolledBackSerials).Error)
+	if rolledBackSerials != 1 {
+		t.Fatal("invalid serialized receipt did not preserve only the pre-registered serial identity")
+	}
+	serializedReceiptRequest := []dto.ReceiptLineRequest{{InboundLineID: serialInbound.Lines[0].ID, ReceivedQty: "2", RejectedQty: "0", Batches: []dto.ReceiptBatchRequest{{SourceQty: "1", ReceivedLocationID: qc.ID, SerialNo: &serialOne}, {SourceQty: "1", ReceivedLocationID: qc.ID, SerialNo: &serialTwo}}}}
+	serializedReceipt, err := service.CreateReceipt(ctx, dto.CreateReceiptRequest{InboundID: serialInbound.ID, BusinessDate: businessDate, ReceivedAt: businessDate + "T08:15:00+07:00", DockLocationID: dock.ID, Lines: serializedReceiptRequest}, account.ID)
+	inboundOK(t, err)
+	if len(serializedReceipt.Lines[0].Batches) != 2 || serializedReceipt.Lines[0].Batches[0].SerialID == nil || serializedReceipt.Lines[0].Batches[0].SerialNo == nil || *serializedReceipt.Lines[0].Batches[0].SerialNo != serialOne {
+		t.Fatalf("serialized receipt identities are missing: %+v", serializedReceipt.Lines[0].Batches)
+	}
+	firstSerialID := *serializedReceipt.Lines[0].Batches[0].SerialID
+	serializedReceipt, err = service.UpdateReceipt(ctx, serializedReceipt.ID, dto.UpdateReceiptRequest{ExpectedVersion: serializedReceipt.VersionNo, ReceivedAt: businessDate + "T08:20:00+07:00", DockLocationID: dock.ID, Lines: serializedReceiptRequest}, account.ID)
+	inboundOK(t, err)
+	if serializedReceipt.Lines[0].Batches[0].SerialID == nil || *serializedReceipt.Lines[0].Batches[0].SerialID != firstSerialID {
+		t.Fatal("editing an open receipt did not retain its own serial identity")
+	}
+	serializedReceipt, err = service.CompleteReceipt(ctx, serializedReceipt.ID, dto.TransitionRequest{ExpectedVersion: serializedReceipt.VersionNo}, account.ID)
+	inboundOK(t, err)
+	serializedEligibleFilter := repository.ListFilter{OwnerID: owner.ID, WarehouseID: warehouse.ID, Search: serializedReceipt.ID, Page: 1, PageSize: 10, InspectionEligible: true}
+	serializedEligible, err := service.ListReceipts(ctx, serializedEligibleFilter)
+	inboundOK(t, err)
+	if serializedEligible.TotalItems != 1 || len(serializedEligible.Items) != 1 || serializedEligible.Items[0].ID != serializedReceipt.ID {
+		t.Fatalf("serialized receipt sharing an aggregate balance should be eligible for inspection: %+v", serializedEligible)
+	}
+	firstSerialInspection, err := service.CreateQualityInspection(ctx, dto.CreateQualityInspectionRequest{ReceiptInventoryID: serializedReceipt.Lines[0].Batches[0].ID}, account.ID)
+	inboundOK(t, err)
+	serializedEligible, err = service.ListReceipts(ctx, serializedEligibleFilter)
+	inboundOK(t, err)
+	if serializedEligible.TotalItems != 1 {
+		t.Fatalf("serialized receipt should remain eligible while another serial is uninspected: %+v", serializedEligible)
+	}
+	if firstSerialInspection.SourceBalanceVersionNo == nil {
+		t.Fatal("serialized inspection did not expose its aggregate source balance version")
+	}
+	firstSerialInspection, err = service.CompleteQualityInspection(ctx, firstSerialInspection.ID, dto.CompleteQualityInspectionRequest{ExpectedVersion: firstSerialInspection.VersionNo, ExpectedBalanceVersion: *firstSerialInspection.SourceBalanceVersionNo, PassedQty: "1", FailedQty: "0", PutawayTargetLocationID: &storage.ID}, account.ID)
+	inboundOK(t, err)
+	if firstSerialInspection.PutawayTask == nil || firstSerialInspection.InspectionResultCode != "ACCEPTED" {
+		t.Fatalf("first serialized inspection did not create its putaway task: %+v", firstSerialInspection)
+	}
+	secondSerialInspection, err := service.CreateQualityInspection(ctx, dto.CreateQualityInspectionRequest{ReceiptInventoryID: serializedReceipt.Lines[0].Batches[1].ID}, account.ID)
+	inboundOK(t, err)
+	serializedEligible, err = service.ListReceipts(ctx, serializedEligibleFilter)
+	inboundOK(t, err)
+	if serializedEligible.TotalItems != 0 {
+		t.Fatalf("serialized receipt should leave the picker after every serial has an inspection: %+v", serializedEligible)
+	}
+	if secondSerialInspection.SourceBalanceVersionNo == nil {
+		t.Fatal("second serialized inspection did not expose the updated aggregate balance version")
+	}
+	secondSerialInspection, err = service.CompleteQualityInspection(ctx, secondSerialInspection.ID, dto.CompleteQualityInspectionRequest{ExpectedVersion: secondSerialInspection.VersionNo, ExpectedBalanceVersion: *secondSerialInspection.SourceBalanceVersionNo, PassedQty: "1", FailedQty: "0", PutawayTargetLocationID: &storage.ID}, account.ID)
+	inboundOK(t, err)
+	if secondSerialInspection.PutawayTask == nil || secondSerialInspection.InspectionResultCode != "ACCEPTED" {
+		t.Fatalf("second serialized inspection did not create its putaway task: %+v", secondSerialInspection)
+	}
+	var palletType mastermodel.HandlingUnitType
+	inboundOK(t, tx.Where("code=?", "PALLET").Take(&palletType).Error)
+	receivingHU := inventorymodel.HandlingUnit{ID: "HU-RCV-" + suffix, OwnerID: owner.ID, WarehouseID: warehouse.ID, HandlingUnitTypeID: palletType.ID, CurrentLocationID: &qc.ID, Barcode: "HU-RCV-" + suffix, CreatedBy: &account.ID}
+	inboundOK(t, tx.Create(&receivingHU).Error)
+	duplicateHUReceipt := dto.CreateReceiptRequest{
+		InboundID:      inboundOrder.ID,
+		BusinessDate:   businessDate,
+		ReceivedAt:     businessDate + "T08:25:00+07:00",
+		DockLocationID: dock.ID,
+		Lines: []dto.ReceiptLineRequest{
+			{
+				InboundLineID: inboundOrder.Lines[0].ID,
+				ReceivedQty:   "2",
+				RejectedQty:   "0",
+				Batches: []dto.ReceiptBatchRequest{
+					{
+						SourceQty:          "1",
+						ReceivedLocationID: qc.ID,
+						HandlingUnitID:     &receivingHU.ID,
+						Lot: &dto.ReceiptLotRequest{
+							LotNumber:  "HU-A-" + suffix,
+							ExpiryDate: &expiryText,
+						},
+					},
+					{
+						SourceQty:          "1",
+						ReceivedLocationID: qc.ID,
+						HandlingUnitID:     &receivingHU.ID,
+						Lot: &dto.ReceiptLotRequest{
+							LotNumber:  "HU-B-" + suffix,
+							ExpiryDate: &expiryText,
+						},
+					},
+				},
+			},
+		},
+	}
+	_, err = service.CreateReceipt(ctx, duplicateHUReceipt, account.ID)
+	inboundWant(t, err, ErrInvalidInput)
+	childHU := inventorymodel.HandlingUnit{ID: "HU-RCV-CHILD-" + suffix, OwnerID: owner.ID, WarehouseID: warehouse.ID, HandlingUnitTypeID: palletType.ID, ParentHandlingUnitID: &receivingHU.ID, CurrentLocationID: &qc.ID, Barcode: "HU-RCV-CHILD-" + suffix, CreatedBy: &account.ID}
+	inboundOK(t, tx.Create(&childHU).Error)
+	composedHUReceipt := duplicateHUReceipt
+	composedHUReceipt.Lines[0].ReceivedQty = "1"
+	composedHUReceipt.Lines[0].Batches = duplicateHUReceipt.Lines[0].Batches[:1]
+	_, err = service.CreateReceipt(ctx, composedHUReceipt, account.ID)
+	inboundWant(t, err, ErrInvalidInput)
+	_, err = service.CreateReceipt(ctx, dto.CreateReceiptRequest{InboundID: reuseInbound.ID, BusinessDate: businessDate, ReceivedAt: businessDate + "T08:30:00+07:00", DockLocationID: dock.ID, Lines: []dto.ReceiptLineRequest{{InboundLineID: reuseInbound.Lines[0].ID, ReceivedQty: "1", RejectedQty: "0", Batches: []dto.ReceiptBatchRequest{{SourceQty: "1", ReceivedLocationID: qc.ID, SerialNo: &serialOne}}}}}, account.ID)
+	inboundWant(t, err, ErrInvalidInput)
 
 	tooSoon := expiry.AddDate(0, 0, 5).Format("2006-01-02")
 	// Receiving-enabled areas may hold batches, but the truck header needs a Dock.
@@ -249,6 +395,11 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 		Lines: []dto.ReceiptLineRequest{{InboundLineID: inboundOrder.Lines[0].ID, ReceivedQty: "1", RejectedQty: "0", Batches: []dto.ReceiptBatchRequest{{SourceQty: "1", ReceivedLocationID: qc.ID, Lot: &dto.ReceiptLotRequest{LotNumber: "SHORT-" + suffix, ExpiryDate: &tooSoon}}}}},
 	}, account.ID)
 	inboundWant(t, err, ErrInvalidInput)
+	_, err = service.CreateReceipt(ctx, dto.CreateReceiptRequest{
+		InboundID: inboundOrder.ID, BusinessDate: businessDate, ReceivedAt: businessDate + "T08:30:00+07:00", DockLocationID: dock.ID,
+		Lines: []dto.ReceiptLineRequest{{InboundLineID: inboundOrder.Lines[0].ID, UOMID: &box.ID, ReceivedQty: "6", RejectedQty: "0", ExceptionNotes: inboundPointer("Six boxes exceed ten expected base units"), Batches: []dto.ReceiptBatchRequest{{SourceQty: "6", ReceivedLocationID: qc.ID, Lot: &dto.ReceiptLotRequest{LotNumber: "OVER-UOM-" + suffix, ExpiryDate: &expiryText}}}}},
+	}, account.ID)
+	inboundWant(t, err, ErrInvalidInput)
 	var rolledBackLots int64
 	inboundOK(t, tx.Table("inventory_lot").Where("lot_number = ?", "SHORT-"+suffix).Count(&rolledBackLots).Error)
 	if rolledBackLots != 0 {
@@ -258,14 +409,18 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	receipt, err := service.CreateReceipt(ctx, dto.CreateReceiptRequest{
 		InboundID: inboundOrder.ID, BusinessDate: businessDate, ReceivedAt: businessDate + "T09:00:00+07:00", DockLocationID: dock.ID,
 		Lines: []dto.ReceiptLineRequest{
-			{InboundLineID: inboundOrder.Lines[0].ID, ReceivedQty: "10", RejectedQty: "2", ExceptionNotes: inboundPointer("Two damaged units rejected at dock"), ExceptionTypeCode: inboundPointer("DAMAGED"), Batches: []dto.ReceiptBatchRequest{{SourceQty: "8", ReceivedLocationID: qc.ID, Lot: &dto.ReceiptLotRequest{LotNumber: "LOT-" + suffix, ExpiryDate: &expiryText}}}},
+			{InboundLineID: inboundOrder.Lines[0].ID, UOMID: &box.ID, ReceivedQty: "5", RejectedQty: "1", ExceptionNotes: inboundPointer("One damaged box rejected at dock"), ExceptionTypeCode: inboundPointer("DAMAGED"), Batches: []dto.ReceiptBatchRequest{{SourceQty: "4", ReceivedLocationID: qc.ID, Lot: &dto.ReceiptLotRequest{LotNumber: "LOT-" + suffix, ExpiryDate: &expiryText}}}},
 			{InboundLineID: inboundOrder.Lines[1].ID, ReceivedQty: "2", RejectedQty: "2", ExceptionNotes: inboundPointer("Entire line is the wrong supplied item"), ExceptionTypeCode: inboundPointer("WRONG_ITEM")},
 		},
 	}, account.ID)
 	inboundOK(t, err)
-	if receipt.StatusCode != "OPEN" || len(receipt.Lines) != 2 || receipt.Lines[0].AcceptedQty != "8.000000" || receipt.Lines[1].AcceptedQty != "0.000000" {
+	if receipt.StatusCode != "OPEN" || len(receipt.Lines) != 2 || receipt.Lines[0].AcceptedQty != "4.000000" || receipt.Lines[1].AcceptedQty != "0.000000" {
 		t.Fatalf("unexpected open receipt: %+v", receipt)
 	}
+	if receipt.Lines[0].UOMID != box.ID || receipt.Lines[0].UOMCode != box.Code || receipt.Lines[0].UOMConversionToBase != "2.000000" || receipt.Lines[0].ReceivedBaseQty != "10.000000" || receipt.Lines[0].RejectedBaseQty != "2.000000" || receipt.Lines[0].BaseUOMID != each.ID || receipt.Lines[0].BaseUOMCode != each.Code || receipt.Lines[0].Batches[0].SourceUOMID != box.ID || receipt.Lines[0].Batches[0].BaseQty != "8.000000" {
+		t.Fatalf("receipt-specific UOM snapshot is incorrect: %+v", receipt.Lines[0])
+	}
+	inboundOK(t, tx.Model(&mastermodel.ItemUOM{}).Where("item_id = ? AND uom_id = ?", item.ID, box.ID).Update("conversion_to_base", "3").Error)
 	_, err = service.UpdateReceipt(ctx, receipt.ID, dto.UpdateReceiptRequest{ExpectedVersion: receipt.VersionNo, ReceivedAt: businessDate + "T09:05:00+07:00", DockLocationID: qc.ID, Lines: []dto.ReceiptLineRequest{
 		{InboundLineID: inboundOrder.Lines[0].ID, ReceivedQty: "1", RejectedQty: "0", Batches: []dto.ReceiptBatchRequest{{SourceQty: "1", ReceivedLocationID: qc.ID, Lot: &dto.ReceiptLotRequest{LotNumber: "LOT-" + suffix, ExpiryDate: &expiryText}}}},
 	}}, account.ID)
@@ -275,13 +430,14 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	}}, account.ID)
 	inboundWant(t, err, ErrInvalidInput)
 	receipt, err = service.UpdateReceipt(ctx, receipt.ID, dto.UpdateReceiptRequest{ExpectedVersion: receipt.VersionNo, ReceivedAt: businessDate + "T09:05:00+07:00", DockLocationID: dock.ID, VehicleNumber: inboundPointer("EDITED-TRUCK"), Lines: []dto.ReceiptLineRequest{
-		{InboundLineID: inboundOrder.Lines[0].ID, ReceivedQty: "10", RejectedQty: "2", ExceptionNotes: inboundPointer("Two damaged units rejected at dock"), ExceptionTypeCode: inboundPointer("DAMAGED"), Batches: []dto.ReceiptBatchRequest{{SourceQty: "8", ReceivedLocationID: qc.ID, Lot: &dto.ReceiptLotRequest{LotNumber: "LOT-" + suffix, ExpiryDate: &expiryText}}}},
+		{InboundLineID: inboundOrder.Lines[0].ID, ReceivedQty: "5", RejectedQty: "1", ExceptionNotes: inboundPointer("One damaged box rejected at dock"), ExceptionTypeCode: inboundPointer("DAMAGED"), Batches: []dto.ReceiptBatchRequest{{SourceQty: "4", ReceivedLocationID: qc.ID, Lot: &dto.ReceiptLotRequest{LotNumber: "LOT-" + suffix, ExpiryDate: &expiryText}}}},
 		{InboundLineID: inboundOrder.Lines[1].ID, ReceivedQty: "2", RejectedQty: "2", ExceptionNotes: inboundPointer("Entire line is the wrong supplied item"), ExceptionTypeCode: inboundPointer("WRONG_ITEM")},
 	}}, account.ID)
 	inboundOK(t, err)
-	if receipt.VersionNo != 2 || receipt.VehicleNumber == nil || *receipt.VehicleNumber != "EDITED-TRUCK" {
+	if receipt.VersionNo != 2 || receipt.VehicleNumber == nil || *receipt.VehicleNumber != "EDITED-TRUCK" || receipt.Lines[0].UOMID != box.ID || receipt.Lines[0].UOMConversionToBase != "2.000000" || receipt.Lines[0].ReceivedBaseQty != "10.000000" {
 		t.Fatalf("receipt draft edit failed: %+v", receipt)
 	}
+	inboundOK(t, tx.Model(&mastermodel.ItemUOM{}).Where("item_id = ? AND uom_id = ?", item.ID, box.ID).Update("conversion_to_base", "2").Error)
 	var before int64
 	inboundOK(t, tx.Model(&inventorymodel.InventoryMovement{}).Where("source_document_id = ?", receipt.ID).Count(&before).Error)
 	if before != 0 || receipt.Lines[0].Batches[0].InitialBalanceID != nil {
@@ -350,7 +506,7 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	if historyReceipts.TotalItems != 1 {
 		t.Fatal("inspection filtering must not hide receipt history")
 	}
-	if inspection.QualityStatusCode != "PENDING" || inspection.VersionNo != 1 {
+	if inspection.QualityStatusCode != "PENDING" || inspection.VersionNo != 1 || inspection.InspectedQty != "8.000000" || inspection.BaseUOMCode != each.Code {
 		t.Fatalf("unexpected open inspection: %+v", inspection)
 	}
 	if inspection.SourceBalanceVersionNo == nil || *inspection.SourceBalanceVersionNo < 1 || inspection.BaseUOMCode == "" || inspection.IsIndivisible == nil {
@@ -366,6 +522,9 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	inboundOK(t, err)
 	if inspection.InspectionResultCode != "PARTIAL" || inspection.PutawayTask == nil || inspection.QuarantineCase == nil {
 		t.Fatalf("inspection did not create both outcomes: %+v", inspection)
+	}
+	if inspection.PassedQty != "6.000000" || inspection.FailedQty != "2.000000" || inspection.PutawayTask.PlannedQty != "6.000000" || inspection.PutawayTask.BaseUOMCode != each.Code || inspection.QuarantineCase.QuarantineQty != "2.000000" || inspection.QuarantineCase.BaseUOMCode != each.Code {
+		t.Fatalf("quality outcomes did not preserve base-unit quantities: %+v", inspection)
 	}
 	var passBalance inventorymodel.InventoryBalance
 	inboundOK(t, tx.Where("balance_id=?", inspection.PutawayTask.SourceBalanceID).Take(&passBalance).Error)
@@ -582,12 +741,12 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	inboundWant(t, err, repository.ErrNotFound)
 	reworkResult, err := service.StartReworkTask(ctx, rework.ID, dto.ReworkTransitionRequest{ExpectedVersion: rework.VersionNo}, account.ID)
 	inboundOK(t, err)
-	if reworkResult.AssignedUsername == nil || *reworkResult.AssignedUsername != account.Username {
+	if reworkResult.AssignedUsername == nil || *reworkResult.AssignedUsername != account.Username || reworkResult.BaseUOMCode != each.Code || reworkResult.PlannedQty != "1.000000" {
 		t.Fatalf("rework detail must expose the assignee username: %+v", reworkResult)
 	}
 	reworkPage, err := service.ListReworkTasks(ctx, repository.ListFilter{OwnerID: owner.ID, WarehouseID: warehouse.ID, Search: rework.ID, Page: 1, PageSize: 10})
 	inboundOK(t, err)
-	if len(reworkPage.Items) != 1 || reworkPage.Items[0].AssignedUsername == nil || *reworkPage.Items[0].AssignedUsername != account.Username {
+	if len(reworkPage.Items) != 1 || reworkPage.Items[0].AssignedUsername == nil || *reworkPage.Items[0].AssignedUsername != account.Username || reworkPage.Items[0].BaseUOMCode != each.Code {
 		t.Fatalf("rework list must expose the assignee username: %+v", reworkPage)
 	}
 	reworkResult, err = service.CompleteReworkTask(ctx, reworkResult.ID, dto.CompleteReworkRequest{ExpectedVersion: reworkResult.VersionNo, ResultNotes: inboundPointer("Seal replaced")}, account.ID)
@@ -597,6 +756,9 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	}
 	reinspection, err := service.GetQualityInspection(ctx, *reworkResult.ReinspectionID)
 	inboundOK(t, err)
+	if reinspection.InspectedQty != "1.000000" || reinspection.BaseUOMCode != each.Code {
+		t.Fatalf("reinspection did not preserve the rework base quantity: %+v", reinspection)
+	}
 	var reworkBalance inventorymodel.InventoryBalance
 	inboundOK(t, tx.Where("balance_id=?", reworkResult.SourceBalanceID).Take(&reworkBalance).Error)
 	reinspection, err = service.CompleteQualityInspection(ctx, reinspection.ID, dto.CompleteQualityInspectionRequest{ExpectedVersion: reinspection.VersionNo, ExpectedBalanceVersion: reworkBalance.VersionNo, PassedQty: "1", FailedQty: "0", PutawayTargetLocationID: &storage.ID}, account.ID)

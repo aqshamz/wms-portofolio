@@ -23,10 +23,19 @@ func defaultMovementTypes() []model.MovementType {
 	}
 }
 
-// Migrate is additive. Conflicting legacy data causes a rollback, never cleanup.
+// Migrate preserves inventory identities and stock history. Obsolete lot-level
+// quality metadata is removed because quality belongs to inspections and stock.
 func Migrate(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		if err := master.MigrateHandlingUnitTypes(tx); err != nil {
+			return err
+		}
+		if err := tx.Exec(`DO $$ BEGIN
+			IF to_regclass(current_schema() || '.inventory_lot') IS NOT NULL THEN
+				ALTER TABLE inventory_lot DROP CONSTRAINT IF EXISTS fk_identity_lot_quality;
+				ALTER TABLE inventory_lot DROP COLUMN IF EXISTS quality_status_id;
+			END IF;
+		END $$`).Error; err != nil {
 			return err
 		}
 		if err := tx.AutoMigrate(&model.InventoryLot{}, &model.SerialNumber{}, &model.HandlingUnit{}, &model.MovementType{}, &model.InventoryBalance{}, &model.InventoryMovement{}, &model.SerialInventory{}); err != nil {
@@ -54,7 +63,6 @@ func Migrate(db *gorm.DB) error {
 			`DO $$ BEGIN ALTER TABLE serial_number ADD CONSTRAINT fk_identity_serial_number_item FOREIGN KEY(owner_id,item_id) REFERENCES item(owner_id,item_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
 			`DO $$ BEGIN ALTER TABLE serial_number ADD CONSTRAINT fk_identity_serial_number_owner FOREIGN KEY(owner_id) REFERENCES organization(organization_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
 			`DO $$ BEGIN ALTER TABLE serial_number ADD CONSTRAINT fk_identity_serial_number_actor FOREIGN KEY(created_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
-			`DO $$ BEGIN ALTER TABLE inventory_lot ADD CONSTRAINT fk_identity_lot_quality FOREIGN KEY(quality_status_id) REFERENCES quality_status(quality_status_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
 			`DO $$ BEGIN ALTER TABLE inventory_lot ADD CONSTRAINT ck_identity_lot_dates CHECK (manufacture_date IS NULL OR expiry_date IS NULL OR expiry_date >= manufacture_date); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
 			`DO $$ BEGIN ALTER TABLE handling_unit ADD CONSTRAINT fk_identity_hu_owner FOREIGN KEY(owner_id) REFERENCES organization(organization_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
 			`DO $$ BEGIN ALTER TABLE handling_unit ADD CONSTRAINT fk_identity_hu_warehouse FOREIGN KEY(warehouse_id) REFERENCES warehouse(warehouse_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,

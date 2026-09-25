@@ -173,6 +173,30 @@ func inboundMultiply(quantity, conversion *big.Rat) (string, *big.Rat, error) {
 	return parsed, exact, nil
 }
 
+// inboundQuantitySnapshot freezes the conversion used by a document line and
+// its resulting base quantity. Later Item-UOM edits must not rewrite history.
+func inboundQuantitySnapshot(quantity *big.Rat, conversion string) (string, string, error) {
+	conversionText, conversionNumber, err := inboundQuantity(conversion, "uom_conversion_to_base", false)
+	if err != nil {
+		return "", "", err
+	}
+	result := new(big.Rat).Mul(quantity, conversionNumber)
+	formatted := result.FloatString(6)
+	baseQuantity, exact, err := inboundQuantity(formatted, "base quantity", true)
+	if err != nil || exact.Cmp(result) != 0 {
+		return "", "", invalid("converted base quantity exceeds numeric(20,6) precision")
+	}
+	return conversionText, baseQuantity, nil
+}
+
+func inboundBaseToSource(quantity *big.Rat, conversion string) (string, error) {
+	conversionNumber, ok := new(big.Rat).SetString(conversion)
+	if !ok || conversionNumber.Sign() <= 0 {
+		return "", state("stored UOM conversion is invalid")
+	}
+	return new(big.Rat).Quo(quantity, conversionNumber).FloatString(6), nil
+}
+
 func (s *Service) documentType(ctx context.Context, code string) (mastermodel.DocumentType, error) {
 	value, err := s.repositories.Master.DocumentType.ByCode(ctx, code)
 	if err != nil {

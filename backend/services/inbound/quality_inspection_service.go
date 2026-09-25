@@ -32,8 +32,17 @@ func (s *Service) CreateQualityInspection(ctx context.Context, request dto.Creat
 		balance, err := local.repositories.Inventory.Balance.Get(ctx, *batch.InitialBalanceID)
 		available, availableErr := storedRatio(balance.AvailableQty)
 		batchQty, batchErr := storedRatio(batch.BaseQty)
-		if err != nil || availableErr != nil || batchErr != nil || balance.InventoryStatusCode != "QC_PENDING" || available.Cmp(batchQty) < 0 || ((batch.SerialID != nil || batch.HandlingUnitID != nil) && available.Cmp(batchQty) != 0) {
+		if err != nil || availableErr != nil || batchErr != nil || balance.InventoryStatusCode != "QC_PENDING" || available.Cmp(batchQty) < 0 || (batch.HandlingUnitID != nil && available.Cmp(batchQty) != 0) {
 			return state("the full receipt batch is no longer available in QC_PENDING")
+		}
+		if batch.SerialID != nil {
+			serialState, err := local.repositories.Inventory.SerialState.Get(ctx, *batch.SerialID)
+			if err != nil {
+				return err
+			}
+			if serialState.BalanceID != balance.ID {
+				return state("the receipt serial is no longer available in QC_PENDING")
+			}
 		}
 		kind, err := local.documentType(ctx, "QUALITY_INSPECTION")
 		if err != nil {
@@ -109,8 +118,17 @@ func (s *Service) CompleteQualityInspection(ctx context.Context, id string, requ
 		}
 		balance, err := local.repositories.Inventory.Balance.Get(ctx, *sourceBalanceID)
 		available, availableErr := storedRatio(balance.AvailableQty)
-		if err != nil || availableErr != nil || balance.InventoryStatusCode != "QC_PENDING" || available.Cmp(inspected) < 0 || ((batch.SerialID != nil || batch.HandlingUnitID != nil) && available.Cmp(inspected) != 0) {
+		if err != nil || availableErr != nil || balance.InventoryStatusCode != "QC_PENDING" || available.Cmp(inspected) < 0 || (batch.HandlingUnitID != nil && available.Cmp(inspected) != 0) {
 			return state("inspection source is no longer the full QC_PENDING balance")
+		}
+		if batch.SerialID != nil {
+			serialState, err := local.repositories.Inventory.SerialState.Get(ctx, *batch.SerialID)
+			if err != nil {
+				return err
+			}
+			if serialState.BalanceID != balance.ID {
+				return state("inspection serial is no longer in the source QC_PENDING balance")
+			}
 		}
 		if balance.VersionNo != request.ExpectedBalanceVersion {
 			return repository.ErrConcurrentWrite

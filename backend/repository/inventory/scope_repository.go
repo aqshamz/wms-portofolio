@@ -14,6 +14,17 @@ func NewInventoryScopeRepository(db *gorm.DB) *InventoryScopeRepository {
 	return &InventoryScopeRepository{db: db}
 }
 
+func (r *InventoryScopeRepository) OwnerAllowed(ctx context.Context, accountID, ownerID string) (bool, error) {
+	if requestscope.IsUnrestricted(ctx, accountID) {
+		return true, nil
+	}
+	var count int64
+	err := r.db.WithContext(ctx).Table("account_owner_access").
+		Where("account_id=? AND owner_id=?", accountID, ownerID).
+		Count(&count).Error
+	return count > 0, Error(err)
+}
+
 func (r *InventoryScopeRepository) Allowed(ctx context.Context, accountID, ownerID, warehouseID string) (bool, error) {
 	if requestscope.IsUnrestricted(ctx, accountID) {
 		return true, nil
@@ -28,9 +39,12 @@ func (r *InventoryScopeRepository) Allowed(ctx context.Context, accountID, owner
 
 func (r *InventoryScopeRepository) ResourceScope(ctx context.Context, resource, id string) (string, string, error) {
 	queries := map[string]string{
-		"balance":      "SELECT owner_id::text, warehouse_id::text FROM inventory_balance WHERE balance_id=?",
-		"movement":     "SELECT owner_id::text, warehouse_id::text FROM inventory_movement WHERE movement_id=?",
-		"serial-state": "SELECT state.owner_id::text, balance.warehouse_id::text FROM serial_inventory state JOIN inventory_balance balance ON balance.balance_id=state.balance_id WHERE state.serial_id=?",
+		"balance":       "SELECT owner_id::text, warehouse_id::text FROM inventory_balance WHERE balance_id=?",
+		"movement":      "SELECT owner_id::text, warehouse_id::text FROM inventory_movement WHERE movement_id=?",
+		"serial-state":  "SELECT state.owner_id::text, balance.warehouse_id::text FROM serial_inventory state JOIN inventory_balance balance ON balance.balance_id=state.balance_id WHERE state.serial_id=?",
+		"lot":           "SELECT owner_id::text, '' warehouse_id FROM inventory_lot WHERE lot_id=?",
+		"serial":        "SELECT owner_id::text, '' warehouse_id FROM serial_number WHERE serial_id=?",
+		"handling-unit": "SELECT owner_id::text, warehouse_id::text FROM handling_unit WHERE handling_unit_id=?",
 	}
 	query, exists := queries[resource]
 	if !exists {
