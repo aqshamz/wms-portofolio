@@ -278,9 +278,9 @@ export function ReworkScreen({
                       </td>
                       <td className="px-5 py-4">{task.quarantine_case_id}</td>
                       <td className="px-5 py-4">
-                        {task.planned_qty} / {task.completed_qty}
+                        {task.planned_qty} / {task.completed_qty} {task.base_uom_code}
                         <p className="mt-1 text-xs text-slate-500">
-                          Base units
+                          Planned / completed
                         </p>
                       </td>
                       <td className="px-5 py-4">
@@ -325,8 +325,14 @@ export function ReworkScreen({
                   </p>
                   <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
                     {[
-                      ["Planned (base units)", task.planned_qty],
-                      ["Completed (base units)", task.completed_qty],
+                      [
+                        "Planned quantity",
+                        `${task.planned_qty} ${task.base_uom_code}`,
+                      ],
+                      [
+                        "Completed quantity",
+                        `${task.completed_qty} ${task.base_uom_code}`,
+                      ],
                       ["Priority", reworkLabel(task.task_priority_code)],
                       [
                         "Assigned account",

@@ -84,6 +84,7 @@ it("supports confirmation, claiming, completion notes and the generated reinspec
 it("keeps read-only users from execution but shows instructions and lineage", async () => {
   mount(false);
   await screen.findByText("Replace damaged seals");
+  expect(screen.getByText("2.000000 EA")).toBeInTheDocument();
   expect(
     screen.queryByRole("button", { name: "Start rework" }),
   ).not.toBeInTheDocument();

@@ -16,7 +16,12 @@ export interface InboundOrderLine {
   item_code: string;
   item_name: string;
   expected_qty: string;
+  uom_conversion_to_base: string;
+  expected_base_qty: string;
+  base_uom_id: string;
+  base_uom_code: string;
   completed_receipt_qty: string;
+  completed_receipt_base_qty: string;
   uom_id: string;
   uom_code: string;
   expected_lot_no?: string;

@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 import { InventoryBalancesScreen } from "@/features/inventory/inventory-screen";
 import { InventoryMovementsScreen } from "@/features/inventory/movement-screen";
 import { InventorySerialStatesScreen } from "@/features/inventory/serial-state-screen";
+import { InventoryLotsScreen } from "@/features/inventory/lot-screen";
+import { InventorySerialsScreen } from "@/features/inventory/serial-screen";
+import { InventoryHandlingUnitsScreen } from "@/features/inventory/handling-unit-screen";
 import { getServerSession } from "@/lib/auth/session";
 import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions";
 
@@ -13,7 +16,17 @@ export default async function InventoryPage({
   params: Promise<{ section: string }>;
 }) {
   const { section } = await params;
-  if (!["balances", "movements", "serials"].includes(section)) notFound();
+  if (
+    ![
+      "balances",
+      "movements",
+      "serials",
+      "serial-numbers",
+      "lots",
+      "handling-units",
+    ].includes(section)
+  )
+    notFound();
   const session = await getServerSession();
   if (session.status !== "authenticated") return null;
   if (!hasPermission(session.user.permissions, PERMISSIONS.INVENTORY.READ))
@@ -33,9 +46,25 @@ export default async function InventoryPage({
     <InventoryMovementsScreen
       timezone={session.user.preferred_timezone || "Asia/Jakarta"}
     />
-  ) : (
+  ) : section === "serials" ? (
     <InventorySerialStatesScreen
       timezone={session.user.preferred_timezone || "Asia/Jakarta"}
+    />
+  ) : section === "serial-numbers" ? (
+    <InventorySerialsScreen
+      timezone={session.user.preferred_timezone || "Asia/Jakarta"}
+    />
+  ) : section === "lots" ? (
+    <InventoryLotsScreen
+      timezone={session.user.preferred_timezone || "Asia/Jakarta"}
+    />
+  ) : (
+    <InventoryHandlingUnitsScreen
+      timezone={session.user.preferred_timezone || "Asia/Jakarta"}
+      canCreate={hasPermission(
+        session.user.permissions,
+        PERMISSIONS.INVENTORY.IDENTITY,
+      )}
     />
   );
 }

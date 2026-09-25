@@ -33,6 +33,11 @@ export interface ReceiptLine {
   item_name: string;
   received_qty: string;
   rejected_qty: string;
+  uom_conversion_to_base: string;
+  received_base_qty: string;
+  rejected_base_qty: string;
+  base_uom_id: string;
+  base_uom_code: string;
   exception_notes?: string;
   exception_type_code?: string;
   accepted_qty: string;
@@ -80,6 +85,7 @@ export interface ReceiptBatchRequest {
 
 export interface ReceiptLineRequest {
   inbound_line_id: string;
+  uom_id?: string;
   received_qty: string;
   rejected_qty: string;
   batches: ReceiptBatchRequest[];

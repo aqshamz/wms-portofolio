@@ -109,10 +109,13 @@ export function ReworkDetailDialog({
                 label="Assigned account"
                 value={reworkAssignee(task, capabilities.accountId)}
               />
-              <Detail label="Planned (base units)" value={task.planned_qty} />
               <Detail
-                label="Completed (base units)"
-                value={task.completed_qty}
+                label="Planned quantity"
+                value={`${task.planned_qty} ${task.base_uom_code}`}
+              />
+              <Detail
+                label="Completed quantity"
+                value={`${task.completed_qty} ${task.base_uom_code}`}
               />
               <Detail
                 label="Created"

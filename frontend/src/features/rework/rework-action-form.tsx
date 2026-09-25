@@ -82,7 +82,7 @@ export function ReworkActionForm({
       <p className="text-sm text-slate-700">
         {action === "start"
           ? "Starting claims this task for you. Carry out the recorded work instructions before completing it."
-          : `Completion records the entire planned quantity (${task.planned_qty} base units) and creates a child quality inspection. Stock stays QC pending until the inspection and subsequent inbound steps are completed.`}
+          : `Completion records the entire planned quantity (${task.planned_qty} ${task.base_uom_code}) and creates a child quality inspection. Stock stays QC pending until the inspection and subsequent inbound steps are completed.`}
       </p>
       {action === "complete" ? (
         <FormField
@@ -104,7 +104,7 @@ export function ReworkActionForm({
           <p>
             {action === "start"
               ? "Start this task and assign it to yourself?"
-              : `Confirm that all ${task.planned_qty} base units have been reworked. Completion cannot be edited here; QC still needs to reinspect the stock.`}
+              : `Confirm that all ${task.planned_qty} ${task.base_uom_code} have been reworked. Completion cannot be edited here; QC still needs to reinspect the stock.`}
           </p>
           {action === "complete" && decision.result_notes ? (
             <p className="break-words whitespace-pre-wrap">

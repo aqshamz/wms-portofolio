@@ -137,7 +137,10 @@ const inboundNavigation: InboundNavigationItem[] = [
 const inventoryNavigation: InventoryNavigationItem[] = [
   { label: "Balances", href: "/inventory/balances" },
   { label: "Movements", href: "/inventory/movements" },
+  { label: "Serial numbers", href: "/inventory/serial-numbers" },
   { label: "Serial states", href: "/inventory/serials" },
+  { label: "Lots", href: "/inventory/lots" },
+  { label: "Handling units", href: "/inventory/handling-units" },
 ];
 
 const masterDataNavigation: MasterDataNavigationItem[] = [

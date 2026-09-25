@@ -15,8 +15,13 @@ export interface PurchaseOrderLine {
   item_code: string;
   item_name: string;
   ordered_qty: string;
+  uom_conversion_to_base: string;
+  ordered_base_qty: string;
+  base_uom_id: string;
+  base_uom_code: string;
   scheduled_qty: string;
   completed_receipt_qty: string;
+  completed_receipt_base_qty: string;
   over_receipt_tolerance_pct: string;
   under_receipt_tolerance_pct: string;
   uom_id: string;

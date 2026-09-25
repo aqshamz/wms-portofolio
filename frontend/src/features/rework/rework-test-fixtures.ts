@@ -19,6 +19,7 @@ export const testTask: ReworkTask = {
   planned_qty: "2.000000",
   completed_qty: "0.000000",
   uom_id: "uom-1",
+  base_uom_code: "EA",
   assigned_to: null,
   work_instructions: "Replace damaged seals",
   result_notes: null,

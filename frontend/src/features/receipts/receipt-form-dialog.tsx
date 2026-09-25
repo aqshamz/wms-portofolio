@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,6 +14,7 @@ import {
   type Control,
   type FieldErrors,
   type UseFormRegister,
+  type UseFormSetValue,
 } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -28,10 +29,20 @@ import {
 } from "@/features/inbound-orders/inbound-order-api";
 import type { InboundOrderLine } from "@/features/inbound-orders/inbound-order-types";
 import {
+  getItem,
   itemCatalogKeys,
   listItems,
+  listUOMs,
 } from "@/features/item-catalog/item-catalog-api";
-import type { CatalogItem } from "@/features/item-catalog/item-catalog-types";
+import type {
+  CatalogItem,
+  UOM,
+} from "@/features/item-catalog/item-catalog-types";
+import {
+  handlingUnitKeys,
+  listHandlingUnits,
+} from "@/features/inventory/inventory-api";
+import type { HandlingUnit } from "@/features/inventory/inventory-types";
 import {
   createReceipt,
   receiptKeys,
@@ -71,6 +82,7 @@ function toRequestLine(
 ): ReceiptLineRequest {
   return {
     inbound_line_id: line.inbound_line_id,
+    uom_id: line.uom_id,
     received_qty: line.received_qty.trim(),
     rejected_qty: line.rejected_qty.trim(),
     exception_type_code:
@@ -101,14 +113,25 @@ function remaining(line: InboundOrderLine) {
   ).toFixed(6);
 }
 
+function remainingBase(line: InboundOrderLine) {
+  return Decimal.max(
+    new Decimal(line.expected_base_qty).minus(line.completed_receipt_base_qty),
+    0,
+  ).toFixed(6);
+}
+
 function BatchEditor({
   lineIndex,
   batchIndex,
   control,
   register,
+  setValue,
   locations,
+  handlingUnits,
   lotControlled,
   serialControlled,
+  sourceUOMCode,
+  baseUOMCode,
   error,
   canRemove,
   onRemove,
@@ -117,13 +140,44 @@ function BatchEditor({
   batchIndex: number;
   control: Control<ReceiptFormValues>;
   register: UseFormRegister<ReceiptFormValues>;
+  setValue: UseFormSetValue<ReceiptFormValues>;
   locations: WarehouseLocation[];
+  handlingUnits: HandlingUnit[];
   lotControlled: boolean;
   serialControlled: boolean;
+  sourceUOMCode: string;
+  baseUOMCode: string;
   error?: FieldErrors<ReceiptFormValues["lines"][number]["batches"][number]>;
   canRemove: boolean;
   onRemove: () => void;
 }) {
+  const receivedLocationId = useWatch({
+    control,
+    name: `lines.${lineIndex}.batches.${batchIndex}.received_location_id`,
+  });
+  const selectedHandlingUnitId = useWatch({
+    control,
+    name: `lines.${lineIndex}.batches.${batchIndex}.handling_unit_id`,
+  });
+  const eligibleHandlingUnits = handlingUnits.filter(
+    (unit) =>
+      !unit.is_closed &&
+      !unit.parent_handling_unit_id &&
+      unit.positive_balance_count === 0 &&
+      unit.child_count === 0 &&
+      unit.current_location_id === receivedLocationId,
+  );
+  const selectedHandlingUnit = handlingUnits.find(
+    (unit) => unit.handling_unit_id === selectedHandlingUnitId,
+  );
+  if (
+    selectedHandlingUnit &&
+    !eligibleHandlingUnits.some(
+      (unit) => unit.handling_unit_id === selectedHandlingUnit.handling_unit_id,
+    )
+  ) {
+    eligibleHandlingUnits.push(selectedHandlingUnit);
+  }
   return (
     <div className="rounded-xl bg-slate-50 p-3">
       <div className="flex items-center justify-between gap-3">
@@ -142,19 +196,43 @@ function BatchEditor({
         </Button>
       </div>
       <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <FormField
-          label="Batch quantity"
-          htmlFor={`receipt-${lineIndex}-${batchIndex}-qty`}
-          required
-          error={error?.source_qty?.message}
-        >
-          <Input
-            id={`receipt-${lineIndex}-${batchIndex}-qty`}
-            inputMode="decimal"
-            invalid={Boolean(error?.source_qty)}
-            {...register(`lines.${lineIndex}.batches.${batchIndex}.source_qty`)}
-          />
-        </FormField>
+        {serialControlled ? (
+          <FormField
+            label="Quantity per serial"
+            htmlFor={`receipt-${lineIndex}-${batchIndex}-qty`}
+            required
+            error={error?.source_qty?.message}
+          >
+            <input
+              type="hidden"
+              {...register(
+                `lines.${lineIndex}.batches.${batchIndex}.source_qty`,
+              )}
+            />
+            <Input
+              id={`receipt-${lineIndex}-${batchIndex}-qty`}
+              value={`1 ${baseUOMCode}`}
+              invalid={Boolean(error?.source_qty)}
+              readOnly
+            />
+          </FormField>
+        ) : (
+          <FormField
+            label={`Batch quantity${sourceUOMCode ? ` (${sourceUOMCode})` : ""}`}
+            htmlFor={`receipt-${lineIndex}-${batchIndex}-qty`}
+            required
+            error={error?.source_qty?.message}
+          >
+            <Input
+              id={`receipt-${lineIndex}-${batchIndex}-qty`}
+              inputMode="decimal"
+              invalid={Boolean(error?.source_qty)}
+              {...register(
+                `lines.${lineIndex}.batches.${batchIndex}.source_qty`,
+              )}
+            />
+          </FormField>
+        )}
         <FormField
           label="Received location"
           htmlFor={`receipt-${lineIndex}-${batchIndex}-location`}
@@ -176,7 +254,22 @@ function BatchEditor({
                 placeholder="Select location"
                 invalid={Boolean(error?.received_location_id)}
                 className="mt-2"
-                onValueChange={field.onChange}
+                onValueChange={(locationId) => {
+                  field.onChange(locationId);
+                  const handlingUnit = handlingUnits.find(
+                    (unit) => unit.handling_unit_id === selectedHandlingUnitId,
+                  );
+                  if (
+                    handlingUnit &&
+                    handlingUnit.current_location_id !== locationId
+                  ) {
+                    setValue(
+                      `lines.${lineIndex}.batches.${batchIndex}.handling_unit_id`,
+                      "",
+                      { shouldValidate: true },
+                    );
+                  }
+                }}
               />
             )}
           />
@@ -244,17 +337,35 @@ function BatchEditor({
           </FormField>
         ) : null}
         <FormField
-          label="Handling unit ID"
+          label="Handling unit"
           htmlFor={`receipt-${lineIndex}-${batchIndex}-hu`}
           error={error?.handling_unit_id?.message}
         >
-          <Input
-            id={`receipt-${lineIndex}-${batchIndex}-hu`}
-            placeholder="Optional existing HU"
-            {...register(
-              `lines.${lineIndex}.batches.${batchIndex}.handling_unit_id`,
+          <Controller
+            control={control}
+            name={`lines.${lineIndex}.batches.${batchIndex}.handling_unit_id`}
+            render={({ field }) => (
+              <Select
+                id={`receipt-${lineIndex}-${batchIndex}-hu`}
+                ariaLabel={`Batch ${batchIndex + 1} handling unit`}
+                value={field.value || "none"}
+                options={[
+                  { value: "none", label: "Loose stock (no handling unit)" },
+                  ...eligibleHandlingUnits.map((unit) => ({
+                    value: unit.handling_unit_id,
+                    label: unit.barcode,
+                  })),
+                ]}
+                invalid={Boolean(error?.handling_unit_id)}
+                onValueChange={(value) =>
+                  field.onChange(value === "none" ? "" : value)
+                }
+              />
             )}
           />
+          <p className="mt-2 text-xs text-slate-500">
+            Only open root containers at this received location are shown.
+          </p>
         </FormField>
       </div>
     </div>
@@ -266,7 +377,10 @@ function ReceiptLineEditor({
   source,
   control,
   register,
+  setValue,
   locations,
+  handlingUnits,
+  uoms,
   error,
   removable,
   onRemove,
@@ -275,13 +389,45 @@ function ReceiptLineEditor({
   source?: InboundOrderLine;
   control: Control<ReceiptFormValues>;
   register: UseFormRegister<ReceiptFormValues>;
+  setValue: UseFormSetValue<ReceiptFormValues>;
   locations: WarehouseLocation[];
+  handlingUnits: HandlingUnit[];
+  uoms: UOM[];
   error?: FieldErrors<ReceiptFormValues["lines"][number]>;
   removable: boolean;
   onRemove: () => void;
 }) {
   const line = useWatch({ control, name: `lines.${index}` });
-  const batches = useFieldArray({ control, name: `lines.${index}.batches` });
+  const [preparedSerialCount, setPreparedSerialCount] = useState<number | null>(
+    null,
+  );
+  const itemDetail = useQuery({
+    queryKey: itemCatalogKeys.item(line.item_id || "none"),
+    queryFn: () => getItem(line.item_id),
+    enabled: Boolean(line.item_id),
+  });
+  const uomById = new Map(uoms.map((uom) => [uom.uom_id, uom]));
+  const receivingUOMs = (itemDetail.data?.uoms ?? [])
+    .filter(
+      (unit) =>
+        unit.is_active &&
+        unit.is_receiving_uom &&
+        (!line.serial_controlled || unit.uom_id === line.base_uom_id),
+    )
+    .map((unit) => {
+      const uom = uomById.get(unit.uom_id);
+      return {
+        value: unit.uom_id,
+        label: uom
+          ? `${uom.name} (${uom.code}) · 1 = ${unit.conversion_to_base} ${line.base_uom_code}`
+          : `${unit.uom_id.slice(0, 8)} · 1 = ${unit.conversion_to_base} ${line.base_uom_code}`,
+        conversion: unit.conversion_to_base,
+      };
+    });
+  const selectedUOM = uomById.get(line.uom_id);
+  const sourceUOMCode =
+    selectedUOM?.code ??
+    (line.uom_id === source?.uom_id ? source.uom_code : "");
   const accepted = useMemo(() => {
     try {
       return Decimal.max(
@@ -292,6 +438,26 @@ function ReceiptLineEditor({
       return "—";
     }
   }, [line.received_qty, line.rejected_qty]);
+  const acceptedBase = useMemo(() => {
+    try {
+      return new Decimal(accepted)
+        .mul(line.uom_conversion_to_base || 0)
+        .toFixed(6);
+    } catch {
+      return "—";
+    }
+  }, [accepted, line.uom_conversion_to_base]);
+  const requiredSerials = useMemo(() => {
+    if (!line.serial_controlled) return null;
+    try {
+      const quantity = new Decimal(acceptedBase);
+      return quantity.isInteger() && quantity.gte(0) && quantity.lte(1000)
+        ? quantity.toNumber()
+        : null;
+    } catch {
+      return null;
+    }
+  }, [acceptedBase, line.serial_controlled]);
   const batchTotal = useMemo(() => {
     try {
       return line.batches
@@ -305,6 +471,71 @@ function ReceiptLineEditor({
     }
   }, [line.batches]);
   const batchError = error?.batches?.root?.message ?? error?.batches?.message;
+  const replaceBatches = (
+    values: ReceiptFormValues["lines"][number]["batches"],
+  ) => {
+    setValue(`lines.${index}.batches`, values, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
+  const syncSerialRows = () => {
+    if (requiredSerials === null) return;
+    replaceBatches(
+      Array.from({ length: requiredSerials }, (_, batchIndex) => ({
+        ...emptyReceiptBatch,
+        ...line.batches[batchIndex],
+        source_qty: "1",
+        received_location_id:
+          line.batches[batchIndex]?.received_location_id ??
+          line.batches[0]?.received_location_id ??
+          locations[0]?.location_id ??
+          "",
+      })),
+    );
+    setPreparedSerialCount(requiredSerials);
+  };
+  const changeUOM = (uomId: string) => {
+    const selected = receivingUOMs.find((unit) => unit.value === uomId);
+    if (!selected) return;
+    const oldConversion = new Decimal(line.uom_conversion_to_base || 1);
+    const newConversion = new Decimal(selected.conversion);
+    const convert = (quantity: string) => {
+      try {
+        return new Decimal(quantity || 0)
+          .mul(oldConversion)
+          .div(newConversion)
+          .toDecimalPlaces(6)
+          .toFixed(6);
+      } catch {
+        return quantity;
+      }
+    };
+    setValue(`lines.${index}.uom_id`, uomId, { shouldValidate: true });
+    setValue(`lines.${index}.uom_conversion_to_base`, selected.conversion, {
+      shouldValidate: true,
+    });
+    setValue(`lines.${index}.received_qty`, convert(line.received_qty), {
+      shouldValidate: true,
+    });
+    setValue(`lines.${index}.rejected_qty`, convert(line.rejected_qty), {
+      shouldValidate: true,
+    });
+    replaceBatches(
+      line.batches.map((batch) => ({
+        ...batch,
+        source_qty: convert(batch.source_qty),
+      })),
+    );
+  };
+  const renderedBatchCount =
+    line.serial_controlled && preparedSerialCount !== null
+      ? preparedSerialCount
+      : line.batches.length;
+  const displayedBatchTotal =
+    line.serial_controlled && preparedSerialCount !== null
+      ? new Decimal(preparedSerialCount).toFixed(6)
+      : batchTotal;
 
   return (
     <article className="rounded-2xl border border-slate-200 p-4">
@@ -315,7 +546,7 @@ function ReceiptLineEditor({
           </h3>
           <p className="mt-0.5 font-mono text-xs text-slate-500">
             {source
-              ? `${source.item_code} · ${source.uom_code} · remaining ${remaining(source)}`
+              ? `${source.item_code} · remaining ${remaining(source)} ${source.uom_code} / ${remainingBase(source)} ${source.base_uom_code}`
               : line.item_id}
           </p>
           <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
@@ -344,9 +575,50 @@ function ReceiptLineEditor({
       </div>
       <input type="hidden" {...register(`lines.${index}.inbound_line_id`)} />
       <input type="hidden" {...register(`lines.${index}.item_id`)} />
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <input
+        type="hidden"
+        {...register(`lines.${index}.uom_conversion_to_base`)}
+      />
+      <input type="hidden" {...register(`lines.${index}.base_uom_id`)} />
+      <input type="hidden" {...register(`lines.${index}.base_uom_code`)} />
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <FormField
-          label="Received quantity"
+          label="Receiving UOM"
+          htmlFor={`receipt-${index}-uom`}
+          required
+          error={error?.uom_id?.message}
+        >
+          <Controller
+            control={control}
+            name={`lines.${index}.uom_id`}
+            render={({ field }) => (
+              <Select
+                id={`receipt-${index}-uom`}
+                ariaLabel={`Receiving UOM for line ${index + 1}`}
+                value={field.value}
+                options={receivingUOMs}
+                placeholder={
+                  itemDetail.isPending
+                    ? "Loading receiving UOMs…"
+                    : receivingUOMs.length
+                      ? "Select receiving UOM"
+                      : line.serial_controlled
+                        ? "Base UOM is not receiving-enabled"
+                        : "No receiving UOM configured"
+                }
+                disabled={itemDetail.isPending || !receivingUOMs.length}
+                invalid={Boolean(error?.uom_id)}
+                className="mt-2"
+                onValueChange={(value) => {
+                  field.onChange(value);
+                  changeUOM(value);
+                }}
+              />
+            )}
+          />
+        </FormField>
+        <FormField
+          label={`Received quantity${sourceUOMCode ? ` (${sourceUOMCode})` : ""}`}
           htmlFor={`receipt-${index}-received`}
           required
           error={error?.received_qty?.message}
@@ -359,7 +631,7 @@ function ReceiptLineEditor({
           />
         </FormField>
         <FormField
-          label="Rejected quantity"
+          label={`Rejected quantity${sourceUOMCode ? ` (${sourceUOMCode})` : ""}`}
           htmlFor={`receipt-${index}-rejected`}
           required
           error={error?.rejected_qty?.message}
@@ -372,7 +644,7 @@ function ReceiptLineEditor({
           />
         </FormField>
         <FormField
-          label="Accepted quantity"
+          label={`Accepted quantity${sourceUOMCode ? ` (${sourceUOMCode})` : ""}`}
           htmlFor={`receipt-${index}-accepted`}
         >
           <Input id={`receipt-${index}-accepted`} value={accepted} readOnly />
@@ -402,7 +674,7 @@ function ReceiptLineEditor({
             )}
           />
         </FormField>
-        <div className="sm:col-span-2 lg:col-span-4">
+        <div className="sm:col-span-2 lg:col-span-5">
           <FormField
             label="Exception notes"
             htmlFor={`receipt-${index}-exception-notes`}
@@ -421,33 +693,75 @@ function ReceiptLineEditor({
       <div className="mt-5 flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-slate-900">
-            Inventory batches
+            {line.serial_controlled ? "Serialized units" : "Inventory batches"}
           </p>
           <p className="text-xs text-slate-500">
-            Batch total must equal accepted quantity. Serialized items need one
-            serial per batch.
+            {line.serial_controlled
+              ? `One serial per accepted base unit. ${acceptedBase} ${line.base_uom_code} accepted.`
+              : "Batch total must equal accepted quantity."}
           </p>
         </div>
         <Button
           type="button"
           variant="secondary"
           size="sm"
-          onClick={() =>
-            batches.append({
-              ...emptyReceiptBatch,
-              received_location_id: locations[0]?.location_id ?? "",
-            })
+          disabled={line.serial_controlled && requiredSerials === null}
+          onClick={
+            line.serial_controlled
+              ? syncSerialRows
+              : () =>
+                  replaceBatches([
+                    ...line.batches,
+                    {
+                      ...emptyReceiptBatch,
+                      received_location_id: locations[0]?.location_id ?? "",
+                    },
+                  ])
           }
         >
-          <Plus className="size-4" /> Add batch
+          <Plus className="size-4" />
+          {line.serial_controlled
+            ? `Prepare ${requiredSerials ?? "—"} serial rows`
+            : "Add batch"}
         </Button>
       </div>
+      {line.serial_controlled && renderedBatchCount ? (
+        <div className="mt-3 rounded-xl border border-cyan-200 bg-cyan-50 p-3">
+          <FormField
+            label="Apply received location to all serials"
+            htmlFor={`receipt-${index}-all-locations`}
+          >
+            <Select
+              id={`receipt-${index}-all-locations`}
+              ariaLabel={`Received location for all serials on line ${index + 1}`}
+              value={line.batches[0]?.received_location_id ?? ""}
+              options={locations.map((location) => ({
+                value: location.location_id,
+                label: `${location.code}${location.zone_code ? ` · ${location.zone_code}` : ""}`,
+              }))}
+              placeholder="Select location"
+              className="mt-2"
+              onValueChange={(locationId) => {
+                line.batches.forEach((_, batchIndex) =>
+                  setValue(
+                    `lines.${index}.batches.${batchIndex}.received_location_id`,
+                    locationId,
+                    { shouldValidate: true },
+                  ),
+                );
+              }}
+            />
+          </FormField>
+        </div>
+      ) : null}
       <p
         aria-live="polite"
-        className={`mt-3 rounded-lg px-3 py-2 text-sm font-semibold ${batchTotal === accepted ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`}
+        className={`mt-3 rounded-lg px-3 py-2 text-sm font-semibold ${displayedBatchTotal === accepted ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`}
       >
-        Batch total: {batchTotal} · Accepted: {accepted}
-        {batchTotal !== accepted ? " · Quantities do not match" : " · Balanced"}
+        Batch total: {displayedBatchTotal} · Accepted: {accepted}
+        {displayedBatchTotal !== accepted
+          ? " · Quantities do not match"
+          : " · Balanced"}
       </p>
       {typeof batchError === "string" ? (
         <p role="alert" className="mt-2 text-sm font-semibold text-rose-700">
@@ -455,19 +769,30 @@ function ReceiptLineEditor({
         </p>
       ) : null}
       <div className="mt-3 space-y-3">
-        {batches.fields.map((batch, batchIndex) => (
+        {Array.from({ length: renderedBatchCount }, (_, batchIndex) => (
           <BatchEditor
-            key={batch.id}
+            key={`${index}-${batchIndex}`}
             lineIndex={index}
             batchIndex={batchIndex}
             control={control}
             register={register}
+            setValue={setValue}
             locations={locations}
+            handlingUnits={handlingUnits}
             lotControlled={line.lot_controlled}
             serialControlled={line.serial_controlled}
+            sourceUOMCode={sourceUOMCode}
+            baseUOMCode={line.base_uom_code}
             error={error?.batches?.[batchIndex]}
-            canRemove={batches.fields.length > 1 || accepted === "0.000000"}
-            onRemove={() => batches.remove(batchIndex)}
+            canRemove={
+              !line.serial_controlled &&
+              (line.batches.length > 1 || accepted === "0.000000")
+            }
+            onRemove={() =>
+              replaceBatches(
+                line.batches.filter((_, index) => index !== batchIndex),
+              )
+            }
           />
         ))}
       </div>
@@ -513,6 +838,21 @@ export function ReceiptFormDialog({
   });
   const { receiving: receivingLocations, docks: dockOptions } =
     receiptLocationOptions(locations, locationTypes.data ?? []);
+  const dockOptionIds = new Set(
+    dockOptions.map((location) => location.location_id),
+  );
+  const preferredReceivingLocationId =
+    receivingLocations.find(
+      (location) => !dockOptionIds.has(location.location_id),
+    )?.location_id ?? "";
+  const batchLocationOptions = [
+    ...receivingLocations.filter(
+      (location) => !dockOptionIds.has(location.location_id),
+    ),
+    ...receivingLocations.filter((location) =>
+      dockOptionIds.has(location.location_id),
+    ),
+  ];
   const itemsFilter = {
     ownerId,
     categoryId: "",
@@ -524,6 +864,33 @@ export function ReceiptFormDialog({
   const itemsQuery = useQuery({
     queryKey: itemCatalogKeys.itemList(itemsFilter),
     queryFn: () => listItems(itemsFilter),
+  });
+  const uomsQuery = useQuery({
+    queryKey: itemCatalogKeys.uomList({
+      search: "",
+      active: "active",
+      page: 1,
+      pageSize,
+    }),
+    queryFn: () =>
+      listUOMs({
+        search: "",
+        active: "active",
+        page: 1,
+        pageSize,
+      }),
+  });
+  const handlingUnitFilters = {
+    ownerId,
+    warehouseId,
+    status: "open" as const,
+    search: "",
+    page: 1,
+    pageSize,
+  };
+  const handlingUnitsQuery = useQuery({
+    queryKey: handlingUnitKeys.list(handlingUnitFilters),
+    queryFn: () => listHandlingUnits(handlingUnitFilters),
   });
   const itemsById = useMemo(
     () =>
@@ -569,6 +936,10 @@ export function ReceiptFormDialog({
         return {
           inbound_line_id: line.inbound_line_id ?? "",
           item_id: line.item_id,
+          uom_id: line.uom_id,
+          uom_conversion_to_base: line.uom_conversion_to_base,
+          base_uom_id: line.base_uom_id,
+          base_uom_code: line.base_uom_code,
           received_qty: line.received_qty,
           rejected_qty: line.rejected_qty,
           exception_type_code:
@@ -606,33 +977,55 @@ export function ReceiptFormDialog({
     queryFn: () => getInboundOrder(inboundId),
     enabled: Boolean(inboundId),
   });
+  const initializedInboundId = useRef("");
 
   useEffect(() => {
-    if (editing || !inboundOrder.data || itemsQuery.isPending) return;
+    if (
+      editing ||
+      !inboundOrder.data ||
+      itemsQuery.isPending ||
+      locationsQuery.isPending ||
+      locationTypes.isPending ||
+      initializedInboundId.current === inboundId
+    ) {
+      return;
+    }
+    initializedInboundId.current = inboundId;
     replaceLines(
       (inboundOrder.data.lines ?? [])
         .filter((line) => new Decimal(remaining(line)).gt(0))
         .map((line) => {
           const item = itemsById.get(line.item_id);
-          const quantity = remaining(line);
+          const serialized = item?.serial_controlled ?? false;
+          const quantity = serialized ? remainingBase(line) : remaining(line);
+          const locationId =
+            preferredReceivingLocationId || getValues("dock_location_id");
           return {
             inbound_line_id: line.inbound_line_id,
             item_id: line.item_id,
+            uom_id: serialized ? line.base_uom_id : line.uom_id,
+            uom_conversion_to_base: serialized
+              ? "1.000000"
+              : line.uom_conversion_to_base,
+            base_uom_id: line.base_uom_id,
+            base_uom_code: line.base_uom_code,
             received_qty: quantity,
             rejected_qty: "0",
             exception_type_code: "NONE" as const,
             exception_notes: "",
             lot_controlled: item?.lot_controlled ?? false,
-            serial_controlled: item?.serial_controlled ?? false,
-            batches: [
-              {
-                ...emptyReceiptBatch,
-                source_qty: quantity,
-                received_location_id: getValues("dock_location_id"),
-                lot_number: line.expected_lot_no ?? "",
-                expiry_date: line.expected_expiry_date ?? "",
-              },
-            ],
+            serial_controlled: serialized,
+            batches: serialized
+              ? []
+              : [
+                  {
+                    ...emptyReceiptBatch,
+                    source_qty: quantity,
+                    received_location_id: locationId,
+                    lot_number: line.expected_lot_no ?? "",
+                    expiry_date: line.expected_expiry_date ?? "",
+                  },
+                ],
           };
         }),
     );
@@ -640,9 +1033,13 @@ export function ReceiptFormDialog({
   }, [
     editing,
     getValues,
+    inboundId,
     inboundOrder.data,
     itemsById,
     itemsQuery.isPending,
+    locationTypes.isPending,
+    locationsQuery.isPending,
+    preferredReceivingLocationId,
     replaceLines,
     setValue,
   ]);
@@ -658,19 +1055,20 @@ export function ReceiptFormDialog({
   }, [editing, getValues, itemsById, itemsQuery.isPending, setValue]);
 
   useEffect(() => {
-    if (!dockLocationId) return;
+    const defaultLocationId = preferredReceivingLocationId || dockLocationId;
+    if (!defaultLocationId) return;
     const lines = getValues("lines");
     lines.forEach((line, lineIndex) =>
       line.batches.forEach((batch, batchIndex) => {
         if (!batch.received_location_id) {
           setValue(
             `lines.${lineIndex}.batches.${batchIndex}.received_location_id`,
-            dockLocationId,
+            defaultLocationId,
           );
         }
       }),
     );
-  }, [dockLocationId, getValues, setValue]);
+  }, [dockLocationId, getValues, preferredReceivingLocationId, setValue]);
 
   const save = useMutation({
     mutationFn: (values: ReceiptFormValues) => {
@@ -970,7 +1368,9 @@ export function ReceiptFormDialog({
               <h2 className="text-xs font-bold tracking-wide text-slate-500 uppercase">
                 Received lines
               </h2>
-              {inboundOrder.isPending || itemsQuery.isPending ? (
+              {inboundOrder.isPending ||
+              itemsQuery.isPending ||
+              uomsQuery.isPending ? (
                 <div className="mt-4 flex items-center gap-2 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
                   <LoaderCircle className="size-4 animate-spin" /> Loading item
                   controls and expected lines…
@@ -984,7 +1384,10 @@ export function ReceiptFormDialog({
                       source={sourceById.get(field.inbound_line_id)}
                       control={control}
                       register={register}
-                      locations={receivingLocations}
+                      setValue={setValue}
+                      locations={batchLocationOptions}
+                      handlingUnits={handlingUnitsQuery.data?.items ?? []}
+                      uoms={uomsQuery.data?.items ?? []}
                       error={errors.lines?.[index]}
                       removable={lineFields.length > 1}
                       onRemove={() => removeLine(index)}
@@ -1010,6 +1413,7 @@ export function ReceiptFormDialog({
                   save.isPending ||
                   !lineFields.length ||
                   itemsQuery.isPending ||
+                  uomsQuery.isPending ||
                   !locationsQuery.isSuccess ||
                   !locationTypes.isSuccess
                 }

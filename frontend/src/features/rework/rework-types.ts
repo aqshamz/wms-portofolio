@@ -21,6 +21,7 @@ export interface ReworkTask {
   planned_qty: string;
   completed_qty: string;
   uom_id: string;
+  base_uom_code: string;
   assigned_to: string | null;
   assigned_username?: string | null;
   work_instructions: string | null;

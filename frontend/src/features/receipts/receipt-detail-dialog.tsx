@@ -3,6 +3,7 @@
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Decimal from "decimal.js";
 import {
   CircleAlert,
   LoaderCircle,
@@ -27,7 +28,10 @@ import {
   reverseReceipt,
 } from "@/features/receipts/receipt-api";
 import { ReceiptFormDialog } from "@/features/receipts/receipt-form-dialog";
-import type { ReceiptStatus } from "@/features/receipts/receipt-types";
+import type {
+  ReceiptLine,
+  ReceiptStatus,
+} from "@/features/receipts/receipt-types";
 
 function statusTone(status: ReceiptStatus) {
   if (status === "COMPLETED") return "success";
@@ -41,6 +45,16 @@ function label(value: string) {
     .replaceAll("_", " ")
     .toLowerCase()
     .replace(/^./, (first) => first.toUpperCase());
+}
+
+function acceptedBaseQuantity(line: ReceiptLine) {
+  try {
+    return new Decimal(line.received_base_qty)
+      .minus(line.rejected_base_qty)
+      .toFixed(6);
+  } catch {
+    return "—";
+  }
 }
 
 function Detail({ name, value }: { name: string; value?: string | null }) {
@@ -317,11 +331,19 @@ export function ReceiptDetailDialog({
                           </p>
                         </div>
                         <p className="text-sm text-slate-700">
-                          Received <strong>{line.received_qty}</strong> ·
-                          Rejected <strong>{line.rejected_qty}</strong> ·
-                          Accepted <strong>{line.accepted_qty}</strong>
+                          Received <strong>{line.received_qty}</strong>{" "}
+                          {line.uom_code} · Rejected{" "}
+                          <strong>{line.rejected_qty}</strong> {line.uom_code} ·
+                          Accepted <strong>{line.accepted_qty}</strong>{" "}
+                          {line.uom_code}
                         </p>
                       </div>
+                      <p className="mt-2 text-xs text-slate-500">
+                        Base quantity: received {line.received_base_qty}{" "}
+                        {line.base_uom_code} · rejected {line.rejected_base_qty}{" "}
+                        {line.base_uom_code} · accepted{" "}
+                        {acceptedBaseQuantity(line)} {line.base_uom_code}
+                      </p>
                       {line.exception_notes ? (
                         <p className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-900">
                           <strong>
@@ -349,6 +371,11 @@ export function ReceiptDetailDialog({
                               >
                                 <td className="px-2 py-2">
                                   {batch.source_qty} {batch.source_uom_code}
+                                  {batch.source_uom_id !== batch.base_uom_id ? (
+                                    <p className="mt-1 text-xs text-slate-500">
+                                      {batch.base_qty} {batch.base_uom_code}
+                                    </p>
+                                  ) : null}
                                 </td>
                                 <td className="px-2 py-2">
                                   {batch.received_location_code}

@@ -306,7 +306,9 @@ export function QualityInspectionsScreen({
                       </td>
                       <td className="px-5 py-4">{row.location_code}</td>
                       <td className="px-5 py-4">
-                        <p>{row.inspected_qty}</p>
+                        <p>
+                          {row.inspected_qty} {row.base_uom_code}
+                        </p>
                         {row.inspected_at ? (
                           <p className="mt-1 text-xs text-slate-500">
                             Pass {row.passed_qty} / fail {row.failed_qty}
@@ -364,7 +366,7 @@ export function QualityInspectionsScreen({
                         Base quantity / location
                       </dt>
                       <dd>
-                        {row.inspected_qty} · {row.location_code}
+                        {row.inspected_qty} {row.base_uom_code} · {row.location_code}
                       </dd>
                     </div>
                   </dl>

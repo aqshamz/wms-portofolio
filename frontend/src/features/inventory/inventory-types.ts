@@ -30,6 +30,7 @@ export interface BalanceFilters {
   warehouseId: string;
   search: string;
   includeZero: boolean;
+  handlingUnitId?: string;
   page: number;
   pageSize: number;
 }
@@ -100,6 +101,80 @@ export interface SerialStateFilters {
   ownerId: string;
   warehouseId: string;
   search: string;
+  page: number;
+  pageSize: number;
+}
+
+export interface InventoryLot {
+  lot_id: string;
+  owner_id: string;
+  item_id: string;
+  lot_number: string;
+  manufacture_date: string | null;
+  expiry_date: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+export type LotPage = PaginatedData<InventoryLot>;
+
+export interface LotFilters {
+  ownerId: string;
+  search: string;
+  page: number;
+  pageSize: number;
+}
+
+export interface InventorySerial {
+  serial_id: string;
+  owner_id: string;
+  item_id: string;
+  serial_no: string;
+  created_at: string;
+  created_by: string | null;
+}
+
+export type SerialPage = PaginatedData<InventorySerial>;
+
+export interface SerialFilters {
+  ownerId: string;
+  search: string;
+  page: number;
+  pageSize: number;
+}
+
+export interface HandlingUnit {
+  handling_unit_id: string;
+  warehouse_id: string;
+  owner_id: string;
+  handling_unit_type_id: string;
+  parent_handling_unit_id: string | null;
+  current_location_id: string | null;
+  barcode: string;
+  is_closed: boolean;
+  positive_balance_count: number;
+  child_count: number;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface CreateHandlingUnitRequest {
+  owner_id: string;
+  warehouse_id: string;
+  handling_unit_type_id: string;
+  current_location_id: string;
+  barcode: string;
+}
+
+export type HandlingUnitPage = PaginatedData<HandlingUnit>;
+
+export interface HandlingUnitFilters {
+  ownerId: string;
+  warehouseId: string;
+  status: "all" | "open" | "closed";
+  search: string;
+  locationId?: string;
+  parentId?: string;
   page: number;
   pageSize: number;
 }

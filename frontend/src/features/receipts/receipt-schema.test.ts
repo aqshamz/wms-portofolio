@@ -15,6 +15,10 @@ const validReceipt = {
     {
       inbound_line_id: "INB-100-L0001",
       item_id: "item-1",
+      uom_id: "uom-ea",
+      uom_conversion_to_base: "1",
+      base_uom_id: "uom-ea",
+      base_uom_code: "EA",
       received_qty: "10",
       rejected_qty: "1",
       exception_type_code: "DAMAGED" as const,
@@ -106,5 +110,116 @@ describe("receiptFormSchema", () => {
       ],
     });
     expect(result.success).toBe(false);
+  });
+
+  it("rejects a repeated serial number for the same item", () => {
+    const batch = validReceipt.lines[0].batches[0];
+    const result = receiptFormSchema.safeParse({
+      ...validReceipt,
+      lines: [
+        {
+          ...validReceipt.lines[0],
+          received_qty: "2",
+          rejected_qty: "0",
+          exception_type_code: "NONE",
+          exception_notes: "",
+          serial_controlled: true,
+          batches: [
+            { ...batch, source_qty: "1", serial_no: "SN-100" },
+            { ...batch, source_qty: "1", serial_no: "SN-100" },
+          ],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["lines", 0, "batches", 1, "serial_no"],
+          }),
+        ]),
+      );
+    }
+  });
+
+  it("accepts one serial row per whole base unit", () => {
+    const batch = validReceipt.lines[0].batches[0];
+    const result = receiptFormSchema.safeParse({
+      ...validReceipt,
+      lines: [
+        {
+          ...validReceipt.lines[0],
+          received_qty: "2",
+          rejected_qty: "0",
+          exception_type_code: "NONE",
+          exception_notes: "",
+          lot_controlled: false,
+          serial_controlled: true,
+          batches: [
+            {
+              ...batch,
+              source_qty: "1",
+              lot_number: "",
+              serial_no: "SN-100",
+            },
+            {
+              ...batch,
+              source_qty: "1",
+              lot_number: "",
+              serial_no: "SN-101",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a non-base receiving UOM for serialized items", () => {
+    const batch = validReceipt.lines[0].batches[0];
+    const result = receiptFormSchema.safeParse({
+      ...validReceipt,
+      lines: [
+        {
+          ...validReceipt.lines[0],
+          uom_id: "uom-box",
+          uom_conversion_to_base: "2",
+          received_qty: "1",
+          rejected_qty: "0",
+          exception_type_code: "NONE",
+          exception_notes: "",
+          lot_controlled: false,
+          serial_controlled: true,
+          batches: [
+            {
+              ...batch,
+              source_qty: "0.5",
+              lot_number: "",
+              serial_no: "SN-100",
+            },
+            {
+              ...batch,
+              source_qty: "0.5",
+              lot_number: "",
+              serial_no: "SN-101",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["lines", 0, "uom_id"],
+          }),
+        ]),
+      );
+    }
   });
 });

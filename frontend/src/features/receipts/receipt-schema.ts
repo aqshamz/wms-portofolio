@@ -33,6 +33,10 @@ export const receiptLineSchema = z
   .object({
     inbound_line_id: z.string().min(1),
     item_id: z.string().min(1),
+    uom_id: z.string().min(1, "Receiving UOM is required."),
+    uom_conversion_to_base: positiveQuantity,
+    base_uom_id: z.string().min(1),
+    base_uom_code: z.string().min(1),
     received_qty: positiveQuantity,
     rejected_qty: nonNegativeQuantity,
     exception_type_code: z.enum([
@@ -52,6 +56,7 @@ export const receiptLineSchema = z
     if (
       !quantityPattern.test(value.received_qty) ||
       !quantityPattern.test(value.rejected_qty) ||
+      !quantityPattern.test(value.uom_conversion_to_base) ||
       value.batches.some((batch) => !quantityPattern.test(batch.source_qty))
     )
       return;
@@ -66,6 +71,10 @@ export const receiptLineSchema = z
       return;
     }
     const accepted = received.minus(rejected);
+    const conversion = new Decimal(value.uom_conversion_to_base);
+    const receivedBase = received.mul(conversion);
+    const rejectedBase = rejected.mul(conversion);
+    const acceptedBase = accepted.mul(conversion);
     const batched = value.batches.reduce(
       (total, batch) => total.plus(batch.source_qty || 0),
       new Decimal(0),
@@ -84,6 +93,29 @@ export const receiptLineSchema = z
         message: "Exception notes are required for rejected quantity.",
       });
     }
+    if (value.serial_controlled) {
+      if (value.uom_id !== value.base_uom_id) {
+        context.addIssue({
+          code: "custom",
+          path: ["uom_id"],
+          message: "Serialized items must be received in their base UOM.",
+        });
+      }
+      if (!receivedBase.isInteger() || !rejectedBase.isInteger()) {
+        context.addIssue({
+          code: "custom",
+          path: ["received_qty"],
+          message: "Serialized quantities must be whole base units.",
+        });
+      }
+      if (acceptedBase.isInteger() && value.batches.length !== acceptedBase.toNumber()) {
+        context.addIssue({
+          code: "custom",
+          path: ["batches"],
+          message: `Provide one serial row for each accepted base unit (${acceptedBase.toFixed(0)} required).`,
+        });
+      }
+    }
     value.batches.forEach((batch, index) => {
       if (value.lot_controlled && !batch.lot_number.trim()) {
         context.addIssue({
@@ -100,6 +132,13 @@ export const receiptLineSchema = z
         });
       }
       if (value.serial_controlled) {
+        if (!new Decimal(batch.source_qty).mul(conversion).eq(1)) {
+          context.addIssue({
+            code: "custom",
+            path: ["batches", index, "source_qty"],
+            message: "Each serialized row must equal one base unit.",
+          });
+        }
         if (!batch.serial_no.trim()) {
           context.addIssue({
             code: "custom",
@@ -117,17 +156,40 @@ export const receiptLineSchema = z
     });
   });
 
-export const receiptFormSchema = z.object({
-  inbound_id: z.string().min(1, "Inbound Order is required."),
-  business_date: z.string().min(1, "Business date is required."),
-  received_at: z.string().min(1, "Received time is required."),
-  dock_location_id: z.string().min(1, "Receiving dock is required."),
-  vehicle_number: z.string().max(60, "Maximum 60 characters."),
-  seal_number: z.string().max(60, "Maximum 60 characters."),
-  delivery_note_no: z.string().max(100, "Maximum 100 characters."),
-  notes: z.string().max(4000, "Maximum 4000 characters."),
-  lines: z.array(receiptLineSchema).min(1, "Add at least one receipt line."),
-});
+export const receiptFormSchema = z
+  .object({
+    inbound_id: z.string().min(1, "Inbound Order is required."),
+    business_date: z.string().min(1, "Business date is required."),
+    received_at: z.string().min(1, "Received time is required."),
+    dock_location_id: z.string().min(1, "Receiving dock is required."),
+    vehicle_number: z.string().max(60, "Maximum 60 characters."),
+    seal_number: z.string().max(60, "Maximum 60 characters."),
+    delivery_note_no: z.string().max(100, "Maximum 100 characters."),
+    notes: z.string().max(4000, "Maximum 4000 characters."),
+    lines: z
+      .array(receiptLineSchema)
+      .min(1, "Add at least one receipt line."),
+  })
+  .superRefine((value, context) => {
+    const seen = new Set<string>();
+    value.lines.forEach((line, lineIndex) => {
+      if (!line.serial_controlled) return;
+      line.batches.forEach((batch, batchIndex) => {
+        const serialNumber = batch.serial_no.trim();
+        if (!serialNumber) return;
+        const key = `${line.item_id}\u0000${serialNumber}`;
+        if (seen.has(key)) {
+          context.addIssue({
+            code: "custom",
+            path: ["lines", lineIndex, "batches", batchIndex, "serial_no"],
+            message: "Serial number is repeated for this item.",
+          });
+          return;
+        }
+        seen.add(key);
+      });
+    });
+  });
 
 export type ReceiptFormValues = z.infer<typeof receiptFormSchema>;
 

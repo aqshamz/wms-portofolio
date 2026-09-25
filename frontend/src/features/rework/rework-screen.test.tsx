@@ -103,6 +103,7 @@ it("shows assignee usernames in desktop and mobile entries", async () => {
     expect(screen.getAllByText("@godown.warehouse")).toHaveLength(2),
   );
   expect(screen.queryByText("other-account-id")).not.toBeInTheDocument();
+  expect(screen.getAllByText(/2\.000000 EA/).length).toBeGreaterThan(0);
 });
 it("waits for a valid scope and does not fetch owners for an unauthorized warehouse", async () => {
   mount("?warehouse=outside&owner=owner-1");
