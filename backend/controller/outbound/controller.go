@@ -11,6 +11,7 @@ import (
 	"wms-api/middleware"
 	inventoryrepository "wms-api/repository/inventory"
 	repository "wms-api/repository/outbound"
+	inventoryservice "wms-api/services/inventory"
 	service "wms-api/services/outbound"
 	"wms-api/utils"
 )
@@ -25,7 +26,7 @@ func actor(c *gin.Context) string {
 }
 func fail(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, service.ErrInvalidInput), errors.Is(err, repository.ErrConstraint), errors.Is(err, inventoryrepository.ErrConstraint):
+	case errors.Is(err, service.ErrInvalidInput), errors.Is(err, inventoryservice.ErrInvalidInput), errors.Is(err, repository.ErrConstraint), errors.Is(err, inventoryrepository.ErrConstraint):
 		utils.Failure(c, http.StatusBadRequest, err.Error(), nil)
 	case errors.Is(err, repository.ErrNotFound), errors.Is(err, inventoryrepository.ErrNotFound):
 		utils.Failure(c, http.StatusNotFound, err.Error(), nil)

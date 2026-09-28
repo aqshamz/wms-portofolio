@@ -39,6 +39,8 @@ func (r *OutboundScopeRepository) ResourceScope(ctx context.Context, kind, id st
 		"packings":         "SELECT o.owner_id::text owner_id,p.warehouse_id::text warehouse_id FROM packing p JOIN outbound_order o ON o.outbound_id=p.outbound_id WHERE p.packing_id=?",
 		"shipments":        "SELECT s.owner_id::text owner_id,s.warehouse_id::text warehouse_id FROM shipment s WHERE s.shipment_id=?",
 		"deliveries":       "SELECT o.owner_id::text owner_id,o.warehouse_id::text warehouse_id FROM delivery d JOIN outbound_order o ON o.outbound_id=d.outbound_id WHERE d.delivery_id=?",
+		"disposals":        "SELECT d.owner_id::text owner_id,d.warehouse_id::text warehouse_id FROM disposal_transaction d WHERE d.disposal_id=?",
+		"vendor-returns":   "SELECT r.owner_id::text owner_id,r.warehouse_id::text warehouse_id FROM vendor_return_transaction r WHERE r.vendor_return_id=?",
 	}
 	query, ok := queries[kind]
 	if !ok {

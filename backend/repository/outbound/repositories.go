@@ -81,6 +81,8 @@ type Repositories struct {
 	DeliveryEventLine     *DeliveryEventLineRepository
 	ReturnPolicy          *OutboundReturnPolicyRepository
 	DeliveryReturnLine    *DeliveryReturnLineRepository
+	Disposal              *DisposalRepository
+	VendorReturn          *VendorReturnRepository
 	Master                *master.OperationalRepositories
 	Inventory             *inventory.Repositories
 }
@@ -95,7 +97,7 @@ func NewRepositories(db *gorm.DB) *Repositories {
 		Check: NewOutboundCheckRepository(db), CheckLine: NewOutboundCheckLineRepository(db), CheckException: NewOutboundCheckExceptionRepository(db), CheckResolution: NewOutboundCheckResolutionRepository(db),
 		ResolutionMovement: NewOutboundCheckResolutionMovementRepository(db), ResolutionReservation: NewOutboundCheckResolutionReservationRepository(db),
 		Packing: NewPackingRepository(db), PackingLine: NewPackingLineRepository(db), Carrier: NewCarrierRepository(db), CarrierService: NewCarrierServiceRepository(db), CarrierDriver: NewCarrierDriverRepository(db), Shipment: NewShipmentRepository(db), ShipmentDriver: NewShipmentDriverRepository(db), ShipmentOrder: NewShipmentOrderRepository(db), ShipmentPacking: NewShipmentPackingRepository(db), ShipmentLine: NewShipmentLineRepository(db),
-		DeliveryEventType: NewDeliveryEventTypeRepository(db), DeliveryFailureReason: NewDeliveryFailureReasonRepository(db), Delivery: NewDeliveryRepository(db), DeliveryLine: NewDeliveryLineRepository(db), DeliveryEvent: NewDeliveryEventRepository(db), DeliveryEventLine: NewDeliveryEventLineRepository(db), ReturnPolicy: NewOutboundReturnPolicyRepository(db), DeliveryReturnLine: NewDeliveryReturnLineRepository(db),
+		DeliveryEventType: NewDeliveryEventTypeRepository(db), DeliveryFailureReason: NewDeliveryFailureReasonRepository(db), Delivery: NewDeliveryRepository(db), DeliveryLine: NewDeliveryLineRepository(db), DeliveryEvent: NewDeliveryEventRepository(db), DeliveryEventLine: NewDeliveryEventLineRepository(db), ReturnPolicy: NewOutboundReturnPolicyRepository(db), DeliveryReturnLine: NewDeliveryReturnLineRepository(db), Disposal: NewDisposalRepository(db), VendorReturn: NewVendorReturnRepository(db),
 		Master: master.NewOperationalRepositories(db), Inventory: inventory.NewRepositories(db)}
 }
 

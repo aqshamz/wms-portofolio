@@ -38,7 +38,7 @@ managing those grants manually.
 | --- | --- |
 | Inbound | `READ`, `PLAN`, `APPROVE`, `RECEIVE`, `QC`, `PUTAWAY`, `ASSIGN`, `QUARANTINE_DISPOSE`, `REWORK`, `CANCEL` |
 | Inventory | `READ`, `IDENTITY`, `MOVE`, `STATUS_CHANGE`, `ADJUST`, `COUNT`, `TRANSFER` |
-| Outbound | `READ`, `PLAN`, `PICK`, `STAGE`, `CHECK`, `PACK`, `TRANSPORT`, `SHIP`, `DELIVER`, `CANCEL`, `CONFIG` |
+| Outbound | `READ`, `PLAN`, `PICK`, `STAGE`, `CHECK`, `PACK`, `TRANSPORT`, `SHIP`, `DELIVER`, `DISPOSE`, `RETURN_TO_VENDOR`, `CANCEL`, `CONFIG` |
 | Billing | `READ`, `CONFIGURE`, `PREPARE`, `APPROVE`, `ISSUE`, `PAYMENT` |
 
 Prefix each code with its area, for example `INBOUND.QC`, `OUTBOUND.SHIP`, or

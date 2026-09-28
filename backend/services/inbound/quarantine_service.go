@@ -9,6 +9,7 @@ import (
 	dto "wms-api/dto/inbound"
 	inventorydto "wms-api/dto/inventory"
 	model "wms-api/models/inbound"
+	outboundmodel "wms-api/models/outbound"
 	repository "wms-api/repository/inbound"
 	inventoryservice "wms-api/services/inventory"
 )
@@ -55,7 +56,8 @@ func (s *Service) CreateQuarantineDisposition(ctx context.Context, caseID string
 	if err != nil {
 		return dto.QuarantineCaseResponse{}, err
 	}
-	if _, err = inboundDate(request.BusinessDate, "business_date"); err != nil {
+	businessDate, err := inboundDate(request.BusinessDate, "business_date")
+	if err != nil {
 		return dto.QuarantineCaseResponse{}, err
 	}
 	decidedAt, err := inboundTimestamp(request.DecidedAt, "decided_at")
@@ -101,7 +103,11 @@ func (s *Service) CreateQuarantineDisposition(ctx context.Context, caseID string
 		if err != nil {
 			return err
 		}
-		if new(big.Rat).Add(disposed, quantityNumber).Cmp(total) > 0 {
+		committed, err := storedRatio(caseRow.CommittedQty)
+		if err != nil {
+			return err
+		}
+		if new(big.Rat).Add(committed, quantityNumber).Cmp(total) > 0 {
 			return invalid("disposition_qty exceeds the undecided quarantine quantity")
 		}
 		kind, err := local.repositories.QuarantineType.ByCode(ctx, typeCode)
@@ -120,7 +126,8 @@ func (s *Service) CreateQuarantineDisposition(ctx context.Context, caseID string
 			return repository.ErrConcurrentWrite
 		}
 		available, err := storedRatio(balance.AvailableQty)
-		if err != nil || available.Cmp(quantityNumber) < 0 {
+		pending := new(big.Rat).Sub(committed, disposed)
+		if err != nil || available.Cmp(new(big.Rat).Add(pending, quantityNumber)) < 0 {
 			return invalid("insufficient unreserved quarantine quantity")
 		}
 		if batch.HandlingUnitID != nil && available.Cmp(quantityNumber) != 0 {
@@ -188,15 +195,70 @@ func (s *Service) CreateQuarantineDisposition(ctx context.Context, caseID string
 		if err != nil {
 			return err
 		}
+		if batch.SerialID != nil && quantityNumber.Cmp(big.NewRat(1, 1)) != 0 {
+			return invalid("serialized quarantine disposition must process exactly one unit")
+		}
 		disposition := model.QuarantineDisposition{ID: dispositionID, QuarantineCaseID: caseID, DocumentTypeID: documentType.ID, StatusID: initial.ID, QuarantineDispositionTypeID: kind.ID, DispositionQty: quantity, UOMID: caseModel.UOMID, ClientDecisionReference: decisionReference, DecisionNotes: decisionNotes, DecidedAt: decidedAt, DecidedBy: actor, TargetLocationID: targetLocationID, CreatedBy: actor}
 		if err := local.repositories.Disposition.Create(ctx, &disposition); err != nil {
 			return err
 		}
+		if typeCode == "DISPOSE" || typeCode == "RETURN" {
+			transactionTypeCode := "DISPOSAL"
+			if typeCode == "RETURN" {
+				transactionTypeCode = "RETURN_TO_VENDOR"
+			}
+			transactionType, err := local.documentType(ctx, transactionTypeCode)
+			if err != nil {
+				return err
+			}
+			transactionStatus, err := local.initialStatus(ctx, transactionType.ID)
+			if err != nil {
+				return err
+			}
+			transactionID, err := local.generateID(ctx, transactionType.ID, request.BusinessDate, batch.VendorID, batch.WarehouseID)
+			if err != nil {
+				return err
+			}
+			if typeCode == "DISPOSE" {
+				planned := outboundmodel.DisposalTransaction{
+					ID: transactionID, DocumentTypeID: transactionType.ID, StatusID: transactionStatus.ID,
+					QuarantineDispositionID: dispositionID, QuarantineCaseID: caseID,
+					OwnerID: caseModel.OwnerID, WarehouseID: caseModel.WarehouseID, BusinessDate: businessDate,
+					SourceBalanceID: balance.ID, PlannedBalanceVersionNo: balance.VersionNo,
+					ItemID: batch.ItemID, LotID: batch.LotID, SerialID: batch.SerialID, HandlingUnitID: batch.HandlingUnitID,
+					SourceLocationID: balance.LocationID, SourceInventoryStatusID: balance.InventoryStatusID,
+					Quantity: quantity, UOMID: caseModel.UOMID, Notes: decisionNotes,
+					PlannedAt: decidedAt, CreatedBy: actor, UpdatedBy: &actor, VersionNo: 1,
+				}
+				if err := local.repositories.Disposal.Create(ctx, &planned); err != nil {
+					return err
+				}
+			} else {
+				planned := outboundmodel.VendorReturnTransaction{
+					ID: transactionID, DocumentTypeID: transactionType.ID, StatusID: transactionStatus.ID,
+					QuarantineDispositionID: dispositionID, QuarantineCaseID: caseID,
+					OwnerID: caseModel.OwnerID, VendorID: batch.VendorID, WarehouseID: caseModel.WarehouseID, BusinessDate: businessDate,
+					SourceBalanceID: balance.ID, PlannedBalanceVersionNo: balance.VersionNo,
+					ItemID: batch.ItemID, LotID: batch.LotID, SerialID: batch.SerialID, HandlingUnitID: batch.HandlingUnitID,
+					SourceLocationID: balance.LocationID, SourceInventoryStatusID: balance.InventoryStatusID,
+					Quantity: quantity, UOMID: caseModel.UOMID, Notes: decisionNotes,
+					PlannedAt: decidedAt, CreatedBy: actor, UpdatedBy: &actor, VersionNo: 1,
+				}
+				if err := local.repositories.VendorReturn.Create(ctx, &planned); err != nil {
+					return err
+				}
+			}
+			if caseRow.StatusCode == "OPEN" {
+				targetStatus, err := local.transitionTarget(ctx, caseModel.DocumentTypeID, caseModel.StatusID, "PARTIALLY_DECIDED")
+				if err != nil {
+					return err
+				}
+				return local.repositories.QuarantineCase.SetStatus(ctx, caseID, targetStatus.ID, actor, false, caseModel.VersionNo)
+			}
+			return local.repositories.QuarantineCase.Touch(ctx, caseID, actor, caseModel.VersionNo)
+		}
 		serialIDs := make([]string, 0, 1)
 		if batch.SerialID != nil {
-			if quantityNumber.Cmp(big.NewRat(1, 1)) != 0 {
-				return invalid("serialized quarantine disposition must process exactly one unit")
-			}
 			serialIDs = append(serialIDs, *batch.SerialID)
 		}
 		posted, err := inventoryservice.NewService(local.repositories.Inventory).PostMovement(ctx, inventorydto.PostingRequest{OperationKey: "inbound.quarantine." + dispositionID, MovementTypeCode: movementTypeCode, OwnerID: caseModel.OwnerID, WarehouseID: caseModel.WarehouseID, BusinessDate: request.BusinessDate, ItemID: batch.ItemID, LotID: batch.LotID, HandlingUnitID: batch.HandlingUnitID, From: &inventorydto.BalanceDimension{LocationID: balance.LocationID, InventoryStatusID: balance.InventoryStatusID}, To: target, Quantity: quantity, SerialIDs: serialIDs, ExpectedSourceVersion: &request.ExpectedBalanceVersion, SourceDocumentID: dispositionID, SourceLineID: &caseID, Notes: decisionNotes, RelocateHandlingUnit: kind.ReleasesToAvailable}, actor)
@@ -259,6 +321,8 @@ func (s *Service) CreateQuarantineDisposition(ctx context.Context, caseID string
 			if err := local.repositories.QuarantineCase.SetStatus(ctx, caseID, targetStatus.ID, actor, closeCase, caseModel.VersionNo); err != nil {
 				return err
 			}
+		} else if err := local.repositories.QuarantineCase.Touch(ctx, caseID, actor, caseModel.VersionNo); err != nil {
+			return err
 		}
 		return nil
 	})

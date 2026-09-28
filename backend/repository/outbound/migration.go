@@ -165,6 +165,84 @@ func Migrate(db *gorm.DB) error {
 	})
 }
 
+func MigrateDisposals(db *gorm.DB) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.AutoMigrate(&model.DisposalTransaction{}); err != nil {
+			return err
+		}
+		statements := []string{
+			"CREATE INDEX IF NOT EXISTS ix_disposal_scope_date ON disposal_transaction(owner_id,warehouse_id,business_date DESC)",
+			"CREATE INDEX IF NOT EXISTS ix_disposal_case ON disposal_transaction(quarantine_case_id)",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT ck_disposal_quantity CHECK(quantity>0); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT ck_disposal_version CHECK(version_no>0 AND planned_balance_version_no>0); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT ck_disposal_outcomes CHECK((completed_at IS NULL)=(completed_by IS NULL) AND (cancelled_at IS NULL)=(cancelled_by IS NULL) AND NOT (completed_at IS NOT NULL AND cancelled_at IS NOT NULL)); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT fk_disposal_status FOREIGN KEY(document_type_id,status_id) REFERENCES document_status(document_type_id,status_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT fk_disposal_disposition FOREIGN KEY(quarantine_disposition_id) REFERENCES quarantine_disposition(quarantine_disposition_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT fk_disposal_case FOREIGN KEY(quarantine_case_id) REFERENCES quarantine_case(quarantine_case_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT fk_disposal_warehouse_owner FOREIGN KEY(owner_id,warehouse_id) REFERENCES warehouse_owner(owner_id,warehouse_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT fk_disposal_balance FOREIGN KEY(source_balance_id) REFERENCES inventory_balance(balance_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT fk_disposal_item FOREIGN KEY(item_id) REFERENCES item(item_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT fk_disposal_lot FOREIGN KEY(lot_id) REFERENCES inventory_lot(lot_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT fk_disposal_serial FOREIGN KEY(serial_id) REFERENCES serial_number(serial_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT fk_disposal_hu FOREIGN KEY(handling_unit_id) REFERENCES handling_unit(handling_unit_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT fk_disposal_location FOREIGN KEY(source_location_id) REFERENCES warehouse_location(location_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT fk_disposal_inventory_status FOREIGN KEY(source_inventory_status_id) REFERENCES inventory_status(inventory_status_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT fk_disposal_uom FOREIGN KEY(uom_id) REFERENCES uom(uom_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT fk_disposal_movement FOREIGN KEY(inventory_movement_id) REFERENCES inventory_movement(movement_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT fk_disposal_created_by FOREIGN KEY(created_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT fk_disposal_updated_by FOREIGN KEY(updated_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT fk_disposal_completed_by FOREIGN KEY(completed_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE disposal_transaction ADD CONSTRAINT fk_disposal_cancelled_by FOREIGN KEY(cancelled_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+		}
+		for _, statement := range statements {
+			if err := tx.Exec(statement).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func MigrateVendorReturns(db *gorm.DB) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.AutoMigrate(&model.VendorReturnTransaction{}); err != nil {
+			return err
+		}
+		statements := []string{
+			"CREATE INDEX IF NOT EXISTS ix_vendor_return_scope_date ON vendor_return_transaction(owner_id,warehouse_id,business_date DESC)",
+			"CREATE INDEX IF NOT EXISTS ix_vendor_return_case ON vendor_return_transaction(quarantine_case_id)",
+			"CREATE INDEX IF NOT EXISTS ix_vendor_return_vendor ON vendor_return_transaction(owner_id,vendor_id)",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT ck_vendor_return_quantity CHECK(quantity>0); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT ck_vendor_return_version CHECK(version_no>0 AND planned_balance_version_no>0); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT ck_vendor_return_outcomes CHECK((completed_at IS NULL)=(completed_by IS NULL) AND (cancelled_at IS NULL)=(cancelled_by IS NULL) AND NOT (completed_at IS NOT NULL AND cancelled_at IS NOT NULL)); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_status FOREIGN KEY(document_type_id,status_id) REFERENCES document_status(document_type_id,status_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_disposition FOREIGN KEY(quarantine_disposition_id) REFERENCES quarantine_disposition(quarantine_disposition_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_case FOREIGN KEY(quarantine_case_id) REFERENCES quarantine_case(quarantine_case_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_warehouse_owner FOREIGN KEY(owner_id,warehouse_id) REFERENCES warehouse_owner(owner_id,warehouse_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_vendor FOREIGN KEY(owner_id,vendor_id) REFERENCES business_partner(owner_id,partner_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_balance FOREIGN KEY(source_balance_id) REFERENCES inventory_balance(balance_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_item FOREIGN KEY(item_id) REFERENCES item(item_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_lot FOREIGN KEY(lot_id) REFERENCES inventory_lot(lot_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_serial FOREIGN KEY(serial_id) REFERENCES serial_number(serial_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_hu FOREIGN KEY(handling_unit_id) REFERENCES handling_unit(handling_unit_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_location FOREIGN KEY(source_location_id) REFERENCES warehouse_location(location_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_inventory_status FOREIGN KEY(source_inventory_status_id) REFERENCES inventory_status(inventory_status_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_uom FOREIGN KEY(uom_id) REFERENCES uom(uom_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_movement FOREIGN KEY(inventory_movement_id) REFERENCES inventory_movement(movement_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_created_by FOREIGN KEY(created_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_updated_by FOREIGN KEY(updated_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_completed_by FOREIGN KEY(completed_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_cancelled_by FOREIGN KEY(cancelled_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+		}
+		for _, statement := range statements {
+			if err := tx.Exec(statement).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func SeedReferenceData(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		ctx := context.Background()

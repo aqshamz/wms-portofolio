@@ -282,6 +282,8 @@ type QuarantineDispositionResponse struct {
 	ResultingBalanceID      *string             `json:"resulting_balance_id"`
 	TargetLocationID        *string             `json:"target_location_id"`
 	TargetLocationCode      *string             `json:"target_location_code"`
+	DisposalID              *string             `json:"disposal_id,omitempty"`
+	VendorReturnID          *string             `json:"vendor_return_id,omitempty"`
 	CreatedAt               time.Time           `json:"created_at"`
 	ReworkTask              *ReworkTaskResponse `json:"rework_task,omitempty"`
 }
@@ -307,6 +309,8 @@ type QuarantineCaseResponse struct {
 	StatusCode                 string                          `json:"status_code"`
 	QuarantineQty              string                          `json:"quarantine_qty"`
 	DisposedQty                string                          `json:"disposed_qty"`
+	CommittedQty               string                          `json:"committed_qty"`
+	PendingQty                 string                          `json:"pending_qty"`
 	UOMID                      string                          `json:"uom_id"`
 	OpenedAt                   time.Time                       `json:"opened_at"`
 	ClosedAt                   *time.Time                      `json:"closed_at"`

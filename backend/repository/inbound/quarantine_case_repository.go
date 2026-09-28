@@ -11,8 +11,8 @@ import (
 
 type QuarantineCaseRow struct {
 	model.QuarantineCase
-	StatusCode, ItemID, ItemCode, LotNumber, LocationCode, DisposedQty string
-	BaseUOMCode                                                        string
+	StatusCode, ItemID, ItemCode, LotNumber, LocationCode, DisposedQty, CommittedQty string
+	BaseUOMCode                                                                      string
 }
 
 type QuarantineCaseRepository struct{ db *gorm.DB }
@@ -29,8 +29,20 @@ func (r *QuarantineCaseRepository) Lock(ctx context.Context, id string) (model.Q
 	return value, Error(err)
 }
 func quarantineCaseQuery(db *gorm.DB) *gorm.DB {
-	return db.Table("quarantine_case qc").Select(`qc.*,status.code status_code,batch.item_id,item.code item_code,COALESCE(lot.lot_number,'') lot_number,location.code location_code,uom.code base_uom_code,COALESCE((SELECT sum(d.disposition_qty) FROM quarantine_disposition d JOIN document_status ds ON ds.status_id=d.status_id WHERE d.quarantine_case_id=qc.quarantine_case_id AND ds.code='PROCESSED'),0)::text disposed_qty`).
+	return db.Table("quarantine_case qc").Select(`qc.*,status.code status_code,batch.item_id,item.code item_code,COALESCE(lot.lot_number,'') lot_number,location.code location_code,uom.code base_uom_code,
+		COALESCE((SELECT sum(d.disposition_qty) FROM quarantine_disposition d JOIN document_status ds ON ds.status_id=d.status_id WHERE d.quarantine_case_id=qc.quarantine_case_id AND ds.code='PROCESSED'),0)::text disposed_qty,
+		COALESCE((SELECT sum(d.disposition_qty) FROM quarantine_disposition d JOIN document_status ds ON ds.status_id=d.status_id WHERE d.quarantine_case_id=qc.quarantine_case_id AND ds.code IN ('DECIDED','PROCESSED')),0)::text committed_qty`).
 		Joins("JOIN document_status status ON status.status_id=qc.status_id").Joins("JOIN receipt_inventory batch ON batch.receipt_inventory_id=qc.receipt_inventory_id").Joins("JOIN item ON item.item_id=batch.item_id").Joins("LEFT JOIN inventory_lot lot ON lot.lot_id=batch.lot_id").Joins("JOIN inventory_balance balance ON balance.balance_id=qc.quarantine_balance_id").Joins("JOIN warehouse_location location ON location.location_id=balance.location_id").Joins("JOIN uom ON uom.uom_id=qc.uom_id")
+}
+func (r *QuarantineCaseRepository) Touch(ctx context.Context, id, actor string, expectedVersion int64) error {
+	result := r.db.WithContext(ctx).Model(&model.QuarantineCase{}).Where("quarantine_case_id=? AND version_no=?", id, expectedVersion).Updates(map[string]interface{}{"updated_at": gorm.Expr("clock_timestamp()"), "updated_by": actor, "version_no": gorm.Expr("version_no+1")})
+	if result.Error != nil {
+		return Error(result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return ErrConcurrentWrite
+	}
+	return nil
 }
 func (r *QuarantineCaseRepository) Get(ctx context.Context, id string) (QuarantineCaseRow, error) {
 	var value QuarantineCaseRow

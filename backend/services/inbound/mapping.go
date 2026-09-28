@@ -1,6 +1,8 @@
 package inbound
 
 import (
+	"math/big"
+
 	dto "wms-api/dto/inbound"
 	model "wms-api/models/inbound"
 	repository "wms-api/repository/inbound"
@@ -54,11 +56,17 @@ func mapDispositionType(row model.QuarantineDispositionType) dto.QuarantineDispo
 }
 
 func mapDisposition(row repository.QuarantineDispositionRow) dto.QuarantineDispositionResponse {
-	return dto.QuarantineDispositionResponse{ID: row.ID, QuarantineCaseID: row.QuarantineCaseID, DispositionTypeCode: row.DispositionTypeCode, StatusCode: row.StatusCode, DispositionQty: row.DispositionQty, UOMID: row.UOMID, ClientDecisionReference: row.ClientDecisionReference, DecisionNotes: row.DecisionNotes, DecidedAt: row.DecidedAt, DecidedBy: row.DecidedBy, ProcessedAt: row.ProcessedAt, InventoryMovementID: row.InventoryMovementID, ResultingBalanceID: row.ResultingBalanceID, TargetLocationID: row.TargetLocationID, TargetLocationCode: row.TargetLocationCode, CreatedAt: row.CreatedAt}
+	return dto.QuarantineDispositionResponse{ID: row.ID, QuarantineCaseID: row.QuarantineCaseID, DispositionTypeCode: row.DispositionTypeCode, StatusCode: row.StatusCode, DispositionQty: row.DispositionQty, UOMID: row.UOMID, ClientDecisionReference: row.ClientDecisionReference, DecisionNotes: row.DecisionNotes, DecidedAt: row.DecidedAt, DecidedBy: row.DecidedBy, ProcessedAt: row.ProcessedAt, InventoryMovementID: row.InventoryMovementID, ResultingBalanceID: row.ResultingBalanceID, TargetLocationID: row.TargetLocationID, TargetLocationCode: row.TargetLocationCode, DisposalID: row.DisposalID, VendorReturnID: row.VendorReturnID, CreatedAt: row.CreatedAt}
 }
 
 func mapQuarantineCase(row repository.QuarantineCaseRow) dto.QuarantineCaseResponse {
-	return dto.QuarantineCaseResponse{ID: row.ID, BaseUOMCode: row.BaseUOMCode, ParentQuarantineCaseID: row.ParentQuarantineCaseID, InspectionID: row.InspectionID, ReceiptInventoryID: row.ReceiptInventoryID, QuarantineBalanceID: row.QuarantineBalanceID, OwnerID: row.OwnerID, WarehouseID: row.WarehouseID, ItemID: row.ItemID, ItemCode: row.ItemCode, LotNumber: row.LotNumber, LocationCode: row.LocationCode, StatusCode: row.StatusCode, QuarantineQty: row.QuarantineQty, DisposedQty: row.DisposedQty, UOMID: row.UOMID, OpenedAt: row.OpenedAt, ClosedAt: row.ClosedAt, Notes: row.Notes, VersionNo: row.VersionNo, Dispositions: make([]dto.QuarantineDispositionResponse, 0)}
+	pending := "0.000000"
+	if committed, ok := new(big.Rat).SetString(row.CommittedQty); ok {
+		if processed, processedOK := new(big.Rat).SetString(row.DisposedQty); processedOK {
+			pending = new(big.Rat).Sub(committed, processed).FloatString(6)
+		}
+	}
+	return dto.QuarantineCaseResponse{ID: row.ID, BaseUOMCode: row.BaseUOMCode, ParentQuarantineCaseID: row.ParentQuarantineCaseID, InspectionID: row.InspectionID, ReceiptInventoryID: row.ReceiptInventoryID, QuarantineBalanceID: row.QuarantineBalanceID, OwnerID: row.OwnerID, WarehouseID: row.WarehouseID, ItemID: row.ItemID, ItemCode: row.ItemCode, LotNumber: row.LotNumber, LocationCode: row.LocationCode, StatusCode: row.StatusCode, QuarantineQty: row.QuarantineQty, DisposedQty: row.DisposedQty, CommittedQty: row.CommittedQty, PendingQty: pending, UOMID: row.UOMID, OpenedAt: row.OpenedAt, ClosedAt: row.ClosedAt, Notes: row.Notes, VersionNo: row.VersionNo, Dispositions: make([]dto.QuarantineDispositionResponse, 0)}
 }
 
 func mapInboundException(row repository.InboundExceptionRow) dto.InboundExceptionResponse {

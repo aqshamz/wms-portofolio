@@ -9,8 +9,14 @@ QC_PENDING
    +-- pass ----> PUTAWAY_PENDING --> putaway task --> AVAILABLE in storage
    |
    +-- fail ----> QUARANTINE ------> ACCEPT --> AVAILABLE in storage
-                                      RETURN --> inventory removed (RETURN_TO_VENDOR)
-                                      DISPOSE -> inventory removed (DISPOSE)
+                                      RETURN --> planned RTV document
+                                                  |
+                                                  +-- complete -> inventory removed (RETURN_TO_VENDOR)
+                                                  +-- cancel --> commitment released
+                                      DISPOSE -> planned DSP document
+                                                   |
+                                                   +-- complete -> inventory removed (DISPOSE)
+                                                   +-- cancel --> commitment released
 ```
 
 Every inventory action is written to the immutable movement ledger. Inspection
@@ -27,8 +33,10 @@ list responses expose `base_uom_code` so clients do not need to infer the unit
 from the current Item-UOM configuration.
 
 Quarantine disposition responses include nullable `target_location_code` for
-readable history labels. `target_location_id` remains the internal identifier
-used by requests. Decisions without a target location return a null code.
+readable history labels, `disposal_id` for DISPOSE, and `vendor_return_id` for
+RETURN. `target_location_id` remains the internal identifier used by requests.
+Cases expose `disposed_qty` (processed), `committed_qty` (decided plus
+processed), and `pending_qty` (planned outbound quantity awaiting completion).
 
 ## Routes
 
@@ -278,18 +286,38 @@ which applies the same active putaway strategy as the mutation validator.
 }
 ```
 
-`RETURN` removes the quantity with a `RETURN_TO_VENDOR` movement.
+`RETURN` creates a numbered `RTV-...` outbound transaction for the vendor from
+the original inbound order. Inventory remains in `QUARANTINE` and the decision
+remains `DECIDED` until the transaction is completed. The client does not choose
+the vendor, preventing a return from being sent to a different supplier.
+
+Complete the physical handover through
+`POST /api/v1/outbound/vendor-returns/:id/complete`. Completion posts the
+`RETURN_TO_VENDOR` movement and processes the linked disposition atomically.
+`POST /api/v1/outbound/vendor-returns/:id/cancel` releases the committed case
+quantity without changing inventory.
 
 ### Dispose
 
-Use the same request shape with `"disposition_type_code": "DISPOSE"`. It removes
-the quantity with a `DISPOSE` movement. Neither removal action accepts a target
-location.
+Use the same request shape with `"disposition_type_code": "DISPOSE"`. It creates
+a numbered outbound disposal transaction in `PLANNED` status and reserves the
+decision quantity against the case. Stock stays in `QUARANTINE`; no movement is
+posted yet. The response disposition contains its `disposal_id`, which the UI
+links to `/outbound/disposals`.
 
-A disposition may process part of a case. The case then becomes
+Complete the physical disposal through
+`POST /api/v1/outbound/disposals/:id/complete`. Completion validates both the
+disposal document version and current source balance version, posts the
+`DISPOSE` inventory movement, and marks the linked disposition processed in one
+transaction. `POST /api/v1/outbound/disposals/:id/cancel` instead cancels the
+linked decision and releases its committed quantity without changing stock.
+
+A disposition may commit or process part of a case. The case then becomes
 `PARTIALLY_DECIDED`, increments its version, and retains the remaining quantity.
 Reload the case and quarantine balance before the next disposition. Once total
-processed quantity equals `quarantine_qty`, the case becomes `CLOSED`.
+processed quantity equals `quarantine_qty`, the case becomes `CLOSED`. Pending
+disposal quantity is excluded from the undecided quantity but is shown
+separately until completion or cancellation.
 The frontend refreshes the detail snapshot and history after each decision.
 
 `REWORK` now creates a task and child reinspection through the lifecycle API.

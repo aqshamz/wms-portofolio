@@ -63,6 +63,8 @@ func main() {
 		{Version: 12, Name: "API audit request index", Up: auditrepository.MigrateRequestIndex},
 		{Version: 13, Name: "account and role administration", Up: authrepository.MigrateAdministration},
 		{Version: 14, Name: "inbound quantity snapshots", Up: inboundrepository.MigrateQuantitySnapshots},
+		{Version: 15, Name: "outbound disposal transactions", Up: outboundrepository.MigrateDisposals},
+		{Version: 16, Name: "return to vendor transactions", Up: outboundrepository.MigrateVendorReturns},
 	}); err != nil {
 		log.Fatalf("apply database migrations: %v", err)
 	}

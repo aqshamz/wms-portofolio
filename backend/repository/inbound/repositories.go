@@ -54,6 +54,8 @@ type Repositories struct {
 	QuarantineType    *QuarantineDispositionTypeRepository
 	QuarantineCase    *QuarantineCaseRepository
 	Disposition       *QuarantineDispositionRepository
+	Disposal          *QuarantineDisposalRepository
+	VendorReturn      *QuarantineVendorReturnRepository
 	Exception         *InboundExceptionRepository
 	ReworkTask        *ReworkTaskRepository
 	Scope             *InboundScopeRepository
@@ -68,7 +70,7 @@ func NewRepositories(db *gorm.DB) *Repositories {
 		Receipt: NewReceiptRepository(db), ReceiptLine: NewReceiptLineRepository(db), ReceiptInventory: NewReceiptInventoryRepository(db),
 		ReceiptLineSerial: NewReceiptLineSerialRepository(db), Master: master.NewOperationalRepositories(db), Inventory: inventory.NewRepositories(db),
 		QualityInspection: NewQualityInspectionRepository(db), PutawayTask: NewPutawayTaskRepository(db), QuarantineType: NewQuarantineDispositionTypeRepository(db),
-		QuarantineCase: NewQuarantineCaseRepository(db), Disposition: NewQuarantineDispositionRepository(db),
+		QuarantineCase: NewQuarantineCaseRepository(db), Disposition: NewQuarantineDispositionRepository(db), Disposal: NewQuarantineDisposalRepository(db), VendorReturn: NewQuarantineVendorReturnRepository(db),
 		Exception: NewInboundExceptionRepository(db), ReworkTask: NewReworkTaskRepository(db),
 		Scope: NewInboundScopeRepository(db),
 	}

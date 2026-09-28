@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm/logger"
 	"wms-api/config"
 	dto "wms-api/dto/inbound"
+	outbounddto "wms-api/dto/outbound"
 	authmodel "wms-api/models/authentication"
 	inventorymodel "wms-api/models/inventory"
 	mastermodel "wms-api/models/master"
@@ -20,7 +21,9 @@ import (
 	repository "wms-api/repository/inbound"
 	inventoryrepository "wms-api/repository/inventory"
 	masterrepository "wms-api/repository/master"
+	outboundrepository "wms-api/repository/outbound"
 	masterservice "wms-api/services/master"
+	outboundservice "wms-api/services/outbound"
 )
 
 func inboundOK(t *testing.T, err error) {
@@ -79,6 +82,8 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 		inboundOK(t, repository.MigrateQuantitySnapshots(tx))
 	}
 	inboundOK(t, repository.Migrate(tx))
+	inboundOK(t, outboundrepository.MigrateDisposals(tx))
+	inboundOK(t, outboundrepository.MigrateVendorReturns(tx))
 	inboundOK(t, repository.SeedReferenceData(tx))
 
 	ctx := context.Background()
@@ -690,35 +695,97 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	}
 	_, err = service.CreateQuarantineDisposition(ctx, acceptedCase.ID, dto.CreateQuarantineDispositionRequest{ExpectedCaseVersion: acceptedCase.VersionNo, ExpectedBalanceVersion: quarantineBalance.VersionNo, DispositionTypeCode: "DISPOSE", DispositionQty: "1", BusinessDate: businessDate, DecidedAt: businessDate + "T11:00:00+07:00"}, account.ID)
 	inboundWant(t, err, repository.ErrConcurrentWrite)
-	disposedCase, err := service.CreateQuarantineDisposition(ctx, acceptedCase.ID, dto.CreateQuarantineDispositionRequest{ExpectedCaseVersion: acceptedCase.VersionNo, ExpectedBalanceVersion: *acceptedCase.QuarantineBalanceVersionNo, DispositionTypeCode: "DISPOSE", DispositionQty: "1", BusinessDate: businessDate, DecidedAt: businessDate + "T11:00:00+07:00"}, account.ID)
+	plannedCase, err := service.CreateQuarantineDisposition(ctx, acceptedCase.ID, dto.CreateQuarantineDispositionRequest{ExpectedCaseVersion: acceptedCase.VersionNo, ExpectedBalanceVersion: *acceptedCase.QuarantineBalanceVersionNo, DispositionTypeCode: "DISPOSE", DispositionQty: "1", BusinessDate: businessDate, DecidedAt: businessDate + "T11:00:00+07:00"}, account.ID)
 	inboundOK(t, err)
-	if disposedCase.StatusCode != "CLOSED" || disposedCase.AvailableQty != "0.000000" || len(disposedCase.Dispositions) != 2 {
-		t.Fatalf("disposal did not close the fully processed case: %+v", disposedCase)
+	if plannedCase.StatusCode != "PARTIALLY_DECIDED" || plannedCase.AvailableQty != "1.000000" || plannedCase.CommittedQty != "2.000000" || plannedCase.PendingQty != "1.000000" || len(plannedCase.Dispositions) != 2 {
+		t.Fatalf("disposal decision did not leave stock pending: %+v", plannedCase)
 	}
-	for _, disposition := range disposedCase.Dispositions {
-		if disposition.DispositionTypeCode == "DISPOSE" && disposition.TargetLocationCode != nil {
-			t.Fatal("disposal without a target must retain a null location code")
-		}
+	plannedDisposition := plannedCase.Dispositions[1]
+	if plannedDisposition.DispositionTypeCode != "DISPOSE" || plannedDisposition.StatusCode != "DECIDED" || plannedDisposition.DisposalID == nil || plannedDisposition.TargetLocationCode != nil {
+		t.Fatalf("pending disposal lineage is incomplete: %+v", plannedDisposition)
+	}
+	outbound, err := outboundservice.NewService(outboundrepository.NewRepositories(tx), "Asia/Jakarta")
+	inboundOK(t, err)
+	plannedDisposal, err := outbound.GetDisposal(ctx, *plannedDisposition.DisposalID)
+	inboundOK(t, err)
+	if plannedDisposal.StatusCode != "PLANNED" || plannedDisposal.SourceBalanceVersionNo == nil || plannedDisposal.AvailableQty != "1.000000" {
+		t.Fatalf("planned disposal snapshot is incomplete: %+v", plannedDisposal)
+	}
+	cancelledDisposal, err := outbound.CancelDisposal(ctx, plannedDisposal.ID, outbounddto.CancelDisposalRequest{ExpectedVersion: plannedDisposal.VersionNo, Reason: "Approval withdrawn"}, account.ID)
+	inboundOK(t, err)
+	if cancelledDisposal.StatusCode != "CANCELLED" || cancelledDisposal.CancellationReason == nil {
+		t.Fatalf("disposal cancellation did not retain its reason: %+v", cancelledDisposal)
+	}
+	acceptedCase, err = service.GetQuarantineCase(ctx, acceptedCase.ID)
+	inboundOK(t, err)
+	if acceptedCase.StatusCode != "PARTIALLY_DECIDED" || acceptedCase.CommittedQty != "1.000000" || acceptedCase.PendingQty != "0.000000" {
+		t.Fatalf("cancelled disposal did not release committed quantity: %+v", acceptedCase)
+	}
+	plannedCase, err = service.CreateQuarantineDisposition(ctx, acceptedCase.ID, dto.CreateQuarantineDispositionRequest{ExpectedCaseVersion: acceptedCase.VersionNo, ExpectedBalanceVersion: *acceptedCase.QuarantineBalanceVersionNo, DispositionTypeCode: "DISPOSE", DispositionQty: "1", BusinessDate: businessDate, DecidedAt: businessDate + "T11:15:00+07:00"}, account.ID)
+	inboundOK(t, err)
+	plannedDisposition = plannedCase.Dispositions[len(plannedCase.Dispositions)-1]
+	plannedDisposal, err = outbound.GetDisposal(ctx, *plannedDisposition.DisposalID)
+	inboundOK(t, err)
+	completedDisposal, err := outbound.CompleteDisposal(ctx, plannedDisposal.ID, outbounddto.CompleteDisposalRequest{ExpectedVersion: plannedDisposal.VersionNo, ExpectedBalanceVersion: *plannedDisposal.SourceBalanceVersionNo, CompletedAt: businessDate + "T11:30:00+07:00"}, account.ID)
+	inboundOK(t, err)
+	if completedDisposal.StatusCode != "COMPLETED" || completedDisposal.InventoryMovementID == nil {
+		t.Fatalf("disposal completion did not post inventory: %+v", completedDisposal)
+	}
+	disposedCase, err := service.GetQuarantineCase(ctx, acceptedCase.ID)
+	inboundOK(t, err)
+	if disposedCase.StatusCode != "CLOSED" || disposedCase.AvailableQty != "0.000000" || disposedCase.DisposedQty != "2.000000" || disposedCase.PendingQty != "0.000000" {
+		t.Fatalf("completed disposal did not close the fully processed case: %+v", disposedCase)
 	}
 	inboundOK(t, tx.RollbackTo("quarantine_accept_check").Error)
 	caseResult, err = service.CreateQuarantineDisposition(ctx, caseResult.ID, dto.CreateQuarantineDispositionRequest{ExpectedCaseVersion: caseResult.VersionNo, ExpectedBalanceVersion: quarantineBalance.VersionNo, DispositionTypeCode: "RETURN", DispositionQty: "1", BusinessDate: businessDate, DecidedAt: businessDate + "T11:00:00+07:00"}, account.ID)
 	inboundOK(t, err)
-	if caseResult.StatusCode != "PARTIALLY_DECIDED" || caseResult.DisposedQty != "1.000000" {
-		t.Fatalf("quarantine case was not partially decided: %+v", caseResult)
+	if caseResult.StatusCode != "PARTIALLY_DECIDED" || caseResult.DisposedQty != "0" || caseResult.CommittedQty != "1.000000" || caseResult.PendingQty != "1.000000" || caseResult.AvailableQty != "2.000000" {
+		t.Fatalf("return decision did not leave stock pending: %+v", caseResult)
+	}
+	returnDisposition := caseResult.Dispositions[0]
+	if returnDisposition.DispositionTypeCode != "RETURN" || returnDisposition.StatusCode != "DECIDED" || returnDisposition.VendorReturnID == nil || returnDisposition.InventoryMovementID != nil {
+		t.Fatalf("pending vendor return lineage is incomplete: %+v", returnDisposition)
+	}
+	plannedReturn, err := outbound.GetVendorReturn(ctx, *returnDisposition.VendorReturnID)
+	inboundOK(t, err)
+	if plannedReturn.StatusCode != "PLANNED" || plannedReturn.VendorID != vendor.ID || plannedReturn.VendorCode != vendor.Code || plannedReturn.SourceBalanceVersionNo == nil || plannedReturn.AvailableQty != "2.000000" {
+		t.Fatalf("planned vendor return snapshot is incomplete: %+v", plannedReturn)
+	}
+	cancelledReturn, err := outbound.CancelVendorReturn(ctx, plannedReturn.ID, outbounddto.CancelVendorReturnRequest{ExpectedVersion: plannedReturn.VersionNo, Reason: "Vendor requested review"}, account.ID)
+	inboundOK(t, err)
+	if cancelledReturn.StatusCode != "CANCELLED" || cancelledReturn.CancellationReason == nil {
+		t.Fatalf("vendor return cancellation did not retain its reason: %+v", cancelledReturn)
+	}
+	caseResult, err = service.GetQuarantineCase(ctx, caseResult.ID)
+	inboundOK(t, err)
+	if caseResult.StatusCode != "OPEN" || caseResult.CommittedQty != "0" || caseResult.PendingQty != "0.000000" || caseResult.AvailableQty != "2.000000" {
+		t.Fatalf("cancelled vendor return did not release committed quantity: %+v", caseResult)
+	}
+	caseResult, err = service.CreateQuarantineDisposition(ctx, caseResult.ID, dto.CreateQuarantineDispositionRequest{ExpectedCaseVersion: caseResult.VersionNo, ExpectedBalanceVersion: *caseResult.QuarantineBalanceVersionNo, DispositionTypeCode: "RETURN", DispositionQty: "1", BusinessDate: businessDate, DecidedAt: businessDate + "T11:30:00+07:00"}, account.ID)
+	inboundOK(t, err)
+	returnDisposition = caseResult.Dispositions[len(caseResult.Dispositions)-1]
+	plannedReturn, err = outbound.GetVendorReturn(ctx, *returnDisposition.VendorReturnID)
+	inboundOK(t, err)
+	completedReturn, err := outbound.CompleteVendorReturn(ctx, plannedReturn.ID, outbounddto.CompleteVendorReturnRequest{ExpectedVersion: plannedReturn.VersionNo, ExpectedBalanceVersion: *plannedReturn.SourceBalanceVersionNo, CompletedAt: businessDate + "T11:45:00+07:00"}, account.ID)
+	inboundOK(t, err)
+	if completedReturn.StatusCode != "COMPLETED" || completedReturn.InventoryMovementID == nil {
+		t.Fatalf("vendor return completion did not post inventory: %+v", completedReturn)
+	}
+	caseResult, err = service.GetQuarantineCase(ctx, caseResult.ID)
+	inboundOK(t, err)
+	if caseResult.StatusCode != "PARTIALLY_DECIDED" || caseResult.DisposedQty != "1.000000" || caseResult.PendingQty != "0.000000" || caseResult.AvailableQty != "1.000000" {
+		t.Fatalf("completed vendor return did not process the quarantine quantity: %+v", caseResult)
 	}
 	inboundOK(t, tx.Where("balance_id=?", caseResult.QuarantineBalanceID).Take(&quarantineBalance).Error)
-	if caseResult.QuarantineBalanceVersionNo == nil || *caseResult.QuarantineBalanceVersionNo != quarantineBalance.VersionNo || caseResult.AvailableQty != "1.000000" || len(caseResult.Dispositions) != 1 {
-		t.Fatalf("partial decision did not refresh the stock snapshot and history: %+v", caseResult)
-	}
 	caseResult, err = service.CreateQuarantineDisposition(ctx, caseResult.ID, dto.CreateQuarantineDispositionRequest{ExpectedCaseVersion: caseResult.VersionNo, ExpectedBalanceVersion: quarantineBalance.VersionNo, DispositionTypeCode: "REWORK", DispositionQty: "1", BusinessDate: businessDate, DecidedAt: businessDate + "T12:00:00+07:00", WorkInstructions: inboundPointer("Replace damaged seal and clean package")}, account.ID)
 	inboundOK(t, err)
-	if caseResult.StatusCode != "CLOSED" || caseResult.DisposedQty != "2.000000" || len(caseResult.Dispositions) != 2 {
+	if caseResult.StatusCode != "CLOSED" || caseResult.DisposedQty != "2.000000" || len(caseResult.Dispositions) != 3 {
 		t.Fatalf("quarantine case was not closed: %+v", caseResult)
 	}
 	if caseResult.AvailableQty != "0.000000" {
 		t.Fatalf("closed quarantine case still reports unprocessed stock: %+v", caseResult)
 	}
-	rework := caseResult.Dispositions[1].ReworkTask
+	rework := caseResult.Dispositions[2].ReworkTask
 	if rework == nil {
 		t.Fatal("REWORK disposition did not create a rework task")
 	}

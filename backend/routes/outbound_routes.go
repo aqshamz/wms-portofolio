@@ -19,6 +19,8 @@ func registerOutboundRoutes(api *gin.RouterGroup, controller *controller.Control
 	transport := authorization.RequirePermission(middleware.PermissionOutboundTransport)
 	ship := authorization.RequirePermission(middleware.PermissionOutboundShip)
 	deliver := authorization.RequirePermission(middleware.PermissionOutboundDeliver)
+	dispose := authorization.RequirePermission(middleware.PermissionOutboundDispose)
+	returnToVendor := authorization.RequirePermission(middleware.PermissionOutboundReturnToVendor)
 	cancel := authorization.RequirePermission(middleware.PermissionOutboundCancel)
 	config := authorization.RequirePermission(middleware.PermissionOutboundConfig)
 
@@ -98,4 +100,12 @@ func registerOutboundRoutes(api *gin.RouterGroup, controller *controller.Control
 	group.POST("/deliveries/:id/close-return", deliver, controller.CloseReturnedDelivery)
 	group.PUT("/return-policy", config, controller.UpsertReturnPolicy)
 	group.GET("/return-policy", read, controller.GetReturnPolicy)
+	group.GET("/disposals", read, controller.ListDisposals)
+	group.GET("/disposals/:id", read, controller.GetDisposal)
+	group.POST("/disposals/:id/complete", dispose, controller.CompleteDisposal)
+	group.POST("/disposals/:id/cancel", cancel, controller.CancelDisposal)
+	group.GET("/vendor-returns", read, controller.ListVendorReturns)
+	group.GET("/vendor-returns/:id", read, controller.GetVendorReturn)
+	group.POST("/vendor-returns/:id/complete", returnToVendor, controller.CompleteVendorReturn)
+	group.POST("/vendor-returns/:id/cancel", cancel, controller.CancelVendorReturn)
 }
