@@ -67,6 +67,11 @@ interface InventoryNavigationItem {
   href: string;
 }
 
+interface OutboundNavigationItem {
+  label: string;
+  href: string;
+}
+
 const navigation: NavigationGroup[] = [
   {
     label: "Workspace",
@@ -94,7 +99,6 @@ const navigation: NavigationGroup[] = [
       {
         label: "Outbound",
         icon: PackageCheck,
-        badge: "8",
         access: MODULE_ACCESS.OUTBOUND.READ,
       },
       {
@@ -141,6 +145,11 @@ const inventoryNavigation: InventoryNavigationItem[] = [
   { label: "Serial states", href: "/inventory/serials" },
   { label: "Lots", href: "/inventory/lots" },
   { label: "Handling units", href: "/inventory/handling-units" },
+];
+
+const outboundNavigation: OutboundNavigationItem[] = [
+  { label: "Return to vendor", href: "/outbound/vendor-returns" },
+  { label: "Disposals", href: "/outbound/disposals" },
 ];
 
 const masterDataNavigation: MasterDataNavigationItem[] = [
@@ -321,12 +330,16 @@ function SidebarNavigation({
   const [inventoryOpen, setInventoryOpen] = useState(
     pathname.startsWith("/inventory"),
   );
+  const [outboundOpen, setOutboundOpen] = useState(
+    pathname.startsWith("/outbound"),
+  );
   const [masterDataOpen, setMasterDataOpen] = useState(
     pathname.startsWith("/master-data"),
   );
   const reportsActive = pathname.startsWith("/reports");
   const inboundActive = pathname.startsWith("/inbound");
   const inventoryActive = pathname.startsWith("/inventory");
+  const outboundActive = pathname.startsWith("/outbound");
   const masterDataActive = pathname.startsWith("/master-data");
   const canViewMasterData = canAccess(MODULE_ACCESS.MASTER.READ);
   const canViewReports = canAccess(MODULE_ACCESS.REPORTING.READ);
@@ -517,6 +530,78 @@ function SidebarNavigation({
                             className="mt-1 ml-5 space-y-0.5 border-l border-white/10 pl-4"
                           >
                             {inventoryNavigation.map((entry) => {
+                              const active = isSectionActive(
+                                pathname,
+                                entry.href,
+                              );
+                              return (
+                                <li key={entry.href}>
+                                  <Link
+                                    href={entry.href}
+                                    onClick={onNavigate}
+                                    aria-current={active ? "page" : undefined}
+                                    className={cn(
+                                      "flex min-h-9 items-center rounded-lg px-3 text-sm transition-colors",
+                                      active
+                                        ? "bg-white/10 font-semibold text-white"
+                                        : "text-slate-400 hover:bg-white/[0.06] hover:text-white",
+                                    )}
+                                  >
+                                    {entry.label}
+                                  </Link>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : null}
+                      </li>
+                    );
+                  }
+
+                  if (item.label === "Outbound") {
+                    return (
+                      <li key={item.label}>
+                        <button
+                          type="button"
+                          aria-expanded={!collapsed && outboundOpen}
+                          aria-controls="outbound-navigation"
+                          aria-label={collapsed ? "Outbound" : undefined}
+                          title={collapsed ? "Outbound" : undefined}
+                          onClick={() => {
+                            if (collapsed) {
+                              onToggleCollapsed?.();
+                              setOutboundOpen(true);
+                            } else {
+                              setOutboundOpen((open) => !open);
+                            }
+                          }}
+                          className={cn(
+                            "flex min-h-11 w-full items-center gap-3 rounded-xl text-left text-sm font-medium transition-colors",
+                            collapsed ? "justify-center px-2" : "px-3",
+                            outboundActive
+                              ? "bg-cyan-400 text-slate-950"
+                              : "text-slate-300 hover:bg-white/[0.07] hover:text-white",
+                          )}
+                        >
+                          <PackageCheck className="size-[18px] shrink-0" />
+                          <span className={collapsed ? "sr-only" : "flex-1"}>
+                            Outbound
+                          </span>
+                          {!collapsed ? (
+                            <ChevronDown
+                              className={cn(
+                                "size-4 transition-transform",
+                                outboundOpen && "rotate-180",
+                              )}
+                            />
+                          ) : null}
+                        </button>
+                        {outboundOpen && !collapsed ? (
+                          <ul
+                            id="outbound-navigation"
+                            className="mt-1 ml-5 space-y-0.5 border-l border-white/10 pl-4"
+                          >
+                            {outboundNavigation.map((entry) => {
                               const active = isSectionActive(
                                 pathname,
                                 entry.href,

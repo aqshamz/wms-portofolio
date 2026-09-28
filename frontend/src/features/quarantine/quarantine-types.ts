@@ -30,6 +30,8 @@ export interface QuarantineDisposition {
   decided_by: string;
   processed_at?: string | null;
   inventory_movement_id?: string | null;
+  disposal_id?: string | null;
+  vendor_return_id?: string | null;
   resulting_balance_id?: string | null;
   target_location_id?: string | null;
   target_location_code?: string | null;
@@ -65,6 +67,8 @@ export interface QuarantineCase {
   status_code: QuarantineStatus;
   quarantine_qty: string;
   disposed_qty: string;
+  committed_qty: string;
+  pending_qty: string;
   uom_id: string;
   opened_at: string;
   closed_at?: string | null;
@@ -93,7 +97,9 @@ export interface DispositionRequest {
   work_instructions?: string;
 }
 export function remainingQuantity(value: QuarantineCase) {
-  return new Decimal(value.quarantine_qty).minus(value.disposed_qty).toString();
+  return new Decimal(value.quarantine_qty)
+    .minus(value.committed_qty ?? value.disposed_qty)
+    .toString();
 }
 export function canDecide(
   value: QuarantineCase,

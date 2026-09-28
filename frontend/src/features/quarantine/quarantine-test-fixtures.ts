@@ -17,6 +17,8 @@ export const testCase: QuarantineCase = {
   status_code: "OPEN",
   quarantine_qty: "10.000000",
   disposed_qty: "0.000000",
+  committed_qty: "0.000000",
+  pending_qty: "0.000000",
   uom_id: "uom-1",
   opened_at: "2026-09-17T09:00:00+07:00",
   version_no: 2,

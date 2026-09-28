@@ -1,0 +1,40 @@
+import type { Disposal, DisposalCapabilities } from "./disposal-types";
+
+export const disposalCapabilities: DisposalCapabilities = {
+  canComplete: true,
+  canCancel: true,
+  timezone: "Asia/Jakarta",
+};
+
+export const testDisposal: Disposal = {
+  disposal_id: "DSP-WH1-20260925-000001",
+  quarantine_disposition_id: "QDS-1",
+  quarantine_case_id: "QCS-1",
+  owner_id: "owner-1",
+  owner_code: "OWNER",
+  owner_name: "Owner one",
+  warehouse_id: "warehouse-1",
+  warehouse_code: "WH1",
+  warehouse_name: "Warehouse one",
+  business_date: "2026-09-25",
+  source_balance_id: "balance-1",
+  source_balance_version_no: 7,
+  available_qty: "10.000000",
+  planned_balance_version_no: 7,
+  item_id: "item-1",
+  item_code: "ITEM-1",
+  item_name: "Damaged item",
+  source_location_id: "location-1",
+  source_location_code: "QC-AREA",
+  source_inventory_status_id: "status-1",
+  source_inventory_status_code: "QUARANTINE",
+  quantity: "2.000000",
+  uom_id: "uom-1",
+  uom_code: "EA",
+  status_code: "PLANNED",
+  planned_at: "2026-09-25T10:00:00+07:00",
+  created_at: "2026-09-25T10:00:00+07:00",
+  created_by: "account-1",
+  created_by_display_name: "Warehouse Admin",
+  version_no: 1,
+};

@@ -34,6 +34,7 @@ describe("quarantine validation", () => {
       ...testCase,
       quarantine_qty: "0.3",
       disposed_qty: "0.1",
+      committed_qty: "0.1",
       available_qty: "0.2",
     };
     expect(remainingQuantity(value)).toBe("0.2");
@@ -53,7 +54,7 @@ describe("quarantine validation", () => {
   it("checks both undecided and unreserved stock", () => {
     expect(
       dispositionSchema(
-        { ...testCase, disposed_qty: "9" },
+        { ...testCase, disposed_qty: "9", committed_qty: "9" },
         testTypes,
       ).safeParse(fields).success,
     ).toBe(false);
@@ -134,7 +135,12 @@ describe("quarantine validation", () => {
     ).toBe(true);
     expect(
       canDecide(
-        { ...testCase, status_code: "PARTIALLY_DECIDED", disposed_qty: "2" },
+        {
+          ...testCase,
+          status_code: "PARTIALLY_DECIDED",
+          disposed_qty: "2",
+          committed_qty: "2",
+        },
         { canDispose: true, timezone: "Asia/Jakarta" },
       ),
     ).toBe(true);

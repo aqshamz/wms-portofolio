@@ -120,7 +120,11 @@ export function DispositionForm({
       });
     },
     onSuccess: (updated) => {
-      toast.success("Disposition recorded. Inventory updated.");
+      toast.success(
+        typeCode === "DISPOSE" || typeCode === "RETURN"
+          ? `${typeCode === "DISPOSE" ? "Disposal" : "Return to vendor"} transaction planned. Inventory remains quarantined.`
+          : "Disposition recorded. Inventory updated.",
+      );
       onDone(updated);
     },
     onError: (error) => toast.error(error.message),
@@ -142,9 +146,10 @@ export function DispositionForm({
       <h3 className="font-bold text-slate-950">Record disposition</h3>
       <p className="text-sm text-slate-700">
         Undecided: {remainingQuantity(value)}{" "}
-        {value.base_uom_code || "base units"}. Unreserved quarantine stock:{" "}
+        {value.base_uom_code || "base units"}. Uncommitted quarantine stock:{" "}
         {value.available_qty ?? "Unavailable"}. Each confirmed decision posts
-        inventory immediately and cannot be edited here.
+        inventory immediately except return and disposal, which create planned
+        outbound transactions. Confirmed decisions cannot be edited here.
       </p>
       {!snapshotReady ? (
         <p
@@ -203,7 +208,9 @@ export function DispositionForm({
             ? "Acceptance moves stock from quarantine into AVAILABLE at the selected storage location immediately. It does not create a putaway task. Confirm only after the physical move is ready."
             : effect === "rework"
               ? "Rework changes this quantity to QC_PENDING at its current location and creates a rework task. After rework is completed, it must pass a new quality inspection."
-              : "This decision removes the quantity from warehouse inventory. Confirm the physical return or disposal before posting."}
+              : typeCode === "DISPOSE"
+                ? "Disposal creates a planned outbound transaction. Stock stays in quarantine until an authorized worker completes that transaction from Outbound → Disposals."
+                : "Return creates a planned outbound transaction for the original receipt vendor. Stock stays in quarantine until an authorized worker completes it from Outbound → Return to vendor."}
         </p>
       ) : null}
       <div className="grid gap-4 sm:grid-cols-2">
@@ -393,9 +400,12 @@ export function DispositionForm({
             {effect === "accept"
               ? ` into ${selection?.label || decision.target_location_id}`
               : ""}
-            ? This posts inventory immediately. The case closes when its entire
-            quarantine quantity has been decided. Decision time is recorded when
-            confirmed.
+            ?{" "}
+            {["DISPOSE", "RETURN"].includes(decision.disposition_type_code)
+              ? " This creates a planned outbound transaction; inventory stays quarantined until completion."
+              : " This posts inventory immediately."}{" "}
+            The case has no undecided quantity once its entire quarantine
+            quantity is committed. Decision time is recorded when confirmed.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button

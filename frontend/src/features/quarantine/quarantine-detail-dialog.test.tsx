@@ -46,21 +46,33 @@ beforeEach(() => {
     total_items: 1,
   });
   vi.mocked(createDisposition).mockImplementation((_id, request) => {
+    const isDisposal = request.disposition_type_code === "DISPOSE";
+    const isVendorReturn = request.disposition_type_code === "RETURN";
+    const isPlannedOutbound = isDisposal || isVendorReturn;
     const disposed = new Decimal(serverCase.disposed_qty).plus(
+      isPlannedOutbound ? 0 : request.disposition_qty,
+    );
+    const committed = new Decimal(serverCase.committed_qty).plus(
       request.disposition_qty,
     );
     serverCase = {
       ...serverCase,
       disposed_qty: disposed.toString(),
-      available_qty: new Decimal(serverCase.available_qty!)
-        .minus(request.disposition_qty)
-        .toString(),
-      status_code: disposed.eq(serverCase.quarantine_qty)
-        ? "CLOSED"
-        : "PARTIALLY_DECIDED",
+      committed_qty: committed.toString(),
+      pending_qty: isPlannedOutbound ? request.disposition_qty : "0",
+      available_qty: isPlannedOutbound
+        ? serverCase.available_qty
+        : new Decimal(serverCase.available_qty!)
+            .minus(request.disposition_qty)
+            .toString(),
+      status_code:
+        !isPlannedOutbound && committed.eq(serverCase.quarantine_qty)
+          ? "CLOSED"
+          : "PARTIALLY_DECIDED",
       version_no: serverCase.version_no + 1,
-      quarantine_balance_version_no:
-        serverCase.quarantine_balance_version_no! + 1,
+      quarantine_balance_version_no: isPlannedOutbound
+        ? serverCase.quarantine_balance_version_no
+        : serverCase.quarantine_balance_version_no! + 1,
       dispositions: [
         ...serverCase.dispositions,
         {
@@ -68,7 +80,7 @@ beforeEach(() => {
           quarantine_case_id: serverCase.quarantine_case_id,
           disposition_type_code: request.disposition_type_code,
           disposition_qty: request.disposition_qty,
-          status_code: "PROCESSED",
+          status_code: isPlannedOutbound ? "DECIDED" : "PROCESSED",
           uom_id: "uom-1",
           decided_at: request.decided_at,
           decided_by: "account-1",
@@ -77,7 +89,9 @@ beforeEach(() => {
           client_decision_reference: request.client_decision_reference,
           target_location_id: request.target_location_id,
           target_location_code: request.target_location_id ? "BULK-01" : null,
-          inventory_movement_id: "MOVE-1",
+          inventory_movement_id: isPlannedOutbound ? null : "MOVE-1",
+          disposal_id: isDisposal ? "DSP-1" : null,
+          vendor_return_id: isVendorReturn ? "RTV-1" : null,
           ...(request.disposition_type_code === "REWORK"
             ? {
                 rework_task: {
@@ -140,7 +154,7 @@ describe("quarantine decisions", () => {
     expect(listQuarantineTargets).not.toHaveBeenCalled();
   });
   it.each(["RETURN", "DISPOSE"])(
-    "confirms %s stock removal and closes a fully decided case",
+    "confirms the %s lifecycle for a fully committed case",
     async (code) => {
       const user = setup();
       await choose(user, code);
@@ -149,7 +163,24 @@ describe("quarantine decisions", () => {
       await user.click(
         screen.getByRole("button", { name: "Confirm disposition" }),
       );
-      await screen.findByText(/fully decided and closed/);
+      await screen.findByText(/full quarantine quantity is committed/);
+      if (code === "DISPOSE") {
+        expect(toast.success).toHaveBeenCalledWith(
+          "Disposal transaction planned. Inventory remains quarantined.",
+        );
+        expect(screen.getByText("Open disposal transaction")).toHaveAttribute(
+          "href",
+          expect.stringContaining("disposal=DSP-1"),
+        );
+      } else {
+        expect(toast.success).toHaveBeenCalledWith(
+          "Return to vendor transaction planned. Inventory remains quarantined.",
+        );
+        expect(screen.getByText("Open return to vendor")).toHaveAttribute(
+          "href",
+          expect.stringContaining("return=RTV-1"),
+        );
+      }
       expect(createDisposition).toHaveBeenCalledTimes(1);
       expect(createDisposition).toHaveBeenCalledWith("QCASE-1", {
         expected_case_version: 2,
@@ -324,6 +355,7 @@ describe("quarantine decisions", () => {
       ...testCase,
       status_code: "CLOSED",
       disposed_qty: "10",
+      committed_qty: "10",
       parent_quarantine_case_id: "PARENT-1",
       dispositions: [
         {

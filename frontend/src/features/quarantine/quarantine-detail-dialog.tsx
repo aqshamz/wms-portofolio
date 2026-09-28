@@ -127,7 +127,9 @@ export function QuarantineDetailDialog({
                 label="Quarantined (base units)"
                 value={`${value.quarantine_qty} ${value.base_uom_code || ""}`}
               />
-              <Detail label="Decided quantity" value={value.disposed_qty} />
+              <Detail label="Processed quantity" value={value.disposed_qty} />
+              <Detail label="Pending outbound" value={value.pending_qty} />
+              <Detail label="Committed quantity" value={value.committed_qty} />
               <Detail
                 label="Undecided quantity"
                 value={remainingQuantity(value)}
@@ -201,7 +203,9 @@ export function QuarantineDetailDialog({
               <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
                 {value.status_code === "CLOSED"
                   ? "This case is fully decided and closed. Rework and reinspection can still continue on the linked task."
-                  : "This account has read-only quarantine access. INBOUND.QUARANTINE_DISPOSE is required to record decisions."}
+                  : remainingQuantity(value) === "0"
+                    ? "The full quarantine quantity is committed. Complete or cancel the pending outbound transaction before recording another decision."
+                    : "This account has read-only quarantine access. INBOUND.QUARANTINE_DISPOSE is required to record decisions."}
               </p>
             )}
             <section className="space-y-3" inert={busy || undefined}>
@@ -253,6 +257,22 @@ export function QuarantineDetailDialog({
                         value={disposition.inventory_movement_id}
                       />
                     </dl>
+                    {disposition.disposal_id ? (
+                      <Link
+                        className="inline-block text-sm font-semibold text-cyan-800 underline underline-offset-4"
+                        href={`/outbound/disposals?${new URLSearchParams({ owner: value.owner_id, warehouse: value.warehouse_id, disposal: disposition.disposal_id })}`}
+                      >
+                        Open disposal transaction
+                      </Link>
+                    ) : null}
+                    {disposition.vendor_return_id ? (
+                      <Link
+                        className="inline-block text-sm font-semibold text-cyan-800 underline underline-offset-4"
+                        href={`/outbound/vendor-returns?${new URLSearchParams({ owner: value.owner_id, warehouse: value.warehouse_id, return: disposition.vendor_return_id })}`}
+                      >
+                        Open return to vendor
+                      </Link>
+                    ) : null}
                     {disposition.rework_task ? (
                       <div className="space-y-2 rounded-lg bg-cyan-50 p-3 text-sm text-cyan-950">
                         <p className="font-semibold break-all">
