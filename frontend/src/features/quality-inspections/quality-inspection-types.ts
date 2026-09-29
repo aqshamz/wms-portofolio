@@ -55,6 +55,16 @@ export interface InspectionFilters {
 
 export type InspectionPage = PaginatedData<QualityInspection>;
 
+export interface QualityInspectionTarget {
+  location_id: string;
+  code: string;
+  zone_code: string;
+  location_type_code: string;
+}
+
+export type QualityInspectionTargetPage =
+  PaginatedData<QualityInspectionTarget>;
+
 export interface CompleteInspectionRequest {
   expected_version: number;
   expected_balance_version: number;

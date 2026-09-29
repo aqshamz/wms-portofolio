@@ -67,6 +67,12 @@ interface InventoryNavigationItem {
   href: string;
 }
 
+interface StockControlNavigationItem {
+  label: string;
+  href: string;
+  access?: PermissionRequirement;
+}
+
 interface OutboundNavigationItem {
   label: string;
   href: string;
@@ -93,8 +99,16 @@ const navigation: NavigationGroup[] = [
       {
         label: "Stock control",
         icon: ClipboardCheck,
-        badge: "3",
-        access: MODULE_ACCESS.INVENTORY.READ,
+        access: {
+          anyOf: [
+            ...MODULE_ACCESS.INVENTORY.MOVE.anyOf,
+            ...MODULE_ACCESS.INVENTORY.STATUS_CHANGE.anyOf,
+            ...MODULE_ACCESS.INVENTORY.ADJUST.anyOf,
+            ...MODULE_ACCESS.INVENTORY.ADJUST_APPROVE.anyOf,
+            ...MODULE_ACCESS.INVENTORY.COUNT.anyOf,
+            ...MODULE_ACCESS.INVENTORY.TRANSFER.anyOf,
+          ],
+        },
       },
       {
         label: "Outbound",
@@ -145,6 +159,29 @@ const inventoryNavigation: InventoryNavigationItem[] = [
   { label: "Serial states", href: "/inventory/serials" },
   { label: "Lots", href: "/inventory/lots" },
   { label: "Handling units", href: "/inventory/handling-units" },
+];
+
+const stockControlNavigation: StockControlNavigationItem[] = [
+  {
+    label: "Internal movements",
+    href: "/stock-control/internal-movements",
+    access: MODULE_ACCESS.INVENTORY.MOVE,
+  },
+  {
+    label: "Replenishments",
+    href: "/stock-control/replenishments",
+    access: MODULE_ACCESS.INVENTORY.MOVE,
+  },
+  {
+    label: "Inventory adjustments",
+    href: "/stock-control/inventory-adjustments",
+    access: {
+      anyOf: [
+        ...MODULE_ACCESS.INVENTORY.ADJUST.anyOf,
+        ...MODULE_ACCESS.INVENTORY.ADJUST_APPROVE.anyOf,
+      ],
+    },
+  },
 ];
 
 const outboundNavigation: OutboundNavigationItem[] = [
@@ -330,6 +367,9 @@ function SidebarNavigation({
   const [inventoryOpen, setInventoryOpen] = useState(
     pathname.startsWith("/inventory"),
   );
+  const [stockControlOpen, setStockControlOpen] = useState(
+    pathname.startsWith("/stock-control"),
+  );
   const [outboundOpen, setOutboundOpen] = useState(
     pathname.startsWith("/outbound"),
   );
@@ -339,6 +379,7 @@ function SidebarNavigation({
   const reportsActive = pathname.startsWith("/reports");
   const inboundActive = pathname.startsWith("/inbound");
   const inventoryActive = pathname.startsWith("/inventory");
+  const stockControlActive = pathname.startsWith("/stock-control");
   const outboundActive = pathname.startsWith("/outbound");
   const masterDataActive = pathname.startsWith("/master-data");
   const canViewMasterData = canAccess(MODULE_ACCESS.MASTER.READ);
@@ -552,6 +593,80 @@ function SidebarNavigation({
                                 </li>
                               );
                             })}
+                          </ul>
+                        ) : null}
+                      </li>
+                    );
+                  }
+
+                  if (item.label === "Stock control") {
+                    return (
+                      <li key={item.label}>
+                        <button
+                          type="button"
+                          aria-expanded={!collapsed && stockControlOpen}
+                          aria-controls="stock-control-navigation"
+                          aria-label={collapsed ? "Stock control" : undefined}
+                          title={collapsed ? "Stock control" : undefined}
+                          onClick={() => {
+                            if (collapsed) {
+                              onToggleCollapsed?.();
+                              setStockControlOpen(true);
+                            } else {
+                              setStockControlOpen((open) => !open);
+                            }
+                          }}
+                          className={cn(
+                            "flex min-h-11 w-full items-center gap-3 rounded-xl text-left text-sm font-medium transition-colors",
+                            collapsed ? "justify-center px-2" : "px-3",
+                            stockControlActive
+                              ? "bg-cyan-400 text-slate-950"
+                              : "text-slate-300 hover:bg-white/[0.07] hover:text-white",
+                          )}
+                        >
+                          <ClipboardCheck className="size-[18px] shrink-0" />
+                          <span className={collapsed ? "sr-only" : "flex-1"}>
+                            Stock control
+                          </span>
+                          {!collapsed ? (
+                            <ChevronDown
+                              className={cn(
+                                "size-4 transition-transform",
+                                stockControlOpen && "rotate-180",
+                              )}
+                            />
+                          ) : null}
+                        </button>
+                        {stockControlOpen && !collapsed ? (
+                          <ul
+                            id="stock-control-navigation"
+                            className="mt-1 ml-5 space-y-0.5 border-l border-white/10 pl-4"
+                          >
+                            {stockControlNavigation
+                              .filter((entry) => canAccess(entry.access))
+                              .map((entry) => {
+                                const active = isSectionActive(
+                                  pathname,
+                                  entry.href,
+                                );
+                                return (
+                                  <li key={entry.href}>
+                                    <Link
+                                      href={entry.href}
+                                      onClick={onNavigate}
+                                      aria-current={active ? "page" : undefined}
+                                      className={cn(
+                                        "flex min-h-9 items-center rounded-lg px-3 text-sm transition-colors",
+                                        active
+                                          ? "bg-white/10 font-semibold text-white"
+                                          : "text-slate-400 hover:bg-white/[0.06] hover:text-white",
+                                      )}
+                                    >
+                                      {entry.label}
+                                    </Link>
+                                  </li>
+                                );
+                              })}
                           </ul>
                         ) : null}
                       </li>

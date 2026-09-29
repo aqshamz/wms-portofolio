@@ -5,13 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import { ApiError } from "@/lib/api/client";
 import {
-  listLocations,
-  listLocationTypes,
-} from "@/features/storage-layout/storage-layout-api";
-import {
   cancelInspection,
   completeInspection,
   getInspection,
+  listInspectionTargets,
 } from "./quality-inspection-api";
 import { InspectionDetailDialog } from "./inspection-detail-dialog";
 import type { QualityInspection } from "./quality-inspection-types";
@@ -20,19 +17,10 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("./quality-inspection-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./quality-inspection-api")>()),
   getInspection: vi.fn(),
+  listInspectionTargets: vi.fn(),
   completeInspection: vi.fn(),
   cancelInspection: vi.fn(),
 }));
-vi.mock(
-  "@/features/storage-layout/storage-layout-api",
-  async (importOriginal) => ({
-    ...(await importOriginal<
-      typeof import("@/features/storage-layout/storage-layout-api")
-    >()),
-    listLocations: vi.fn(),
-    listLocationTypes: vi.fn(),
-  }),
-);
 
 const inspection: QualityInspection = {
   inspection_id: "QC-1",
@@ -75,60 +63,20 @@ beforeEach(() => {
     vi.mocked(getInspection).mockResolvedValue(completed);
     return completed;
   });
-  vi.mocked(listLocations).mockResolvedValue({
+  vi.mocked(listInspectionTargets).mockResolvedValue({
     items: [
       {
         location_id: "target-1",
-        warehouse_id: "wh-1",
-        zone_id: "zone-1",
-        location_type_id: "storage",
         code: "BULK-01",
-        is_active: true,
-        is_locked: false,
-        is_pick_face: false,
-        pick_sequence: 0,
-        created_at: "2026-09-17",
-      },
-      {
-        location_id: "dock-1",
-        warehouse_id: "wh-1",
-        zone_id: "zone-1",
-        location_type_id: "dock",
-        code: "DOCK-01",
-        is_active: true,
-        is_locked: false,
-        is_pick_face: false,
-        pick_sequence: 0,
-        created_at: "2026-09-17",
+        zone_code: "BULK",
+        location_type_code: "STORAGE",
       },
     ],
     page: 1,
     page_size: 100,
-    total_items: 2,
+    total_items: 1,
     total_pages: 1,
   });
-  vi.mocked(listLocationTypes).mockResolvedValue([
-    {
-      location_type_id: "storage",
-      code: "BULK",
-      name: "Bulk",
-      is_active: true,
-      allows_storage: true,
-      allows_receiving: false,
-      allows_shipping: false,
-      allows_picking: false,
-    },
-    {
-      location_type_id: "dock",
-      code: "DOCK",
-      name: "Dock",
-      is_active: true,
-      allows_storage: false,
-      allows_receiving: true,
-      allows_shipping: true,
-      allows_picking: false,
-    },
-  ]);
 });
 afterEach(cleanup);
 
@@ -225,7 +173,7 @@ describe("QC result workflow", () => {
       screen.queryByRole("button", { name: "Complete inspection" }),
     ).not.toBeInTheDocument();
   });
-  it("requires a storage target and excludes the dock", async () => {
+  it("requires a strategy-approved target and excludes unavailable locations", async () => {
     const { user } = setup();
     await user.click(
       await screen.findByRole("button", { name: "Complete inspection" }),
@@ -238,7 +186,9 @@ describe("QC result workflow", () => {
     select.focus();
     await user.keyboard(" ");
     expect(
-      await screen.findByRole("option", { name: "BULK-01" }),
+      await screen.findByRole("option", {
+        name: "BULK-01 · BULK · STORAGE",
+      }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("option", { name: "DOCK-01" }),
@@ -294,7 +244,7 @@ describe("QC result workflow", () => {
     expect(
       screen.queryByRole("button", { name: "Cancel inspection" }),
     ).not.toBeInTheDocument();
-    expect(listLocations).not.toHaveBeenCalled();
+    expect(listInspectionTargets).not.toHaveBeenCalled();
   });
   it("validates the cancel reason and links to the automatically created replacement", async () => {
     const cancelled = {

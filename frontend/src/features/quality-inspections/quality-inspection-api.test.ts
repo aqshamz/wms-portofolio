@@ -5,6 +5,7 @@ import {
   completeInspection,
   createInspection,
   inspectionListPath,
+  listInspectionTargets,
   listReceiptInspections,
 } from "./quality-inspection-api";
 
@@ -51,6 +52,12 @@ describe("quality inspection requests", () => {
     expect(apiRequest).toHaveBeenCalledWith(
       "/api/v1/inbound/quality-inspections",
       { method: "POST", body: { receipt_inventory_id: "batch" } },
+    );
+  });
+  it("loads strategy-filtered targets for the pending inspection", async () => {
+    await listInspectionTargets("QC/1", " zone a ", 2);
+    expect(apiRequest).toHaveBeenCalledWith(
+      "/api/v1/inbound/quality-inspections/QC%2F1/targets?page=2&page_size=100&search=zone+a",
     );
   });
   it("checks every receipt inspection page and removes unrelated matches", async () => {

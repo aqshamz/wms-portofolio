@@ -42,6 +42,12 @@ export function balanceListPath(filters: BalanceFilters) {
   if (filters.handlingUnitId) {
     query.set("handling_unit_id", filters.handlingUnitId);
   }
+  if (filters.locationTypeCode) {
+    query.set("location_type_code", filters.locationTypeCode);
+  }
+  if (filters.inventoryStatusCode) {
+    query.set("inventory_status_code", filters.inventoryStatusCode);
+  }
   return `${root}/balances?${query}`;
 }
 
@@ -98,6 +104,15 @@ export function serialStateListPath(filters: SerialStateFilters) {
     page: String(filters.page),
     page_size: String(filters.pageSize),
   });
+  if (filters.locationId) query.set("location_id", filters.locationId);
+  if (filters.itemId) query.set("item_id", filters.itemId);
+  if (filters.lotId) query.set("lot_id", filters.lotId);
+  if (filters.handlingUnitId) {
+    query.set("handling_unit_id", filters.handlingUnitId);
+  }
+  if (filters.inventoryStatusId) {
+    query.set("inventory_status_id", filters.inventoryStatusId);
+  }
   if (filters.search.trim()) query.set("search", filters.search.trim());
   return `${root}/serial-states?${query}`;
 }
@@ -146,6 +161,7 @@ export function serialListPath(filters: SerialFilters) {
     page: String(filters.page),
     page_size: String(filters.pageSize),
   });
+  if (filters.itemId) query.set("item_id", filters.itemId);
   if (filters.search.trim()) query.set("search", filters.search.trim());
   return `${root}/serials?${query}`;
 }

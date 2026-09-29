@@ -3,6 +3,7 @@ import type {
   CompleteInspectionRequest,
   InspectionFilters,
   InspectionPage,
+  QualityInspectionTargetPage,
   QualityInspection,
 } from "./quality-inspection-types";
 
@@ -14,6 +15,8 @@ export const inspectionKeys = {
   list: (filters: InspectionFilters) =>
     [...inspectionKeys.lists(), filters] as const,
   detail: (id: string) => [...inspectionKeys.all, "detail", id] as const,
+  targets: (id: string, search: string, page: number) =>
+    [...inspectionKeys.all, "targets", id, search, page] as const,
   receipt: (owner: string, warehouse: string, receipt: string) =>
     [...inspectionKeys.all, "receipt", owner, warehouse, receipt] as const,
 };
@@ -64,6 +67,18 @@ export async function listReceiptInspections(
 
 export function getInspection(id: string) {
   return apiRequest<QualityInspection>(`${basePath}/${encodeURIComponent(id)}`);
+}
+
+export function listInspectionTargets(
+  id: string,
+  search: string,
+  page: number,
+) {
+  const query = new URLSearchParams({ page: String(page), page_size: "100" });
+  if (search.trim()) query.set("search", search.trim());
+  return apiRequest<QualityInspectionTargetPage>(
+    `${basePath}/${encodeURIComponent(id)}/targets?${query}`,
+  );
 }
 
 export function createInspection(request: {

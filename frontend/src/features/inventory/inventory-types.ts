@@ -6,14 +6,23 @@ export interface Balance {
   warehouse_id: string;
   location_id: string;
   location_code: string;
+  location_type_code?: string;
+  location_is_pick_face?: boolean;
+  location_is_locked?: boolean;
+  location_allows_storage?: boolean;
+  location_allows_picking?: boolean;
   item_id: string;
   item_code: string;
   item_name: string;
   lot_id: string | null;
   lot_number: string | null;
   handling_unit_id: string | null;
+  handling_unit_barcode?: string | null;
+  serial_controlled?: boolean;
   inventory_status_id: string;
   inventory_status_code: string;
+  inventory_status_is_allocatable?: boolean;
+  inventory_status_is_pickable?: boolean;
   on_hand_qty: string;
   reserved_qty: string;
   available_qty: string;
@@ -31,6 +40,8 @@ export interface BalanceFilters {
   search: string;
   includeZero: boolean;
   handlingUnitId?: string;
+  locationTypeCode?: string;
+  inventoryStatusCode?: string;
   page: number;
   pageSize: number;
 }
@@ -100,6 +111,11 @@ export type SerialStatePage = PaginatedData<SerialState>;
 export interface SerialStateFilters {
   ownerId: string;
   warehouseId: string;
+  locationId?: string;
+  itemId?: string;
+  lotId?: string;
+  handlingUnitId?: string;
+  inventoryStatusId?: string;
   search: string;
   page: number;
   pageSize: number;
@@ -138,6 +154,7 @@ export type SerialPage = PaginatedData<InventorySerial>;
 
 export interface SerialFilters {
   ownerId: string;
+  itemId?: string;
   search: string;
   page: number;
   pageSize: number;

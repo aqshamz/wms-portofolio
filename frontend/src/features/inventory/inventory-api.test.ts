@@ -50,6 +50,21 @@ describe("inventory balance paths", () => {
       }),
     ).toContain("handling_unit_id=HU-1");
   });
+
+  it("can limit stock-control sources by location type and inventory status", () => {
+    expect(
+      balanceListPath({
+        ownerId: "owner-1",
+        warehouseId: "warehouse-1",
+        locationTypeCode: "STORAGE",
+        inventoryStatusCode: "AVAILABLE",
+        search: "",
+        includeZero: false,
+        page: 1,
+        pageSize: 10,
+      }),
+    ).toContain("location_type_code=STORAGE&inventory_status_code=AVAILABLE");
+  });
 });
 
 describe("inventory movement paths", () => {
@@ -81,6 +96,24 @@ describe("inventory serial-state paths", () => {
       }),
     ).toBe(
       "/api/v1/inventory/serial-states?owner_id=owner-1&warehouse_id=warehouse-1&page=1&page_size=10&search=serial-001",
+    );
+  });
+
+  it("can scope serial lookup to one exact balance identity", () => {
+    expect(
+      serialStateListPath({
+        ownerId: "owner-1",
+        warehouseId: "warehouse-1",
+        locationId: "location-1",
+        itemId: "item-1",
+        lotId: "LOT-1",
+        inventoryStatusId: "status-1",
+        search: " SN-1 ",
+        page: 1,
+        pageSize: 100,
+      }),
+    ).toBe(
+      "/api/v1/inventory/serial-states?owner_id=owner-1&warehouse_id=warehouse-1&page=1&page_size=100&location_id=location-1&item_id=item-1&lot_id=LOT-1&inventory_status_id=status-1&search=SN-1",
     );
   });
 });

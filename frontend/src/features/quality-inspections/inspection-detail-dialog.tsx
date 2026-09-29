@@ -14,15 +14,11 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
-  listLocations,
-  listLocationTypes,
-  storageLayoutKeys,
-} from "@/features/storage-layout/storage-layout-api";
-import {
   cancelInspection,
   completeInspection,
   getInspection,
   inspectionKeys,
+  listInspectionTargets,
 } from "./quality-inspection-api";
 import {
   cancelInspectionSchema,
@@ -88,40 +84,16 @@ function InspectionCompletion({
   });
   const total = quantityTotal(passed, failed);
   const hasPassed = /^\d+(\.\d+)?$/.test(passed) && new Decimal(passed).gt(0);
-  const filters = {
-    warehouseId: inspection.warehouse_id,
-    active: "active" as const,
-    search,
-    page,
-    pageSize: 100,
-  };
-  const locations = useQuery({
-    queryKey: storageLayoutKeys.locations(filters),
-    queryFn: () => listLocations(filters),
+  const targets = useQuery({
+    queryKey: inspectionKeys.targets(inspection.inspection_id, search, page),
+    queryFn: () =>
+      listInspectionTargets(inspection.inspection_id, search, page),
     enabled: hasPassed,
   });
-  const types = useQuery({
-    queryKey: storageLayoutKeys.locationTypes("active"),
-    queryFn: () => listLocationTypes("active"),
-    enabled: hasPassed,
-  });
-  const storageTypes = new Set(
-    types.data
-      ?.filter((type) => type.is_active && type.allows_storage)
-      .map((type) => type.location_type_id),
-  );
-  const options = (locations.data?.items ?? [])
-    .filter(
-      (location) =>
-        location.warehouse_id === inspection.warehouse_id &&
-        location.is_active &&
-        !location.is_locked &&
-        storageTypes.has(location.location_type_id),
-    )
-    .map((location) => ({
-      value: location.location_id,
-      label: `${location.code}${location.zone_code ? ` · ${location.zone_code}` : ""}`,
-    }));
+  const options = (targets.data?.items ?? []).map((location) => ({
+    value: location.location_id,
+    label: `${location.code}${location.zone_code ? ` · ${location.zone_code}` : ""} · ${location.location_type_code}`,
+  }));
   if (
     selectedLocation &&
     !options.some((option) => option.value === selectedLocation.value)
@@ -279,12 +251,7 @@ function InspectionCompletion({
                 className="mt-2"
                 value={target}
                 options={options}
-                disabled={
-                  locations.isPending ||
-                  types.isPending ||
-                  types.isError ||
-                  locations.isError
-                }
+                disabled={targets.isPending || targets.isError}
                 invalid={Boolean(
                   form.formState.errors.putaway_target_location_id,
                 )}
@@ -300,11 +267,10 @@ function InspectionCompletion({
               />
             </FormField>
             <p className="text-xs text-slate-600">
-              Only active, unlocked storage-capable locations in this warehouse
-              are shown. The backend also enforces the item’s configured putaway
-              strategy.
+              Only locations accepted by this item’s active putaway strategy are
+              shown.
             </p>
-            {locations.data && locations.data.total_pages > 1 ? (
+            {targets.data && targets.data.total_pages > 1 ? (
               <div className="flex items-center gap-2 text-xs">
                 <Button
                   type="button"
@@ -316,28 +282,28 @@ function InspectionCompletion({
                   Previous locations
                 </Button>
                 <span>
-                  {page} / {locations.data.total_pages}
+                  {page} / {targets.data.total_pages}
                 </span>
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
-                  disabled={page >= locations.data.total_pages}
+                  disabled={page >= targets.data.total_pages}
                   onClick={() => setPage(page + 1)}
                 >
                   Next locations
                 </Button>
               </div>
             ) : null}
-            {locations.isSuccess && types.isSuccess && !options.length ? (
+            {targets.isSuccess && !options.length ? (
               <p className="text-sm text-amber-800">
-                No eligible storage locations on this page. Try another search
-                or location page.
+                No locations match this item’s active putaway strategy. Check
+                the strategy configuration or try another search.
               </p>
             ) : null}
-            {locations.error || types.error ? (
+            {targets.error ? (
               <p role="alert" className="text-sm text-rose-800">
-                {(locations.error ?? types.error)?.message}
+                {targets.error.message}
               </p>
             ) : null}
           </div>
