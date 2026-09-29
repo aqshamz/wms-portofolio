@@ -55,7 +55,8 @@ The previous lot, serial identity and handling-unit endpoints remain available.
 ### Balance filters
 
 `page`, `page_size`, `owner_id`, `warehouse_id`, `location_id`, `item_id`,
-`lot_id`, `handling_unit_id`, `inventory_status_id`, `search`, `include_zero`.
+`location_type_code`, `lot_id`, `handling_unit_id`, `inventory_status_id`,
+`inventory_status_code`, `search`, `include_zero`.
 
 Example using the study owner and warehouse:
 

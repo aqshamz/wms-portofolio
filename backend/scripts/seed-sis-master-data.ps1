@@ -515,7 +515,7 @@ try {
             permissions = @(
                 'MASTER.READ', 'MASTER.WRITE', 'REPORTING.READ',
                 'INBOUND.READ', 'INBOUND.APPROVE', 'INBOUND.ASSIGN', 'INBOUND.QUARANTINE_DISPOSE', 'INBOUND.CANCEL',
-                'INVENTORY.READ', 'INVENTORY.IDENTITY', 'INVENTORY.MOVE', 'INVENTORY.STATUS_CHANGE', 'INVENTORY.ADJUST', 'INVENTORY.COUNT', 'INVENTORY.TRANSFER',
+                'INVENTORY.READ', 'INVENTORY.IDENTITY', 'INVENTORY.MOVE', 'INVENTORY.STATUS_CHANGE', 'INVENTORY.ADJUST_APPROVE', 'INVENTORY.COUNT', 'INVENTORY.TRANSFER',
                 'OUTBOUND.READ', 'OUTBOUND.TRANSPORT', 'OUTBOUND.SHIP', 'OUTBOUND.DELIVER', 'OUTBOUND.CANCEL', 'OUTBOUND.CONFIG'
             )
         }
@@ -536,7 +536,7 @@ try {
         }
         IC = @{
             name = 'Inventory Control'
-            description = 'Performs inventory identity, movement, status, count, adjustment, and transfer operations.'
+            description = 'Performs inventory identity, movement, status, count, adjustment requests, and transfer operations.'
             permissions = @('MASTER.READ', 'INBOUND.READ', 'OUTBOUND.READ', 'REPORTING.READ', 'INVENTORY.READ', 'INVENTORY.IDENTITY', 'INVENTORY.MOVE', 'INVENTORY.STATUS_CHANGE', 'INVENTORY.ADJUST', 'INVENTORY.COUNT', 'INVENTORY.TRANSFER')
         }
         QC = @{

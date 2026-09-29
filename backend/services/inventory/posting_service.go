@@ -148,6 +148,19 @@ func validateDimension(ctx context.Context, r *repository.Repositories, warehous
 	if target && (!location.IsActive || location.IsLocked) {
 		return invalid("target location is inactive or locked")
 	}
+	if target {
+		zone, err := r.Zone.GetShared(ctx, location.ZoneID)
+		if err != nil {
+			return reference(err, "target zone")
+		}
+		locationType, err := r.LocationType.GetShared(ctx, location.LocationTypeID)
+		if err != nil {
+			return reference(err, "target location type")
+		}
+		if !zone.IsActive || !locationType.IsActive {
+			return invalid("target location zone or type is inactive")
+		}
+	}
 	status, err := r.Catalog.InventoryStatus.GetShared(ctx, d.InventoryStatusID)
 	if err != nil {
 		return reference(err, "inventory status")

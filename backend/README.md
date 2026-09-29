@@ -235,12 +235,13 @@ document-backed stock-control workflows remain separate orchestration layers.
 
 ### Stock control
 
-Authenticated immediate commands now cover internal moves, status changes,
-adjustments, single-balance count reconciliation, and atomic inter-warehouse
-transfer. They require optimistic balance versions and create idempotent core
-movements. See [Stock-control API](docs/stock-control-api.md). These are posting
-commands; maker/checker and dispatch/in-transit/receipt document workflows remain
-distinct future orchestration over the same core.
+Authenticated immediate commands cover internal moves, status changes,
+single-balance count reconciliation, and atomic inter-warehouse transfer.
+Inventory adjustments use a maker-checker document: one account requests and a
+different authorized account approves and atomically posts the correction. All
+flows use optimistic balance versions and immutable core movements. See
+[Stock-control API](docs/stock-control-api.md). Transfer
+dispatch/in-transit/receipt remains future orchestration over the same core.
 
 ### Inbound part 1
 

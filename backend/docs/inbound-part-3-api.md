@@ -182,6 +182,10 @@ GET /api/v1/inbound/putaway-tasks/:id/assignees?search=<name>&page=1&page_size=2
 GET /api/v1/inbound/putaway-tasks/:id/targets?search=<location-or-zone>&page=1&page_size=20
 ```
 
+Pending quality inspections expose the same strategy-filtered target set through
+`GET /api/v1/inbound/quality-inspections/:id/targets`. This keeps the completion
+picker aligned with the backend completion validator.
+
 Both require `INBOUND.ASSIGN` and the task's owner/warehouse access scope.
 They accept only `search`, `page`, and `page_size`; clients cannot override
 owner/warehouse scope. Assignees expose only account ID, username, and display

@@ -44,6 +44,7 @@ processed), and `pending_qty` (planned outbound quantity awaiting completion).
 POST /api/v1/inbound/quality-inspections
 GET  /api/v1/inbound/quality-inspections?owner_id=<uuid>&warehouse_id=<uuid>&status_code=PENDING&page=1&page_size=20
 GET  /api/v1/inbound/quality-inspections/:id
+GET  /api/v1/inbound/quality-inspections/:id/targets?search=<location-or-zone>&page=1&page_size=20
 POST /api/v1/inbound/quality-inspections/:id/complete
 POST /api/v1/inbound/quality-inspections/:id/cancel
 

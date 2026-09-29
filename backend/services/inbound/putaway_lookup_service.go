@@ -57,3 +57,33 @@ func (s *Service) ListPutawayTargets(ctx context.Context, id, search string, num
 	}
 	return page(items, number, size, total), repository.Error(err)
 }
+
+// ListQualityInspectionTargets uses the same strategy selection and target
+// query as completion validation, so the QC picker cannot offer a location
+// that CompleteQualityInspection will reject.
+func (s *Service) ListQualityInspectionTargets(ctx context.Context, id, search string, number, size int) (dto.PageResponse[dto.PutawayTargetResponse], error) {
+	if err := validatePutawayLookup(id, &search, number, size); err != nil {
+		return dto.PageResponse[dto.PutawayTargetResponse]{}, err
+	}
+	inspection, err := s.repositories.QualityInspection.Get(ctx, id)
+	if err != nil {
+		return dto.PageResponse[dto.PutawayTargetResponse]{}, err
+	}
+	if inspection.InspectedAt != nil || inspection.CancelledAt != nil {
+		return dto.PageResponse[dto.PutawayTargetResponse]{}, state("only a pending quality inspection has putaway targets")
+	}
+	item, err := s.repositories.Master.Catalog.Item.Get(ctx, inspection.ItemID)
+	if err != nil || !item.IsActive {
+		return dto.PageResponse[dto.PutawayTargetResponse]{}, invalid("inspection item is unavailable")
+	}
+	rules, err := s.applicablePutawayRules(ctx, inspection.OwnerID, inspection.WarehouseID)
+	if err != nil {
+		return dto.PageResponse[dto.PutawayTargetResponse]{}, err
+	}
+	rows, total, err := s.repositories.PutawayTask.ListTargets(ctx, inspection.WarehouseID, item, rules, search, number, size)
+	items := make([]dto.PutawayTargetResponse, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, dto.PutawayTargetResponse{LocationID: row.LocationID, Code: row.Code, ZoneCode: row.ZoneCode, LocationTypeCode: row.LocationTypeCode})
+	}
+	return page(items, number, size, total), repository.Error(err)
+}

@@ -37,7 +37,7 @@ managing those grants manually.
 | Area | Permission codes |
 | --- | --- |
 | Inbound | `READ`, `PLAN`, `APPROVE`, `RECEIVE`, `QC`, `PUTAWAY`, `ASSIGN`, `QUARANTINE_DISPOSE`, `REWORK`, `CANCEL` |
-| Inventory | `READ`, `IDENTITY`, `MOVE`, `STATUS_CHANGE`, `ADJUST`, `COUNT`, `TRANSFER` |
+| Inventory | `READ`, `IDENTITY`, `MOVE`, `STATUS_CHANGE`, `ADJUST`, `ADJUST_APPROVE`, `COUNT`, `TRANSFER` |
 | Outbound | `READ`, `PLAN`, `PICK`, `STAGE`, `CHECK`, `PACK`, `TRANSPORT`, `SHIP`, `DELIVER`, `DISPOSE`, `RETURN_TO_VENDOR`, `CANCEL`, `CONFIG` |
 | Billing | `READ`, `CONFIGURE`, `PREPARE`, `APPROVE`, `ISSUE`, `PAYMENT` |
 
@@ -48,11 +48,11 @@ Prefix each code with its area, for example `INBOUND.QC`, `OUTBOUND.SHIP`, or
 
 | Role | Account | Responsibilities |
 | --- | --- | --- |
-| `WHADMIN` | `whm` | Warehouse approval, assignment, quarantine disposal, cancellation, inventory control, outbound configuration, shipment and delivery; no document planning or billing |
+| `WHADMIN` | `whm` | Warehouse approval (including inventory adjustments), assignment, quarantine disposal, cancellation, inventory control, outbound configuration, shipment and delivery; no document planning or billing |
 | `WAREHOUSE_PLANNER` | `planner.warehouse` | Create inbound and outbound plans; cannot approve or execute them |
 | `RECEIVER` | `receiver.warehouse` | Receive goods, create inventory identities, and execute putaway |
 | `PICKER` | `picker.warehouse` | Pick and stage outbound goods |
-| `IC` | `ic.warehouse` | Inventory identity, movement, status, adjustment, count, and transfer control |
+| `IC` | `ic.warehouse` | Inventory identity, movement, status, adjustment requests, count, and transfer control; cannot approve its own adjustment requests |
 | `QC` | `qc.warehouse` | Perform inbound quality inspections; cannot decide quarantine disposal |
 | `REWORK_OPERATOR` | `rework.warehouse` | Execute assigned quarantine rework; cannot inspect or decide disposition |
 | `PACKER` | `packer.warehouse` | Check and pack outbound goods |

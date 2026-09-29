@@ -50,6 +50,7 @@ func TestInspectionEligibleReceiptsPostgreSQL(t *testing.T) {
 		"CREATE TABLE receipt_inventory (receipt_inventory_id text PRIMARY KEY, receipt_line_id text, initial_balance_id text, base_qty numeric, handling_unit_id text)",
 		"CREATE TABLE inventory_balance (balance_id text PRIMARY KEY, inventory_status_id text, on_hand_qty numeric, reserved_qty numeric)",
 		"CREATE TABLE receipt_line_serial (receipt_inventory_id text, serial_id text)",
+		"CREATE TABLE serial_inventory (serial_id text PRIMARY KEY, balance_id text)",
 		"CREATE TABLE quality_inspection (receipt_inventory_id text, quality_status_id text)",
 		"INSERT INTO organization VALUES ('owner','OWNER'),('other','OTHER')",
 		"INSERT INTO warehouse VALUES ('wh','WH'),('other-wh','OTHER')",

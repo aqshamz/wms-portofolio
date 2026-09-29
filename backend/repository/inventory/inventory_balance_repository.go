@@ -14,14 +14,18 @@ type BalanceIdentity struct {
 }
 type BalanceRow struct {
 	model.InventoryBalance
-	LocationCode, ItemCode, ItemName, InventoryStatusCode, UOMCode string
-	LotNumber                                                      *string
-	AvailableQty                                                   string
+	LocationCode, LocationTypeCode, ItemCode, ItemName, InventoryStatusCode, UOMCode string
+	LotNumber, HandlingUnitBarcode                                                   *string
+	SerialControlled                                                                 bool
+	LocationIsPickFace, LocationIsLocked                                             bool
+	LocationAllowsStorage, LocationAllowsPicking                                     bool
+	InventoryStatusIsAllocatable, InventoryStatusIsPickable                          bool
+	AvailableQty                                                                     string
 }
 type BalanceFilter struct {
-	OwnerID, WarehouseID, LocationID, ItemID, LotID, HandlingUnitID, InventoryStatusID, Search string
-	IncludeZero                                                                                bool
-	Page, PageSize                                                                             int
+	OwnerID, WarehouseID, LocationID, LocationTypeCode, ItemID, LotID, HandlingUnitID, InventoryStatusID, InventoryStatusCode, Search string
+	IncludeZero                                                                                                                       bool
+	Page, PageSize                                                                                                                    int
 }
 type InventoryBalanceRepository struct{ db *gorm.DB }
 
@@ -81,15 +85,20 @@ func (r *InventoryBalanceRepository) CountPositiveForHandlingUnit(ctx context.Co
 	return count, Error(err)
 }
 
-const balanceSelect = `b.balance_id,b.owner_id,b.warehouse_id,b.location_id,l.code location_code,b.item_id,
- i.code item_code,i.name item_name,b.lot_id,lot.lot_number,b.handling_unit_id,b.inventory_status_id,
- s.code inventory_status_code,b.on_hand_qty,b.reserved_qty,(b.on_hand_qty-b.reserved_qty) available_qty,
+const balanceSelect = `b.balance_id,b.owner_id,b.warehouse_id,b.location_id,l.code location_code,lt.code location_type_code,b.item_id,
+ i.code item_code,i.name item_name,i.serial_controlled,b.lot_id,lot.lot_number,b.handling_unit_id,
+ hu.barcode handling_unit_barcode,b.inventory_status_id,
+ s.code inventory_status_code,s.is_allocatable inventory_status_is_allocatable,
+ s.is_pickable inventory_status_is_pickable,b.on_hand_qty,b.reserved_qty,(b.on_hand_qty-b.reserved_qty) available_qty,
+ l.is_pick_face location_is_pick_face,l.is_locked location_is_locked,
+ lt.allows_storage location_allows_storage,lt.allows_picking location_allows_picking,
  b.uom_id,u.code uom_code,b.version_no,b.updated_at`
 
 func balanceQuery(db *gorm.DB) *gorm.DB {
 	return db.Table("inventory_balance b").Select(balanceSelect).
-		Joins("JOIN warehouse_location l ON l.location_id=b.location_id").Joins("JOIN item i ON i.item_id=b.item_id").
-		Joins("LEFT JOIN inventory_lot lot ON lot.lot_id=b.lot_id").Joins("JOIN inventory_status s ON s.inventory_status_id=b.inventory_status_id").
+		Joins("JOIN warehouse_location l ON l.location_id=b.location_id").Joins("JOIN location_type lt ON lt.location_type_id=l.location_type_id").Joins("JOIN item i ON i.item_id=b.item_id").
+		Joins("LEFT JOIN inventory_lot lot ON lot.lot_id=b.lot_id").Joins("LEFT JOIN handling_unit hu ON hu.handling_unit_id=b.handling_unit_id").
+		Joins("JOIN inventory_status s ON s.inventory_status_id=b.inventory_status_id").
 		Joins("JOIN uom u ON u.uom_id=b.uom_id")
 }
 func (r *InventoryBalanceRepository) Get(ctx context.Context, id string) (BalanceRow, error) {
@@ -103,6 +112,12 @@ func (r *InventoryBalanceRepository) List(ctx context.Context, f BalanceFilter) 
 		if val != "" {
 			q = q.Where(col+"=?", val)
 		}
+	}
+	if f.LocationTypeCode != "" {
+		q = q.Where("lt.code=?", f.LocationTypeCode)
+	}
+	if f.InventoryStatusCode != "" {
+		q = q.Where("s.code=?", f.InventoryStatusCode)
 	}
 	if !f.IncludeZero {
 		q = q.Where("b.on_hand_qty>0")

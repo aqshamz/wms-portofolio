@@ -46,3 +46,16 @@ func (controller *Controller) ListPutawayTargets(c *gin.Context) {
 	}
 	utils.Success(c, http.StatusOK, "eligible putaway targets retrieved", response)
 }
+
+func (controller *Controller) ListQualityInspectionTargets(c *gin.Context) {
+	search, page, size, ok := putawayLookupQuery(c)
+	if !ok {
+		return
+	}
+	response, err := controller.service.ListQualityInspectionTargets(c.Request.Context(), c.Param("id"), search, page, size)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "eligible quality-inspection putaway targets retrieved", response)
+}

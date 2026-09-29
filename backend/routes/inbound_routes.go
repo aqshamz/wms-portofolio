@@ -52,6 +52,7 @@ func registerInboundRoutes(api *gin.RouterGroup, controller *controller.Controll
 	group.POST("/quality-inspections", qc, controller.CreateQualityInspection)
 	group.GET("/quality-inspections", read, controller.ListQualityInspections)
 	group.GET("/quality-inspections/:id", read, controller.GetQualityInspection)
+	group.GET("/quality-inspections/:id/targets", qc, controller.ListQualityInspectionTargets)
 	group.POST("/quality-inspections/:id/complete", qc, controller.CompleteQualityInspection)
 	group.POST("/quality-inspections/:id/cancel", cancel, controller.CancelQualityInspection)
 	group.GET("/putaway-tasks", read, controller.ListPutawayTasks)

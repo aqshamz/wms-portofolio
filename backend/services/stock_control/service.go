@@ -15,6 +15,7 @@ import (
 )
 
 var ErrInvalidInput = errors.New("invalid stock-control command")
+var ErrForbidden = errors.New("stock-control owner or warehouse access denied")
 var nonnegative = regexp.MustCompile(`^(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$`)
 var reasonPattern = regexp.MustCompile(`^[A-Z0-9][A-Z0-9_-]*$`)
 
@@ -92,11 +93,59 @@ func response(operation string, results ...inventorydto.PostingResult) dto.Comma
 	}
 	return r
 }
+func authorize(ctx context.Context, r *repository.Repositories, actor string, balance inventoryrepo.BalanceRow) error {
+	allowed, err := r.Scope.Allowed(ctx, actor, balance.OwnerID, balance.WarehouseID)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return ErrForbidden
+	}
+	return nil
+}
+
+func validateStorageLocation(ctx context.Context, r *inventoryrepo.Repositories, warehouseID, locationID, operation string) error {
+	location, err := r.Location.GetShared(ctx, locationID)
+	if err != nil {
+		return err
+	}
+	if location.WarehouseID != warehouseID || !location.IsActive || location.IsLocked {
+		return invalid(operation + " location must be active, unlocked, and in the selected warehouse")
+	}
+	zone, err := r.Zone.GetShared(ctx, location.ZoneID)
+	if err != nil {
+		return err
+	}
+	locationType, err := r.LocationType.GetShared(ctx, location.LocationTypeID)
+	if err != nil {
+		return err
+	}
+	if !zone.IsActive || !locationType.IsActive || locationType.Code != "STORAGE" {
+		return invalid(operation + " is limited to active STORAGE locations")
+	}
+	return nil
+}
+
 func (s *Service) InternalMove(ctx context.Context, q dto.InternalMoveRequest, actor string) (dto.CommandResponse, error) {
 	var result inventorydto.PostingResult
 	err := s.repositories.Transaction(ctx, func(r *repository.Repositories, ir *inventoryrepo.Repositories) error {
 		source, err := r.Balances.Get(ctx, q.SourceBalanceID)
 		if err != nil {
+			return err
+		}
+		if err := authorize(ctx, r, actor, source); err != nil {
+			return err
+		}
+		if source.InventoryStatusCode != "AVAILABLE" {
+			return invalid("internal movements are limited to AVAILABLE inventory")
+		}
+		if q.TargetLocationID == source.LocationID {
+			return invalid("target location must differ from the source location")
+		}
+		if err := validateStorageLocation(ctx, ir, source.WarehouseID, source.LocationID, "internal movement"); err != nil {
+			return err
+		}
+		if err := validateStorageLocation(ctx, ir, source.WarehouseID, q.TargetLocationID, "internal movement"); err != nil {
 			return err
 		}
 		p := base(q.CommandBase)
@@ -112,6 +161,7 @@ func (s *Service) InternalMove(ctx context.Context, q dto.InternalMoveRequest, a
 		p.Quantity = q.Quantity
 		p.SerialIDs = q.SerialIDs
 		p.ExpectedSourceVersion = &q.ExpectedVersion
+		p.RelocateHandlingUnit = source.HandlingUnitID != nil
 		result, err = inventory.NewService(ir).PostMovement(ctx, p, actor)
 		return err
 	})
@@ -122,6 +172,9 @@ func (s *Service) StatusChange(ctx context.Context, q dto.StatusChangeRequest, a
 	err := s.repositories.Transaction(ctx, func(r *repository.Repositories, ir *inventoryrepo.Repositories) error {
 		source, err := r.Balances.Get(ctx, q.SourceBalanceID)
 		if err != nil {
+			return err
+		}
+		if err := authorize(ctx, r, actor, source); err != nil {
 			return err
 		}
 		p := base(q.CommandBase)
@@ -147,6 +200,9 @@ func (s *Service) Adjustment(ctx context.Context, q dto.AdjustmentRequest, actor
 	err := s.repositories.Transaction(ctx, func(r *repository.Repositories, ir *inventoryrepo.Repositories) error {
 		balance, err := r.Balances.Get(ctx, q.BalanceID)
 		if err != nil {
+			return err
+		}
+		if err := authorize(ctx, r, actor, balance); err != nil {
 			return err
 		}
 		p := base(q.CommandBase)
@@ -184,6 +240,9 @@ func (s *Service) ReconcileCount(ctx context.Context, q dto.StockCountReconcileR
 	err = s.repositories.Transaction(ctx, func(r *repository.Repositories, ir *inventoryrepo.Repositories) error {
 		balance, err := r.Balances.Get(ctx, q.BalanceID)
 		if err != nil {
+			return err
+		}
+		if err := authorize(ctx, r, actor, balance); err != nil {
 			return err
 		}
 		if err := ir.Balance.LockStockKey(ctx, balance.OwnerID, balance.WarehouseID, balance.ItemID); err != nil {
@@ -241,6 +300,16 @@ func (s *Service) WarehouseTransfer(ctx context.Context, q dto.WarehouseTransfer
 		source, err := r.Balances.Get(ctx, q.SourceBalanceID)
 		if err != nil {
 			return err
+		}
+		if err := authorize(ctx, r, actor, source); err != nil {
+			return err
+		}
+		allowed, err := r.Scope.Allowed(ctx, actor, source.OwnerID, q.TargetWarehouseID)
+		if err != nil {
+			return err
+		}
+		if !allowed {
+			return ErrForbidden
 		}
 		if source.WarehouseID == q.TargetWarehouseID {
 			return invalid("source and target warehouses must differ")

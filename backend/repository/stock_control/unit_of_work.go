@@ -7,13 +7,23 @@ import (
 )
 
 type Repositories struct {
-	db       *gorm.DB
-	Balances *inventory.InventoryBalanceRepository
-	Reasons  *ReasonCodeRepository
+	db             *gorm.DB
+	Balances       *inventory.InventoryBalanceRepository
+	Reasons        *ReasonCodeRepository
+	Scope          *inventory.InventoryScopeRepository
+	Replenishments *ReplenishmentTaskRepository
+	Adjustments    *InventoryAdjustmentRepository
 }
 
 func NewRepositories(db *gorm.DB) *Repositories {
-	return &Repositories{db: db, Balances: inventory.NewInventoryBalanceRepository(db), Reasons: NewReasonCodeRepository(db)}
+	return &Repositories{
+		db:             db,
+		Balances:       inventory.NewInventoryBalanceRepository(db),
+		Reasons:        NewReasonCodeRepository(db),
+		Scope:          inventory.NewInventoryScopeRepository(db),
+		Replenishments: NewReplenishmentTaskRepository(db),
+		Adjustments:    NewInventoryAdjustmentRepository(db),
+	}
 }
 func (r *Repositories) Transaction(ctx context.Context, work func(*Repositories, *inventory.Repositories) error) error {
 	return inventory.Error(r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return work(NewRepositories(tx), inventory.NewRepositories(tx)) }))

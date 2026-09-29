@@ -31,7 +31,7 @@ func validateCoreText(value string, max int, label string) error {
 	return nil
 }
 func mapBalance(v repository.BalanceRow) dto.BalanceResponse {
-	return dto.BalanceResponse{ID: v.ID, OwnerID: v.OwnerID, WarehouseID: v.WarehouseID, LocationID: v.LocationID, LocationCode: v.LocationCode, ItemID: v.ItemID, ItemCode: v.ItemCode, ItemName: v.ItemName, LotID: v.LotID, LotNumber: v.LotNumber, HandlingUnitID: v.HandlingUnitID, InventoryStatusID: v.InventoryStatusID, InventoryStatusCode: v.InventoryStatusCode, OnHandQty: v.OnHandQty, ReservedQty: v.ReservedQty, AvailableQty: v.AvailableQty, UOMID: v.UOMID, UOMCode: v.UOMCode, VersionNo: v.VersionNo, UpdatedAt: v.UpdatedAt}
+	return dto.BalanceResponse{ID: v.ID, OwnerID: v.OwnerID, WarehouseID: v.WarehouseID, LocationID: v.LocationID, LocationCode: v.LocationCode, LocationTypeCode: v.LocationTypeCode, LocationIsPickFace: v.LocationIsPickFace, LocationIsLocked: v.LocationIsLocked, LocationAllowsStorage: v.LocationAllowsStorage, LocationAllowsPicking: v.LocationAllowsPicking, ItemID: v.ItemID, ItemCode: v.ItemCode, ItemName: v.ItemName, LotID: v.LotID, LotNumber: v.LotNumber, HandlingUnitID: v.HandlingUnitID, HandlingUnitBarcode: v.HandlingUnitBarcode, SerialControlled: v.SerialControlled, InventoryStatusID: v.InventoryStatusID, InventoryStatusCode: v.InventoryStatusCode, InventoryStatusIsAllocatable: v.InventoryStatusIsAllocatable, InventoryStatusIsPickable: v.InventoryStatusIsPickable, OnHandQty: v.OnHandQty, ReservedQty: v.ReservedQty, AvailableQty: v.AvailableQty, UOMID: v.UOMID, UOMCode: v.UOMCode, VersionNo: v.VersionNo, UpdatedAt: v.UpdatedAt}
 }
 func mapMovement(v repository.MovementRow) dto.MovementResponse {
 	return dto.MovementResponse{ID: v.ID, MovementTypeID: v.MovementTypeID, MovementTypeCode: v.MovementTypeCode, OwnerID: v.OwnerID, WarehouseID: v.WarehouseID, BusinessDate: v.BusinessDate.Format("2006-01-02"), OccurredAt: v.OccurredAt, ItemID: v.ItemID, ItemCode: v.ItemCode, LotID: v.LotID, LotNumber: v.LotNumber, SerialID: v.SerialID, HandlingUnitID: v.HandlingUnitID, FromLocationID: v.FromLocationID, FromLocationCode: v.FromLocationCode, ToLocationID: v.ToLocationID, ToLocationCode: v.ToLocationCode, FromStatusID: v.FromStatusID, FromStatusCode: v.FromStatusCode, ToStatusID: v.ToStatusID, ToStatusCode: v.ToStatusCode, Quantity: v.Quantity, UOMID: v.UOMID, UOMCode: v.UOMCode, SourceDocumentID: v.SourceDocumentID, SourceLineID: v.SourceLineID, ReasonCodeID: v.ReasonCodeID, Notes: v.Notes, OperationKey: v.OperationKey, CreatedBy: v.CreatedBy}
@@ -61,6 +61,11 @@ func (s *Service) ListBalances(ctx context.Context, f repository.BalanceFilter) 
 	}
 	if err := validateIdentityFilter(f.HandlingUnitID, 120, "handling_unit_id"); err != nil {
 		return dto.PageResponse[dto.BalanceResponse]{}, err
+	}
+	f.LocationTypeCode = strings.ToUpper(strings.TrimSpace(f.LocationTypeCode))
+	f.InventoryStatusCode = strings.ToUpper(strings.TrimSpace(f.InventoryStatusCode))
+	if (f.LocationTypeCode != "" && !businessCodePattern.MatchString(f.LocationTypeCode)) || (f.InventoryStatusCode != "" && !businessCodePattern.MatchString(f.InventoryStatusCode)) {
+		return dto.PageResponse[dto.BalanceResponse]{}, invalid("invalid balance code filter")
 	}
 	rows, total, err := s.repositories.Balance.List(ctx, f)
 	items := make([]dto.BalanceResponse, 0, len(rows))

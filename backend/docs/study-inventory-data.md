@@ -112,7 +112,8 @@ action.
 
 The implemented inventory layer covers lot/serial/HU identities, balances,
 immutable movements, serial current state, internal moves, status changes,
-adjustments, single-balance count reconciliation, and immediate warehouse
-transfer. Reservations/allocation, replenishment tasks, count documents with
-approval/freeze, and dispatch/in-transit/receipt workflows belong to outbound,
-task, or document orchestration and are not completed inventory APIs yet.
+maker-checker adjustment requests, replenishment tasks, single-balance count
+reconciliation, and immediate warehouse transfer. Reservations/allocation,
+count documents with approval/freeze, and dispatch/in-transit/receipt workflows
+belong to outbound, task, or document orchestration and are not completed
+inventory APIs yet.

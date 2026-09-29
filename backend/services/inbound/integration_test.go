@@ -517,6 +517,11 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	if inspection.SourceBalanceVersionNo == nil || *inspection.SourceBalanceVersionNo < 1 || inspection.BaseUOMCode == "" || inspection.IsIndivisible == nil {
 		t.Fatalf("inspection must expose scoped source version and base unit: %+v", inspection)
 	}
+	inspectionTargets, err := service.ListQualityInspectionTargets(ctx, inspection.ID, "", 1, 20)
+	inboundOK(t, err)
+	if inspectionTargets.TotalItems != 2 || len(inspectionTargets.Items) != 2 || inspectionTargets.Items[0].LocationID != storage.ID {
+		t.Fatalf("quality inspection targets do not match the active putaway strategy: %+v", inspectionTargets)
+	}
 	var qcBalance inventorymodel.InventoryBalance
 	inboundOK(t, tx.Where("balance_id=?", *receipt.Lines[0].Batches[0].InitialBalanceID).Take(&qcBalance).Error)
 	if *inspection.SourceBalanceVersionNo != qcBalance.VersionNo {

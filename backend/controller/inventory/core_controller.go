@@ -13,7 +13,7 @@ func coreFilter(c *gin.Context, kind string) (int, int, bool) {
 	allowed := map[string]bool{"page": true, "page_size": true, "owner_id": true, "warehouse_id": true, "item_id": true, "search": true}
 	switch kind {
 	case "balance":
-		for _, k := range []string{"location_id", "lot_id", "handling_unit_id", "inventory_status_id", "include_zero"} {
+		for _, k := range []string{"location_id", "location_type_code", "lot_id", "handling_unit_id", "inventory_status_id", "inventory_status_code", "include_zero"} {
 			allowed[k] = true
 		}
 	case "movement":
@@ -73,7 +73,7 @@ func (controller *Controller) ListBalances(c *gin.Context) {
 	if !ok {
 		return
 	}
-	response, err := controller.service.ListBalances(c.Request.Context(), repository.BalanceFilter{OwnerID: c.Query("owner_id"), WarehouseID: c.Query("warehouse_id"), LocationID: c.Query("location_id"), ItemID: c.Query("item_id"), LotID: c.Query("lot_id"), HandlingUnitID: c.Query("handling_unit_id"), InventoryStatusID: c.Query("inventory_status_id"), Search: strings.TrimSpace(c.Query("search")), IncludeZero: include, Page: page, PageSize: size})
+	response, err := controller.service.ListBalances(c.Request.Context(), repository.BalanceFilter{OwnerID: c.Query("owner_id"), WarehouseID: c.Query("warehouse_id"), LocationID: c.Query("location_id"), LocationTypeCode: c.Query("location_type_code"), ItemID: c.Query("item_id"), LotID: c.Query("lot_id"), HandlingUnitID: c.Query("handling_unit_id"), InventoryStatusID: c.Query("inventory_status_id"), InventoryStatusCode: c.Query("inventory_status_code"), Search: strings.TrimSpace(c.Query("search")), IncludeZero: include, Page: page, PageSize: size})
 	if err != nil {
 		fail(c, err)
 		return

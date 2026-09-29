@@ -3,26 +3,35 @@ package inventory
 import "time"
 
 type BalanceResponse struct {
-	ID                  string    `json:"balance_id"`
-	OwnerID             string    `json:"owner_id"`
-	WarehouseID         string    `json:"warehouse_id"`
-	LocationID          string    `json:"location_id"`
-	LocationCode        string    `json:"location_code"`
-	ItemID              string    `json:"item_id"`
-	ItemCode            string    `json:"item_code"`
-	ItemName            string    `json:"item_name"`
-	LotID               *string   `json:"lot_id"`
-	LotNumber           *string   `json:"lot_number"`
-	HandlingUnitID      *string   `json:"handling_unit_id"`
-	InventoryStatusID   string    `json:"inventory_status_id"`
-	InventoryStatusCode string    `json:"inventory_status_code"`
-	OnHandQty           string    `json:"on_hand_qty"`
-	ReservedQty         string    `json:"reserved_qty"`
-	AvailableQty        string    `json:"available_qty"`
-	UOMID               string    `json:"uom_id"`
-	UOMCode             string    `json:"uom_code"`
-	VersionNo           int64     `json:"version_no"`
-	UpdatedAt           time.Time `json:"updated_at"`
+	ID                           string    `json:"balance_id"`
+	OwnerID                      string    `json:"owner_id"`
+	WarehouseID                  string    `json:"warehouse_id"`
+	LocationID                   string    `json:"location_id"`
+	LocationCode                 string    `json:"location_code"`
+	LocationTypeCode             string    `json:"location_type_code"`
+	LocationIsPickFace           bool      `json:"location_is_pick_face"`
+	LocationIsLocked             bool      `json:"location_is_locked"`
+	LocationAllowsStorage        bool      `json:"location_allows_storage"`
+	LocationAllowsPicking        bool      `json:"location_allows_picking"`
+	ItemID                       string    `json:"item_id"`
+	ItemCode                     string    `json:"item_code"`
+	ItemName                     string    `json:"item_name"`
+	LotID                        *string   `json:"lot_id"`
+	LotNumber                    *string   `json:"lot_number"`
+	HandlingUnitID               *string   `json:"handling_unit_id"`
+	HandlingUnitBarcode          *string   `json:"handling_unit_barcode"`
+	SerialControlled             bool      `json:"serial_controlled"`
+	InventoryStatusID            string    `json:"inventory_status_id"`
+	InventoryStatusCode          string    `json:"inventory_status_code"`
+	InventoryStatusIsAllocatable bool      `json:"inventory_status_is_allocatable"`
+	InventoryStatusIsPickable    bool      `json:"inventory_status_is_pickable"`
+	OnHandQty                    string    `json:"on_hand_qty"`
+	ReservedQty                  string    `json:"reserved_qty"`
+	AvailableQty                 string    `json:"available_qty"`
+	UOMID                        string    `json:"uom_id"`
+	UOMCode                      string    `json:"uom_code"`
+	VersionNo                    int64     `json:"version_no"`
+	UpdatedAt                    time.Time `json:"updated_at"`
 }
 type MovementResponse struct {
 	ID               string    `json:"movement_id"`
