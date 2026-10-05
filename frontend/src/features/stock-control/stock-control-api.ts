@@ -3,10 +3,17 @@ import type {
   AdjustmentFilters,
   AdjustmentPage,
   CreateAdjustmentRequest,
+  CycleCount,
+  CycleCountFilters,
+  CycleCountPage,
   InternalMoveRequest,
   InventoryAdjustment,
   StockControlCommandResponse,
   StockControlReason,
+  WarehouseTransferRequest,
+  WarehouseTransfer,
+  WarehouseTransferFilters,
+  WarehouseTransferPage,
 } from "./stock-control-types";
 import type {
   ReplenishmentAssignee,
@@ -46,6 +53,17 @@ export const stockControlKeys = {
     [...stockControlKeys.adjustments(), "list", filters] as const,
   adjustment: (id: string) =>
     [...stockControlKeys.adjustments(), "detail", id] as const,
+  cycleCounts: () => [...stockControlKeys.all, "cycle-counts"] as const,
+  cycleCountList: (filters: CycleCountFilters) =>
+    [...stockControlKeys.cycleCounts(), "list", filters] as const,
+  cycleCount: (id: string) =>
+    [...stockControlKeys.cycleCounts(), "detail", id] as const,
+  warehouseTransfers: () =>
+    [...stockControlKeys.all, "warehouse-transfers"] as const,
+  warehouseTransferList: (filters: WarehouseTransferFilters) =>
+    [...stockControlKeys.warehouseTransfers(), "list", filters] as const,
+  warehouseTransfer: (id: string) =>
+    [...stockControlKeys.warehouseTransfers(), "detail", id] as const,
 };
 
 export function listStockControlReasons() {
@@ -168,6 +186,95 @@ export function postInternalMove(request: InternalMoveRequest) {
   });
 }
 
+export function postWarehouseTransfer(request: WarehouseTransferRequest) {
+  return apiRequest<StockControlCommandResponse>(
+    `${root}/warehouse-transfers`,
+    {
+      method: "POST",
+      body: request,
+    },
+  );
+}
+
+const warehouseTransferRoot = `${root}/warehouse-transfer-documents`;
+export function listWarehouseTransfers(filters: WarehouseTransferFilters) {
+  const query = new URLSearchParams({
+    owner_id: filters.ownerId,
+    warehouse_id: filters.warehouseId,
+    side: filters.side,
+    page: String(filters.page),
+    page_size: String(filters.pageSize),
+  });
+  if (filters.status) query.set("status_code", filters.status);
+  if (filters.search.trim()) query.set("search", filters.search.trim());
+  return apiRequest<WarehouseTransferPage>(`${warehouseTransferRoot}?${query}`);
+}
+export function getWarehouseTransfer(id: string) {
+  return apiRequest<WarehouseTransfer>(
+    `${warehouseTransferRoot}/${encodeURIComponent(id)}`,
+  );
+}
+export function createWarehouseTransfer(request: {
+  business_date: string;
+  source_balance_id: string;
+  target_warehouse_id: string;
+  quantity: string;
+  serial_ids: string[];
+  notes?: string;
+}) {
+  return apiRequest<WarehouseTransfer>(warehouseTransferRoot, {
+    method: "POST",
+    body: request,
+  });
+}
+function warehouseTransferTransition(
+  id: string,
+  action: string,
+  body: unknown,
+) {
+  return apiRequest<WarehouseTransfer>(
+    `${warehouseTransferRoot}/${encodeURIComponent(id)}/${action}`,
+    { method: "POST", body },
+  );
+}
+export const approveWarehouseTransfer = (id: string, expectedVersion: number) =>
+  warehouseTransferTransition(id, "approve", {
+    expected_version: expectedVersion,
+  });
+export const dispatchWarehouseTransfer = (
+  id: string,
+  expectedVersion: number,
+) =>
+  warehouseTransferTransition(id, "dispatch", {
+    expected_version: expectedVersion,
+  });
+export const cancelWarehouseTransfer = (
+  id: string,
+  expectedVersion: number,
+  reason: string,
+) =>
+  warehouseTransferTransition(id, "cancel", {
+    expected_version: expectedVersion,
+    reason,
+  });
+export const receiveWarehouseTransfer = (
+  id: string,
+  body: {
+    expected_version: number;
+    business_date: string;
+    receipt_location_id: string;
+    putaway_target_location_id: string;
+  },
+) => warehouseTransferTransition(id, "receive", body);
+export const putawayWarehouseTransfer = (
+  id: string,
+  body: {
+    expected_version: number;
+    expected_balance_version: number;
+    business_date: string;
+  },
+) => warehouseTransferTransition(id, "putaway", body);
+
 const adjustmentRoot = `${root}/adjustments`;
 
 export function listAdjustments(filters: AdjustmentFilters) {
@@ -233,6 +340,81 @@ export function rejectAdjustment(
   return adjustmentTransition(id, "reject", {
     expected_version: expectedVersion,
     line_ids: lineIds,
+    reason,
+  });
+}
+
+const cycleCountRoot = `${root}/cycle-counts`;
+export function listCycleCounts(filters: CycleCountFilters) {
+  const query = new URLSearchParams({
+    owner_id: filters.ownerId,
+    warehouse_id: filters.warehouseId,
+    page: String(filters.page),
+    page_size: String(filters.pageSize),
+  });
+  if (filters.status) query.set("status_code", filters.status);
+  if (filters.search.trim()) query.set("search", filters.search.trim());
+  return apiRequest<CycleCountPage>(`${cycleCountRoot}?${query}`);
+}
+export function getCycleCount(id: string) {
+  return apiRequest<CycleCount>(`${cycleCountRoot}/${encodeURIComponent(id)}`);
+}
+export function createCycleCount(request: {
+  business_date: string;
+  tolerance_quantity: string;
+  notes?: string;
+  balance_ids: string[];
+}) {
+  return apiRequest<CycleCount>(cycleCountRoot, {
+    method: "POST",
+    body: request,
+  });
+}
+function cycleCountTransition(id: string, action: string, body: unknown) {
+  return apiRequest<CycleCount>(
+    `${cycleCountRoot}/${encodeURIComponent(id)}/${action}`,
+    { method: "POST", body },
+  );
+}
+export function recordCycleCount(
+  id: string,
+  expectedVersion: number,
+  lines: { line_id: string; counted_quantity: string; notes?: string }[],
+) {
+  return cycleCountTransition(id, "count", {
+    expected_version: expectedVersion,
+    lines,
+  });
+}
+export function approveCycleCount(
+  id: string,
+  expectedVersion: number,
+  lineIds: string[],
+) {
+  return cycleCountTransition(id, "approve", {
+    expected_version: expectedVersion,
+    line_ids: lineIds,
+  });
+}
+export function rejectCycleCount(
+  id: string,
+  expectedVersion: number,
+  lineIds: string[],
+  reason: string,
+) {
+  return cycleCountTransition(id, "reject", {
+    expected_version: expectedVersion,
+    line_ids: lineIds,
+    reason,
+  });
+}
+export function cancelCycleCount(
+  id: string,
+  expectedVersion: number,
+  reason: string,
+) {
+  return cycleCountTransition(id, "cancel", {
+    expected_version: expectedVersion,
     reason,
   });
 }

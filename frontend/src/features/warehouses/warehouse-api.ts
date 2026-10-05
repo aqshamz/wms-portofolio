@@ -26,6 +26,7 @@ export function warehouseListPath(filters: WarehouseListFilters) {
     page_size: String(filters.pageSize),
   });
   if (filters.search.trim()) query.set("search", filters.search.trim());
+  if (filters.ownerId) query.set("owner_id", filters.ownerId);
   if (filters.active !== "all") {
     query.set("active", String(filters.active === "active"));
   }
@@ -42,6 +43,19 @@ export function getWarehouse(id: string) {
 
 export function listWarehouseOwners(id: string) {
   return apiRequest<WarehouseOwner[]>(`${basePath}/${id}/owners`);
+}
+
+export function assignWarehouseOwner(id: string, ownerId: string) {
+  return apiRequest<void>(`${basePath}/${id}/owners`, {
+    method: "POST",
+    body: { owner_id: ownerId },
+  });
+}
+
+export function deactivateWarehouseOwner(id: string, ownerId: string) {
+  return apiRequest<void>(`${basePath}/${id}/owners/${ownerId}/deactivate`, {
+    method: "PATCH",
+  });
 }
 
 export function createWarehouse(request: CreateWarehouseRequest) {

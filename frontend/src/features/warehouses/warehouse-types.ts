@@ -33,6 +33,7 @@ export interface WarehouseOwner {
 export interface WarehouseListFilters {
   search: string;
   active: "all" | "active" | "inactive";
+  ownerId?: string;
   page: number;
   pageSize: number;
 }

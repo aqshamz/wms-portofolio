@@ -10,6 +10,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Users,
   Warehouse as WarehouseIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -26,6 +27,7 @@ import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { WarehouseDeactivateDialog } from "@/features/warehouses/warehouse-deactivate-dialog";
 import { WarehouseFormDialog } from "@/features/warehouses/warehouse-form-dialog";
+import { WarehouseOwnersDialog } from "@/features/warehouses/warehouse-owners-dialog";
 import {
   listWarehouses,
   warehouseKeys,
@@ -60,31 +62,39 @@ function locationLabel(warehouse: Warehouse) {
 function RowActions({
   warehouse,
   canWrite,
+  onOwners,
   onEdit,
   onDeactivate,
 }: {
   warehouse: Warehouse;
   canWrite: boolean;
+  onOwners: () => void;
   onEdit: () => void;
   onDeactivate: () => void;
 }) {
-  if (!canWrite) return null;
-
   return (
     <div className="flex flex-wrap items-center justify-end gap-1">
-      <Button variant="ghost" size="sm" onClick={onEdit}>
-        <Pencil className="size-4" />
-        Edit
+      <Button variant="ghost" size="sm" onClick={onOwners}>
+        <Users className="size-4" />
+        Served owners
       </Button>
-      {warehouse.is_active ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onDeactivate}
-          className="text-rose-700 hover:bg-rose-50 hover:text-rose-800"
-        >
-          Deactivate
-        </Button>
+      {canWrite ? (
+        <>
+          <Button variant="ghost" size="sm" onClick={onEdit}>
+            <Pencil className="size-4" />
+            Edit
+          </Button>
+          {warehouse.is_active ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDeactivate}
+              className="text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+            >
+              Deactivate
+            </Button>
+          ) : null}
+        </>
       ) : null}
     </div>
   );
@@ -110,6 +120,7 @@ export function WarehousesScreen({ canWrite }: { canWrite: boolean }) {
     page: parseAsInteger.withDefault(1),
   });
   const [editor, setEditor] = useState<EditorState>(null);
+  const [ownersTarget, setOwnersTarget] = useState<Warehouse>();
   const [deactivateTarget, setDeactivateTarget] = useState<Warehouse>();
   const queryFilters = {
     search: filters.search,
@@ -319,6 +330,7 @@ export function WarehousesScreen({ canWrite }: { canWrite: boolean }) {
                         <RowActions
                           warehouse={warehouse}
                           canWrite={canWrite}
+                          onOwners={() => setOwnersTarget(warehouse)}
                           onEdit={() =>
                             setEditor({
                               mode: "edit",
@@ -382,6 +394,7 @@ export function WarehousesScreen({ canWrite }: { canWrite: boolean }) {
                     <RowActions
                       warehouse={warehouse}
                       canWrite={canWrite}
+                      onOwners={() => setOwnersTarget(warehouse)}
                       onEdit={() =>
                         setEditor({
                           mode: "edit",
@@ -436,6 +449,15 @@ export function WarehousesScreen({ canWrite }: { canWrite: boolean }) {
           warehouseId={editor.mode === "edit" ? editor.warehouseId : undefined}
           onOpenChange={(open) => {
             if (!open) setEditor(null);
+          }}
+        />
+      ) : null}
+      {ownersTarget ? (
+        <WarehouseOwnersDialog
+          warehouse={ownersTarget}
+          canWrite={canWrite}
+          onOpenChange={(open) => {
+            if (!open) setOwnersTarget(undefined);
           }}
         />
       ) : null}

@@ -106,6 +106,7 @@ const navigation: NavigationGroup[] = [
             ...MODULE_ACCESS.INVENTORY.ADJUST.anyOf,
             ...MODULE_ACCESS.INVENTORY.ADJUST_APPROVE.anyOf,
             ...MODULE_ACCESS.INVENTORY.COUNT.anyOf,
+            ...MODULE_ACCESS.INVENTORY.COUNT_APPROVE.anyOf,
             ...MODULE_ACCESS.INVENTORY.TRANSFER.anyOf,
           ],
         },
@@ -145,6 +146,7 @@ const inboundNavigation: InboundNavigationItem[] = [
   { label: "Purchase orders", href: "/inbound/purchase-orders" },
   { label: "Orders", href: "/inbound/orders" },
   { label: "Receipts", href: "/inbound/receipts" },
+  { label: "Transfer receipts", href: "/inbound/transfer-receipts" },
   { label: "Quality inspections", href: "/inbound/quality-inspections" },
   { label: "Putaway tasks", href: "/inbound/putaway" },
   { label: "Quarantine", href: "/inbound/quarantine" },
@@ -181,6 +183,21 @@ const stockControlNavigation: StockControlNavigationItem[] = [
         ...MODULE_ACCESS.INVENTORY.ADJUST_APPROVE.anyOf,
       ],
     },
+  },
+  {
+    label: "Cycle counts",
+    href: "/stock-control/cycle-counts",
+    access: {
+      anyOf: [
+        ...MODULE_ACCESS.INVENTORY.COUNT.anyOf,
+        ...MODULE_ACCESS.INVENTORY.COUNT_APPROVE.anyOf,
+      ],
+    },
+  },
+  {
+    label: "Warehouse transfers",
+    href: "/stock-control/warehouse-transfers",
+    access: MODULE_ACCESS.INVENTORY.TRANSFER,
   },
 ];
 

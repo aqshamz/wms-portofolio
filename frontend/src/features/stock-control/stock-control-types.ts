@@ -23,6 +23,20 @@ export interface InternalMoveRequest {
   expected_version: number;
 }
 
+export interface WarehouseTransferRequest {
+  operation_key: string;
+  business_date: string;
+  source_document_id: string;
+  notes?: string;
+  source_balance_id: string;
+  target_warehouse_id: string;
+  target_location_id: string;
+  target_inventory_status_id: string;
+  quantity: string;
+  serial_ids: string[];
+  expected_version: number;
+}
+
 export interface StockControlCommandResponse {
   operation: string;
   movements: Movement[];
@@ -128,3 +142,147 @@ export interface CreateAdjustmentRequest {
     expected_balance_version: number;
   }[];
 }
+
+export interface CycleCountLine {
+  cycle_count_line_id: string;
+  line_no: number;
+  decision_code:
+    "OPEN" | "COUNTED" | "NO_VARIANCE" | "POSTED" | "REJECTED" | "CANCELLED";
+  balance_id: string;
+  snapshot_version_no: number;
+  current_balance_version_no?: number;
+  item_code: string;
+  item_name: string;
+  location_code: string;
+  inventory_status_code: string;
+  uom_code: string;
+  lot_number: string | null;
+  handling_unit_barcode: string | null;
+  serial_controlled: boolean;
+  system_quantity?: string;
+  counted_quantity: string | null;
+  variance_quantity: string | null;
+  count_attempts: number;
+  requires_recount: boolean;
+  counted_at: string | null;
+  counted_by_display_name: string | null;
+  count_notes: string | null;
+  decided_at: string | null;
+  decided_by_display_name: string | null;
+  decision_reason: string | null;
+  inventory_movement_id: string | null;
+  resulting_balance_id: string | null;
+}
+export interface CycleCount {
+  cycle_count_id: string;
+  status_code:
+    | "DRAFT"
+    | "COUNTING"
+    | "REVIEW"
+    | "PARTIALLY_POSTED"
+    | "POSTED"
+    | "CANCELLED";
+  owner_id: string;
+  owner_code: string;
+  owner_name: string;
+  warehouse_id: string;
+  warehouse_code: string;
+  warehouse_name: string;
+  business_date: string;
+  tolerance_quantity: string;
+  blind_count: boolean;
+  notes: string | null;
+  total_lines: number;
+  open_lines: number;
+  counted_lines: number;
+  recount_lines: number;
+  final_lines: number;
+  lines: CycleCountLine[];
+  completed_at: string | null;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
+  created_at: string;
+  created_by: string;
+  created_by_display_name: string;
+  version_no: number;
+}
+export interface CycleCountFilters {
+  ownerId: string;
+  warehouseId: string;
+  status: string;
+  search: string;
+  page: number;
+  pageSize: number;
+}
+export type CycleCountPage = PaginatedData<CycleCount>;
+
+export type WarehouseTransferStatus =
+  "DRAFT" | "APPROVED" | "IN_TRANSIT" | "RECEIVED" | "CANCELLED";
+export interface WarehouseTransferLine {
+  warehouse_transfer_line_id: string;
+  line_no: number;
+  source_balance_id: string;
+  source_balance_version_no: number;
+  item_id: string;
+  item_code: string;
+  item_name: string;
+  lot_id: string | null;
+  lot_number: string | null;
+  serial_id: string | null;
+  serial_number: string | null;
+  handling_unit_id: string | null;
+  handling_unit_barcode: string | null;
+  source_location_id: string;
+  source_location_code: string;
+  source_inventory_status_id: string;
+  source_inventory_status_code: string;
+  uom_id: string;
+  uom_code: string;
+  quantity: string;
+  dispatch_movement_id: string | null;
+  receipt_location_id: string | null;
+  receipt_location_code: string | null;
+  receipt_movement_id: string | null;
+  received_balance_id: string | null;
+  received_balance_version_no?: number;
+  putaway_target_location_id: string | null;
+  putaway_target_location_code: string | null;
+  putaway_movement_id: string | null;
+  putaway_result_balance_id: string | null;
+  putaway_completed_at: string | null;
+}
+export interface WarehouseTransfer {
+  warehouse_transfer_id: string;
+  status_code: WarehouseTransferStatus;
+  owner_id: string;
+  owner_code: string;
+  owner_name: string;
+  source_warehouse_id: string;
+  source_warehouse_code: string;
+  source_warehouse_name: string;
+  target_warehouse_id: string;
+  target_warehouse_code: string;
+  target_warehouse_name: string;
+  business_date: string;
+  notes: string | null;
+  lines: WarehouseTransferLine[];
+  approved_at: string | null;
+  dispatched_at: string | null;
+  received_at: string | null;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
+  created_at: string;
+  created_by: string;
+  created_by_display_name: string;
+  version_no: number;
+}
+export interface WarehouseTransferFilters {
+  ownerId: string;
+  warehouseId: string;
+  side: "SOURCE" | "TARGET";
+  status: string;
+  search: string;
+  page: number;
+  pageSize: number;
+}
+export type WarehouseTransferPage = PaginatedData<WarehouseTransfer>;
