@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { apiRequest } from "@/lib/api/client";
 import {
   cancelVendorReturn,
-  completeVendorReturn,
+  dispatchVendorReturn,
   getVendorReturn,
   listVendorReturns,
   vendorReturnListPath,
@@ -41,13 +41,13 @@ it("posts document and balance versions to lifecycle actions", async () => {
   expect(apiRequest).toHaveBeenLastCalledWith(
     "/api/v1/outbound/vendor-returns/RTV%2F1",
   );
-  await completeVendorReturn("RTV/1", {
+  await dispatchVendorReturn("RTV/1", {
     expected_version: 2,
     expected_balance_version: 7,
     completed_at: "2026-09-25T10:00:00Z",
   });
   expect(apiRequest).toHaveBeenLastCalledWith(
-    "/api/v1/outbound/vendor-returns/RTV%2F1/complete",
+    "/api/v1/outbound/vendor-returns/RTV%2F1/dispatch",
     {
       method: "POST",
       body: {
@@ -57,9 +57,20 @@ it("posts document and balance versions to lifecycle actions", async () => {
       },
     },
   );
-  await cancelVendorReturn("RTV/1", { expected_version: 2, reason: "Retain" });
+  await cancelVendorReturn("RTV/1", {
+    expected_version: 2,
+    expected_balance_version: 7,
+    reason: "Retain",
+  });
   expect(apiRequest).toHaveBeenLastCalledWith(
     "/api/v1/outbound/vendor-returns/RTV%2F1/cancel",
-    { method: "POST", body: { expected_version: 2, reason: "Retain" } },
+    {
+      method: "POST",
+      body: {
+        expected_version: 2,
+        expected_balance_version: 7,
+        reason: "Retain",
+      },
+    },
   );
 });

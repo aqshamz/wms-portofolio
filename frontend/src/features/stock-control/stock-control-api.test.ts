@@ -6,10 +6,12 @@ import {
   completeReplenishment,
   createAdjustment,
   createCycleCount,
+  createGrandStockOpname,
   createReplenishment,
   listReplenishments,
   listReplenishmentTargets,
   listAdjustments,
+  listCycleCounts,
   listStockControlReasons,
   postInternalMove,
   postWarehouseTransfer,
@@ -206,6 +208,37 @@ describe("stock-control API", () => {
           line_ids: ["CCNT-1-L0001"],
         },
       },
+    );
+  });
+
+  it("lists and creates customer-scoped grand stock opnames", async () => {
+    vi.mocked(apiRequest).mockResolvedValue({});
+    await listCycleCounts({
+      ownerId: "owner-1",
+      warehouseId: "warehouse-1",
+      countType: "GRAND",
+      status: "DRAFT",
+      search: "GSO",
+      page: 1,
+      pageSize: 20,
+    });
+    expect(apiRequest).toHaveBeenNthCalledWith(
+      1,
+      "/api/v1/stock-control/cycle-counts?owner_id=owner-1&warehouse_id=warehouse-1&count_type_code=GRAND&page=1&page_size=20&status_code=DRAFT&search=GSO",
+    );
+
+    const request = {
+      owner_id: "owner-1",
+      warehouse_id: "warehouse-1",
+      business_date: "2026-10-05",
+      tolerance_quantity: "0",
+      notes: "Annual count",
+    };
+    await createGrandStockOpname(request);
+    expect(apiRequest).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/stock-control/cycle-counts/grand",
+      { method: "POST", body: request },
     );
   });
 

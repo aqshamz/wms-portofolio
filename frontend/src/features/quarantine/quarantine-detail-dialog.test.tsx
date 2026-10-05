@@ -9,6 +9,7 @@ import {
   createDisposition,
   getQuarantineCase,
   listDispositionTypes,
+  listQuarantineReturnDocks,
   listQuarantineTargets,
 } from "./quarantine-api";
 import { QuarantineDetailDialog } from "./quarantine-detail-dialog";
@@ -21,6 +22,7 @@ vi.mock("./quarantine-api", async (importOriginal) => ({
   createDisposition: vi.fn(),
   getQuarantineCase: vi.fn(),
   listDispositionTypes: vi.fn(),
+  listQuarantineReturnDocks: vi.fn(),
   listQuarantineTargets: vi.fn(),
 }));
 let serverCase: QuarantineCase;
@@ -45,6 +47,20 @@ beforeEach(() => {
     total_pages: 1,
     total_items: 1,
   });
+  vi.mocked(listQuarantineReturnDocks).mockResolvedValue({
+    items: [
+      {
+        location_id: "return-dock-1",
+        code: "RETURN-DOCK",
+        zone_code: "DOCKS",
+        location_type_code: "DOCK",
+      },
+    ],
+    page: 1,
+    page_size: 20,
+    total_pages: 1,
+    total_items: 1,
+  });
   vi.mocked(createDisposition).mockImplementation((_id, request) => {
     const isDisposal = request.disposition_type_code === "DISPOSE";
     const isVendorReturn = request.disposition_type_code === "RETURN";
@@ -60,7 +76,7 @@ beforeEach(() => {
       disposed_qty: disposed.toString(),
       committed_qty: committed.toString(),
       pending_qty: isPlannedOutbound ? request.disposition_qty : "0",
-      available_qty: isPlannedOutbound
+      available_qty: isDisposal
         ? serverCase.available_qty
         : new Decimal(serverCase.available_qty!)
             .minus(request.disposition_qty)
@@ -70,7 +86,7 @@ beforeEach(() => {
           ? "CLOSED"
           : "PARTIALLY_DECIDED",
       version_no: serverCase.version_no + 1,
-      quarantine_balance_version_no: isPlannedOutbound
+      quarantine_balance_version_no: isDisposal
         ? serverCase.quarantine_balance_version_no
         : serverCase.quarantine_balance_version_no! + 1,
       dispositions: [
@@ -88,8 +104,12 @@ beforeEach(() => {
           decision_notes: request.decision_notes,
           client_decision_reference: request.client_decision_reference,
           target_location_id: request.target_location_id,
-          target_location_code: request.target_location_id ? "BULK-01" : null,
-          inventory_movement_id: isPlannedOutbound ? null : "MOVE-1",
+          target_location_code: request.target_location_id
+            ? isVendorReturn
+              ? "RETURN-DOCK"
+              : "BULK-01"
+            : null,
+          inventory_movement_id: isDisposal ? null : "MOVE-1",
           disposal_id: isDisposal ? "DSP-1" : null,
           vendor_return_id: isVendorReturn ? "RTV-1" : null,
           ...(request.disposition_type_code === "REWORK"
@@ -151,6 +171,7 @@ describe("quarantine decisions", () => {
       screen.queryByRole("button", { name: "Review decision" }),
     ).not.toBeInTheDocument();
     expect(listDispositionTypes).not.toHaveBeenCalled();
+    expect(listQuarantineReturnDocks).not.toHaveBeenCalled();
     expect(listQuarantineTargets).not.toHaveBeenCalled();
   });
   it.each(["RETURN", "DISPOSE"])(
@@ -158,6 +179,16 @@ describe("quarantine decisions", () => {
     async (code) => {
       const user = setup();
       await choose(user, code);
+      if (code === "RETURN") {
+        const dock = await screen.findByRole("combobox", {
+          name: "Return dock",
+        });
+        await waitFor(() => expect(dock).not.toBeDisabled());
+        await user.click(dock);
+        await user.click(
+          await screen.findByRole("option", { name: "RETURN-DOCK · DOCKS" }),
+        );
+      }
       await user.click(screen.getByRole("button", { name: "Review decision" }));
       expect(createDisposition).not.toHaveBeenCalled();
       await user.click(
@@ -174,7 +205,7 @@ describe("quarantine decisions", () => {
         );
       } else {
         expect(toast.success).toHaveBeenCalledWith(
-          "Return to vendor transaction planned. Inventory remains quarantined.",
+          "Return staged at the dock in RETURN_PENDING.",
         );
         expect(screen.getByText("Open return to vendor")).toHaveAttribute(
           "href",
@@ -189,13 +220,14 @@ describe("quarantine decisions", () => {
         disposition_qty: "10",
         business_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
         decided_at: expect.stringMatching(/Z$/),
+        ...(code === "RETURN" ? { target_location_id: "return-dock-1" } : {}),
       });
       expect(
         screen.queryByRole("button", { name: "Review decision" }),
       ).not.toBeInTheDocument();
       expect(
         screen.getByText("Target location").nextElementSibling,
-      ).toHaveTextContent("—");
+      ).toHaveTextContent(code === "RETURN" ? "RETURN-DOCK" : "—");
     },
   );
   it("requires a strategy-filtered target before accepting stock into storage", async () => {
@@ -295,7 +327,7 @@ describe("quarantine decisions", () => {
       screen.getByRole("heading", { name: "Disposition history (1)" }),
     ).toBeInTheDocument();
   });
-  it("omits stale target fields when switching from acceptance to removal", async () => {
+  it("clears the acceptance target and requires a return dock when switching to RETURN", async () => {
     const user = setup();
     await choose(user, "ACCEPT");
     const target = await screen.findByRole("combobox", {
@@ -310,14 +342,22 @@ describe("quarantine decisions", () => {
     expect(
       screen.queryByRole("combobox", { name: "Acceptance target" }),
     ).not.toBeInTheDocument();
+    const returnDock = await screen.findByRole("combobox", {
+      name: "Return dock",
+    });
+    await waitFor(() => expect(returnDock).not.toBeDisabled());
+    await user.click(returnDock);
+    await user.click(
+      await screen.findByRole("option", { name: "RETURN-DOCK · DOCKS" }),
+    );
     await user.click(screen.getByRole("button", { name: "Review decision" }));
     await user.click(
       screen.getByRole("button", { name: "Confirm disposition" }),
     );
     await waitFor(() => expect(createDisposition).toHaveBeenCalled());
-    expect(vi.mocked(createDisposition).mock.calls[0][1]).not.toHaveProperty(
-      "target_location_id",
-    );
+    expect(vi.mocked(createDisposition).mock.calls[0][1]).toMatchObject({
+      target_location_id: "return-dock-1",
+    });
     expect(vi.mocked(createDisposition).mock.calls[0][1]).not.toHaveProperty(
       "work_instructions",
     );
@@ -328,6 +368,12 @@ describe("quarantine decisions", () => {
     );
     const user = setup();
     await choose(user, "RETURN");
+    const dock = await screen.findByRole("combobox", { name: "Return dock" });
+    await waitFor(() => expect(dock).not.toBeDisabled());
+    await user.click(dock);
+    await user.click(
+      await screen.findByRole("option", { name: "RETURN-DOCK · DOCKS" }),
+    );
     await user.click(screen.getByRole("button", { name: "Review decision" }));
     await user.click(
       screen.getByRole("button", { name: "Confirm disposition" }),

@@ -32,7 +32,7 @@ export const listVendorReturns = (filters: VendorReturnFilters) =>
 export const getVendorReturn = (id: string) =>
   apiRequest<VendorReturn>(`${basePath}/${encodeURIComponent(id)}`);
 
-export const completeVendorReturn = (
+export const dispatchVendorReturn = (
   id: string,
   body: {
     expected_version: number;
@@ -40,14 +40,18 @@ export const completeVendorReturn = (
     completed_at: string;
   },
 ) =>
-  apiRequest<VendorReturn>(`${basePath}/${encodeURIComponent(id)}/complete`, {
+  apiRequest<VendorReturn>(`${basePath}/${encodeURIComponent(id)}/dispatch`, {
     method: "POST",
     body,
   });
 
 export const cancelVendorReturn = (
   id: string,
-  body: { expected_version: number; reason: string },
+  body: {
+    expected_version: number;
+    expected_balance_version: number;
+    reason: string;
+  },
 ) =>
   apiRequest<VendorReturn>(`${basePath}/${encodeURIComponent(id)}/cancel`, {
     method: "POST",

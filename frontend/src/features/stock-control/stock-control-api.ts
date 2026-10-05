@@ -349,6 +349,7 @@ export function listCycleCounts(filters: CycleCountFilters) {
   const query = new URLSearchParams({
     owner_id: filters.ownerId,
     warehouse_id: filters.warehouseId,
+    count_type_code: filters.countType,
     page: String(filters.page),
     page_size: String(filters.pageSize),
   });
@@ -366,6 +367,18 @@ export function createCycleCount(request: {
   balance_ids: string[];
 }) {
   return apiRequest<CycleCount>(cycleCountRoot, {
+    method: "POST",
+    body: request,
+  });
+}
+export function createGrandStockOpname(request: {
+  owner_id: string;
+  warehouse_id: string;
+  business_date: string;
+  tolerance_quantity: string;
+  notes?: string;
+}) {
+  return apiRequest<CycleCount>(`${cycleCountRoot}/grand`, {
     method: "POST",
     body: request,
   });

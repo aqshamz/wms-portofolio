@@ -195,6 +195,16 @@ const stockControlNavigation: StockControlNavigationItem[] = [
     },
   },
   {
+    label: "Grand stock opname",
+    href: "/stock-control/grand-stock-opnames",
+    access: {
+      anyOf: [
+        ...MODULE_ACCESS.INVENTORY.COUNT.anyOf,
+        ...MODULE_ACCESS.INVENTORY.COUNT_APPROVE.anyOf,
+      ],
+    },
+  },
+  {
     label: "Warehouse transfers",
     href: "/stock-control/warehouse-transfers",
     access: MODULE_ACCESS.INVENTORY.TRANSFER,

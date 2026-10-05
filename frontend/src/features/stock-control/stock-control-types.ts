@@ -175,6 +175,7 @@ export interface CycleCountLine {
 }
 export interface CycleCount {
   cycle_count_id: string;
+  count_type_code: "CYCLE" | "GRAND";
   status_code:
     | "DRAFT"
     | "COUNTING"
@@ -209,6 +210,7 @@ export interface CycleCount {
 export interface CycleCountFilters {
   ownerId: string;
   warehouseId: string;
+  countType: "CYCLE" | "GRAND";
   status: string;
   search: string;
   page: number;

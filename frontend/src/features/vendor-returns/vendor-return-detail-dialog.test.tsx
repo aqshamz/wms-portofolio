@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import {
   cancelVendorReturn,
-  completeVendorReturn,
+  dispatchVendorReturn,
   getVendorReturn,
 } from "./vendor-return-api";
 import { VendorReturnDetailDialog } from "./vendor-return-detail-dialog";
@@ -19,7 +19,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("./vendor-return-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./vendor-return-api")>()),
   getVendorReturn: vi.fn(),
-  completeVendorReturn: vi.fn(),
+  dispatchVendorReturn: vi.fn(),
   cancelVendorReturn: vi.fn(),
 }));
 
@@ -28,7 +28,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   current = { ...testVendorReturn };
   vi.mocked(getVendorReturn).mockImplementation(async () => current);
-  vi.mocked(completeVendorReturn).mockImplementation(async () => {
+  vi.mocked(dispatchVendorReturn).mockImplementation(async () => {
     current = {
       ...current,
       status_code: "COMPLETED",
@@ -68,13 +68,11 @@ function mount() {
 it("shows the inherited vendor and confirms the stock-removal action", async () => {
   const user = mount();
   expect(await screen.findByText("VENDOR · Source Vendor")).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "Complete return" }));
-  expect(completeVendorReturn).not.toHaveBeenCalled();
-  await user.click(
-    screen.getByRole("button", { name: "Confirm vendor return" }),
-  );
-  expect(await screen.findByText("Completed")).toBeInTheDocument();
-  expect(completeVendorReturn).toHaveBeenCalledWith(
+  await user.click(screen.getByRole("button", { name: "Dispatch return" }));
+  expect(dispatchVendorReturn).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "Confirm dispatch" }));
+  expect(await screen.findByText("Dispatched")).toBeInTheDocument();
+  expect(dispatchVendorReturn).toHaveBeenCalledWith(
     testVendorReturn.vendor_return_id,
     {
       expected_version: 1,
@@ -82,7 +80,7 @@ it("shows the inherited vendor and confirms the stock-removal action", async () 
       completed_at: expect.stringMatching(/Z$/),
     },
   );
-  expect(toast.success).toHaveBeenCalledWith("Return to vendor completed.");
+  expect(toast.success).toHaveBeenCalledWith("Return dispatched to vendor.");
 });
 
 it("requires and trims a cancellation reason", async () => {
@@ -102,6 +100,7 @@ it("requires and trims a cancellation reason", async () => {
     testVendorReturn.vendor_return_id,
     {
       expected_version: 1,
+      expected_balance_version: 7,
       reason: "Vendor rejected request",
     },
   );

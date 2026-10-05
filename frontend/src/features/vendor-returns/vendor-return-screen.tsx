@@ -132,13 +132,13 @@ export function VendorReturnScreen({
         </div>
       </header>
       <section className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 sm:p-5">
-        Quarantine RETURN decisions create planned transactions for the vendor
-        inherited from the original inbound order. Stock stays quarantined until
-        completion. Cancelling releases the quantity back to its quarantine
-        case.
+        Quarantine RETURN decisions stage stock in RETURN_PENDING at a selected
+        return dock and create a transaction for the vendor inherited from the
+        original inbound order. Dispatch removes the staged stock from
+        inventory; cancellation restores it to quarantine.
         {!capabilities.canComplete ? (
           <p className="mt-3 rounded-xl bg-amber-50 p-3 text-amber-900">
-            This account cannot complete returns. OUTBOUND.RETURN_TO_VENDOR is
+            This account cannot dispatch returns. OUTBOUND.RETURN_TO_VENDOR is
             required.
           </p>
         ) : null}
@@ -257,7 +257,7 @@ export function VendorReturnScreen({
                     {[
                       "Transaction / item",
                       "Vendor",
-                      "Source",
+                      "Return dock",
                       "Quantity",
                       "Status",
                       "Planned",
@@ -290,7 +290,10 @@ export function VendorReturnScreen({
                         </p>
                       </td>
                       <td className="px-5 py-4">
-                        <p>{value.source_location_code}</p>
+                        <p>
+                          {value.return_dock_location_code ||
+                            value.source_location_code}
+                        </p>
                         <p className="mt-1 text-xs text-slate-500">
                           {value.lot_number ||
                             value.serial_no ||
@@ -337,7 +340,9 @@ export function VendorReturnScreen({
                     {value.item_code} · {value.quantity} {value.uom_code}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    {value.vendor_name} · {value.source_location_code}
+                    {value.vendor_name} ·{" "}
+                    {value.return_dock_location_code ||
+                      value.source_location_code}
                   </p>
                   <Button
                     className="mt-4 w-full"

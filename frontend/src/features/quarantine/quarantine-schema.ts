@@ -52,10 +52,15 @@ export function dispositionSchema(
           "disposition_type_code",
           "Select an active, supported disposition type.",
         );
-      if (effect === "accept" && !fields.target_location_id)
+      if (
+        (effect === "accept" || fields.disposition_type_code === "RETURN") &&
+        !fields.target_location_id
+      )
         issue(
           "target_location_id",
-          "Select a strategy-eligible storage location.",
+          fields.disposition_type_code === "RETURN"
+            ? "Select a shipping-capable return dock."
+            : "Select a strategy-eligible storage location.",
         );
       if (effect === "rework" && !fields.work_instructions)
         issue(

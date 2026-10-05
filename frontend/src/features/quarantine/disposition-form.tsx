@@ -15,6 +15,7 @@ import { ApiError } from "@/lib/api/client";
 import { businessDateToday } from "@/features/putaway/putaway-schema";
 import {
   createDisposition,
+  listQuarantineReturnDocks,
   listQuarantineTargets,
   quarantineKeys,
 } from "./quarantine-api";
@@ -68,10 +69,16 @@ export function DispositionForm({
   const selectedType = types.find((row) => row.code === typeCode);
   const effect = dispositionEffect(selectedType);
   const filters = { search, page, pageSize: 20 };
+  const isReturn = typeCode === "RETURN";
   const targets = useQuery({
-    queryKey: quarantineKeys.targets(value.quarantine_case_id, filters),
-    queryFn: () => listQuarantineTargets(value.quarantine_case_id, filters),
-    enabled: effect === "accept",
+    queryKey: isReturn
+      ? quarantineKeys.returnDocks(value.quarantine_case_id, filters)
+      : quarantineKeys.targets(value.quarantine_case_id, filters),
+    queryFn: () =>
+      isReturn
+        ? listQuarantineReturnDocks(value.quarantine_case_id, filters)
+        : listQuarantineTargets(value.quarantine_case_id, filters),
+    enabled: effect === "accept" || isReturn,
   });
   const options = (targets.data?.items ?? []).map((row) => ({
     value: row.location_id,
@@ -105,7 +112,7 @@ export function DispositionForm({
         disposition_qty: fields.disposition_qty,
         business_date: fields.business_date,
         decided_at: new Date().toISOString(),
-        ...(action === "accept"
+        ...(action === "accept" || fields.disposition_type_code === "RETURN"
           ? { target_location_id: fields.target_location_id }
           : {}),
         ...(action === "rework"
@@ -121,9 +128,11 @@ export function DispositionForm({
     },
     onSuccess: (updated) => {
       toast.success(
-        typeCode === "DISPOSE" || typeCode === "RETURN"
-          ? `${typeCode === "DISPOSE" ? "Disposal" : "Return to vendor"} transaction planned. Inventory remains quarantined.`
-          : "Disposition recorded. Inventory updated.",
+        typeCode === "DISPOSE"
+          ? "Disposal transaction planned. Inventory remains quarantined."
+          : typeCode === "RETURN"
+            ? "Return staged at the dock in RETURN_PENDING."
+            : "Disposition recorded. Inventory updated.",
       );
       onDone(updated);
     },
@@ -148,8 +157,9 @@ export function DispositionForm({
         Undecided: {remainingQuantity(value)}{" "}
         {value.base_uom_code || "base units"}. Uncommitted quarantine stock:{" "}
         {value.available_qty ?? "Unavailable"}. Each confirmed decision posts
-        inventory immediately except return and disposal, which create planned
-        outbound transactions. Confirmed decisions cannot be edited here.
+        inventory immediately except disposal. A return immediately stages stock
+        at its return dock in RETURN_PENDING. Confirmed decisions cannot be
+        edited here.
       </p>
       {!snapshotReady ? (
         <p
@@ -210,7 +220,7 @@ export function DispositionForm({
               ? "Rework changes this quantity to QC_PENDING at its current location and creates a rework task. After rework is completed, it must pass a new quality inspection."
               : typeCode === "DISPOSE"
                 ? "Disposal creates a planned outbound transaction. Stock stays in quarantine until an authorized worker completes that transaction from Outbound → Disposals."
-                : "Return creates a planned outbound transaction for the original receipt vendor. Stock stays in quarantine until an authorized worker completes it from Outbound → Return to vendor."}
+                : "Return moves stock to the selected shipping-capable return dock in RETURN_PENDING and creates a transaction for the original receipt vendor. Dispatching that transaction removes it from inventory."}
         </p>
       ) : null}
       <div className="grid gap-4 sm:grid-cols-2">
@@ -245,10 +255,10 @@ export function DispositionForm({
           />
         </FormField>
       </div>
-      {effect === "accept" ? (
+      {effect === "accept" || isReturn ? (
         <div className="space-y-3">
           <FormField
-            label="Search storage targets"
+            label={isReturn ? "Search return docks" : "Search storage targets"}
             htmlFor="quarantine-target-search"
           >
             <Input
@@ -257,7 +267,9 @@ export function DispositionForm({
               maxLength={160}
               disabled={locked}
               value={search}
-              placeholder="Location or zone code"
+              placeholder={
+                isReturn ? "Return dock or zone code" : "Location or zone code"
+              }
               onChange={(event) => {
                 setSearch(event.target.value);
                 setPage(1);
@@ -265,21 +277,23 @@ export function DispositionForm({
             />
           </FormField>
           <FormField
-            label="Acceptance target"
+            label={isReturn ? "Return dock" : "Acceptance target"}
             htmlFor="quarantine-target"
             required
             error={errors.target_location_id?.message}
           >
             <Select
               id="quarantine-target"
-              ariaLabel="Acceptance target"
+              ariaLabel={isReturn ? "Return dock" : "Acceptance target"}
               value={targetId}
               options={options}
               disabled={locked || targets.isPending || targets.isError}
               placeholder={
                 targets.isPending
                   ? "Loading eligible locations…"
-                  : "Select storage location"
+                  : isReturn
+                    ? "Select return dock"
+                    : "Select storage location"
               }
               invalid={Boolean(errors.target_location_id)}
               ariaDescribedBy={
@@ -296,9 +310,9 @@ export function DispositionForm({
             />
           </FormField>
           <p className="text-xs text-slate-500">
-            Only active, unlocked, storage-capable locations in this warehouse
-            matching the item’s active putaway strategy are shown. Rules are
-            rechecked when posting.
+            {isReturn
+              ? "Only active, unlocked, shipping-capable locations in this warehouse are shown. Eligibility is rechecked when staging."
+              : "Only active, unlocked, storage-capable locations in this warehouse matching the item’s active putaway strategy are shown. Rules are rechecked when posting."}
           </p>
           {targets.error ? (
             <div role="alert" className="text-sm text-rose-900">
@@ -316,7 +330,9 @@ export function DispositionForm({
           ) : null}
           {targets.isSuccess && !targets.data.items.length ? (
             <p className="text-sm text-amber-900">
-              No storage targets match the active strategy and your search.
+              {isReturn
+                ? "No eligible return docks match your search."
+                : "No storage targets match the active strategy and your search."}
             </p>
           ) : null}
           {targets.data && targets.data.total_pages > 1 ? (
@@ -399,11 +415,15 @@ export function DispositionForm({
             {decision.disposition_qty} {value.base_uom_code || "base units"}
             {effect === "accept"
               ? ` into ${selection?.label || decision.target_location_id}`
-              : ""}
+              : isReturn
+                ? ` to ${selection?.label || decision.target_location_id}`
+                : ""}
             ?{" "}
-            {["DISPOSE", "RETURN"].includes(decision.disposition_type_code)
+            {decision.disposition_type_code === "DISPOSE"
               ? " This creates a planned outbound transaction; inventory stays quarantined until completion."
-              : " This posts inventory immediately."}{" "}
+              : decision.disposition_type_code === "RETURN"
+                ? " This immediately moves inventory to RETURN_PENDING at the selected return dock and creates the dispatch transaction."
+                : " This posts inventory immediately."}{" "}
             The case has no undecided quantity once its entire quarantine
             quantity is committed. Decision time is recorded when confirmed.
           </p>

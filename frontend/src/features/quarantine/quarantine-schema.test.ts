@@ -10,7 +10,7 @@ const fields = {
   disposition_type_code: "RETURN",
   disposition_qty: "2",
   business_date: "2026-09-17",
-  target_location_id: "",
+  target_location_id: "return-dock",
   client_decision_reference: "",
   decision_notes: "",
   work_instructions: "",
@@ -70,6 +70,7 @@ describe("quarantine validation", () => {
       dispositionSchema(testCase, testTypes).safeParse({
         ...fields,
         disposition_type_code: "ACCEPT",
+        target_location_id: "",
       }).success,
     ).toBe(false);
     expect(
@@ -83,6 +84,7 @@ describe("quarantine validation", () => {
       dispositionSchema(testCase, testTypes).safeParse({
         ...fields,
         disposition_type_code: "REWORK",
+        target_location_id: "",
         work_instructions: "   ",
       }).success,
     ).toBe(false);
@@ -90,6 +92,7 @@ describe("quarantine validation", () => {
       dispositionSchema(testCase, testTypes).safeParse({
         ...fields,
         disposition_type_code: "REWORK",
+        target_location_id: "",
         work_instructions: "Replace seal",
       }).success,
     ).toBe(true);

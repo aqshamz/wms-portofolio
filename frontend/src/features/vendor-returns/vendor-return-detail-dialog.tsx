@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { quarantineKeys } from "@/features/quarantine/quarantine-api";
 import {
   cancelVendorReturn,
-  completeVendorReturn,
+  dispatchVendorReturn,
   getVendorReturn,
   vendorReturnKeys,
 } from "./vendor-return-api";
@@ -43,7 +43,7 @@ export function VendorReturnDetailDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const client = useQueryClient();
-  const [action, setAction] = useState<"complete" | "cancel">();
+  const [action, setAction] = useState<"dispatch" | "cancel">();
   const [reason, setReason] = useState("");
   const query = useQuery({
     queryKey: vendorReturnKeys.detail(id),
@@ -60,32 +60,35 @@ export function VendorReturnDetailDialog({
     setReason("");
     toast.success(message);
   };
-  const complete = useMutation({
+  const dispatch = useMutation({
     mutationFn: () => {
       if (!value?.source_balance_version_no)
-        throw new Error("Refresh the return before completing it.");
-      return completeVendorReturn(id, {
+        throw new Error("Refresh the return before dispatching it.");
+      return dispatchVendorReturn(id, {
         expected_version: value.version_no,
         expected_balance_version: value.source_balance_version_no,
         completed_at: new Date().toISOString(),
       });
     },
-    onSuccess: (updated) => finish(updated, "Return to vendor completed."),
+    onSuccess: (updated) => finish(updated, "Return dispatched to vendor."),
     onError: (error) => toast.error(error.message),
   });
   const cancel = useMutation({
     mutationFn: () => {
       if (!value) throw new Error("Refresh the return before cancelling it.");
+      if (!value.source_balance_version_no)
+        throw new Error("Refresh the return before cancelling it.");
       if (!reason.trim()) throw new Error("Enter a cancellation reason.");
       return cancelVendorReturn(id, {
         expected_version: value.version_no,
+        expected_balance_version: value.source_balance_version_no!,
         reason: reason.trim(),
       });
     },
     onSuccess: (updated) => finish(updated, "Return to vendor cancelled."),
     onError: (error) => toast.error(error.message),
   });
-  const busy = complete.isPending || cancel.isPending;
+  const busy = dispatch.isPending || cancel.isPending;
 
   return (
     <OperationDialog
@@ -141,12 +144,20 @@ export function VendorReturnDetailDialog({
                 value={`${value.quantity} ${value.uom_code}`}
               />
               <Detail
-                label="Source location"
+                label="Quarantine source"
                 value={value.source_location_code}
               />
               <Detail
                 label="Inventory status"
                 value={value.source_inventory_status_code}
+              />
+              <Detail
+                label="Return dock"
+                value={value.return_dock_location_code}
+              />
+              <Detail
+                label="Staged status"
+                value={value.return_pending_status_code}
               />
               <Detail label="Business date" value={value.business_date} />
               <Detail
@@ -155,13 +166,24 @@ export function VendorReturnDetailDialog({
               />
               <Detail label="Planned at" value={value.planned_at} />
               <Detail label="Available now" value={value.available_qty} />
-              <Detail label="Movement" value={value.inventory_movement_id} />
+              <Detail
+                label="Staging movement"
+                value={value.staging_movement_id}
+              />
+              <Detail
+                label="Dispatch movement"
+                value={value.inventory_movement_id}
+              />
+              <Detail
+                label="Cancellation movement"
+                value={value.cancellation_movement_id}
+              />
               <Detail label="Notes" value={value.notes} />
               <Detail
-                label="Completed by"
+                label="Dispatched by"
                 value={value.completed_by_display_name}
               />
-              <Detail label="Completed at" value={value.completed_at} />
+              <Detail label="Dispatched at" value={value.completed_at} />
               <Detail
                 label="Cancelled by"
                 value={value.cancelled_by_display_name}
@@ -181,16 +203,16 @@ export function VendorReturnDetailDialog({
             {value.status_code === "PLANNED" ? (
               <section className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <p className="text-sm text-amber-950">
-                  Completing permanently removes {value.quantity}{" "}
-                  {value.uom_code} from WMS inventory and records its return to{" "}
-                  {value.vendor_name}. Confirm only after the physical handover
-                  is authorized and performed.
+                  {value.quantity} {value.uom_code} is staged as RETURN_PENDING
+                  at {value.return_dock_location_code || "the return dock"}.
+                  Dispatch permanently removes it from WMS inventory and records
+                  its handover to {value.vendor_name}.
                 </p>
                 {!action ? (
                   <div className="flex flex-wrap gap-2">
                     {capabilities.canComplete ? (
-                      <Button onClick={() => setAction("complete")}>
-                        <Undo2 className="size-4" /> Complete return
+                      <Button onClick={() => setAction("dispatch")}>
+                        <Undo2 className="size-4" /> Dispatch return
                       </Button>
                     ) : null}
                     {capabilities.canCancel ? (
@@ -202,16 +224,16 @@ export function VendorReturnDetailDialog({
                       </Button>
                     ) : null}
                   </div>
-                ) : action === "complete" ? (
+                ) : action === "dispatch" ? (
                   <div className="flex flex-wrap gap-2">
                     <Button
                       disabled={busy || !value.source_balance_version_no}
-                      onClick={() => complete.mutate()}
+                      onClick={() => dispatch.mutate()}
                     >
-                      {complete.isPending ? (
+                      {dispatch.isPending ? (
                         <LoaderCircle className="size-4 animate-spin" />
                       ) : null}
-                      Confirm vendor return
+                      Confirm dispatch
                     </Button>
                     <Button
                       variant="secondary"
@@ -252,12 +274,12 @@ export function VendorReturnDetailDialog({
                     </div>
                   </div>
                 )}
-                {complete.error || cancel.error ? (
+                {dispatch.error || cancel.error ? (
                   <p
                     role="alert"
                     className="rounded-lg bg-rose-50 p-3 text-sm text-rose-900"
                   >
-                    {(complete.error ?? cancel.error)?.message}
+                    {(dispatch.error ?? cancel.error)?.message}
                   </p>
                 ) : null}
               </section>

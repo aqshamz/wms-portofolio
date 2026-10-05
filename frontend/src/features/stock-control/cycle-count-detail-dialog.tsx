@@ -38,6 +38,8 @@ export function CycleCountDetailDialog({
     queryFn: () => getCycleCount(cycleCountId),
   });
   const row = count.data;
+  const documentLabel =
+    row?.count_type_code === "GRAND" ? "Grand stock opname" : "Cycle count";
   const countable = useMemo(
     () =>
       row?.lines.filter(
@@ -60,7 +62,7 @@ export function CycleCountDetailDialog({
   const canApprove = hasApprovalPermission && !isCreator;
   const update = useMutation({
     mutationFn: async (action: "count" | "approve" | "reject" | "cancel") => {
-      if (!row) throw new Error("Cycle count is unavailable.");
+      if (!row) throw new Error(`${documentLabel} is unavailable.`);
       if (action === "count") {
         const lines = countable
           .filter((line) => quantities[line.cycle_count_line_id]?.trim())
@@ -94,14 +96,14 @@ export function CycleCountDetailDialog({
       setSelected([]);
       setQuantities({});
       setReason("");
-      toast.success("Cycle count updated.");
+      toast.success(`${documentLabel} updated.`);
     },
     onError: (error) => toast.error(error.message),
   });
   return (
     <OperationDialog
       title={cycleCountId}
-      description="Blind count, recount, variance review and posting audit."
+      description={`${documentLabel}: blind count, recount, variance review and posting audit.`}
       busy={update.isPending}
       onOpenChange={onOpenChange}
       closeLabel="Close cycle count details"
@@ -118,6 +120,7 @@ export function CycleCountDetailDialog({
         <div className="space-y-5">
           <section className="grid gap-4 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-3">
             <Info label="Status" value={row.status_code} />
+            <Info label="Count type" value={documentLabel} />
             <Info label="Business date" value={row.business_date} />
             <Info label="Tolerance" value={row.tolerance_quantity} />
             <Info label="Owner" value={row.owner_name} />

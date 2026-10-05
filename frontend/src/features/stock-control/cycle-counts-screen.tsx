@@ -26,6 +26,8 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { listCycleCounts, stockControlKeys } from "./stock-control-api";
 import { CycleCountCreateDialog } from "./cycle-count-create-dialog";
 import { CycleCountDetailDialog } from "./cycle-count-detail-dialog";
+import { GrandStockOpnameCreateDialog } from "./grand-stock-opname-create-dialog";
+import type { CycleCountFilters } from "./stock-control-types";
 
 const warehouseFilter = {
   search: "",
@@ -42,7 +44,13 @@ const statuses = [
   { value: "POSTED", label: "Posted" },
   { value: "CANCELLED", label: "Cancelled" },
 ];
-export function CycleCountsScreen({ timezone }: { timezone: string }) {
+export function CycleCountsScreen({
+  timezone,
+  countType = "CYCLE",
+}: {
+  timezone: string;
+  countType?: CycleCountFilters["countType"];
+}) {
   const { can } = useAuth();
   const [filters, setFilters] = useQueryStates({
     warehouse: parseAsString.withDefault(""),
@@ -82,6 +90,7 @@ export function CycleCountsScreen({ timezone }: { timezone: string }) {
   const request = {
     ownerId: filters.owner,
     warehouseId: filters.warehouse,
+    countType,
     status: filters.status,
     search: filters.search,
     page: Math.max(1, filters.page),
@@ -94,6 +103,9 @@ export function CycleCountsScreen({ timezone }: { timezone: string }) {
   });
   const page = Math.max(1, filters.page);
   const totalPages = counts.data?.total_pages ?? 0;
+  const isGrand = countType === "GRAND";
+  const singularLabel = isGrand ? "grand stock opname" : "cycle count";
+  const pluralLabel = isGrand ? "grand stock opnames" : "cycle counts";
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -104,9 +116,13 @@ export function CycleCountsScreen({ timezone }: { timezone: string }) {
               <ClipboardCheck className="size-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Cycle counts</h1>
+              <h1 className="text-2xl font-bold">
+                {isGrand ? "Grand stock opname" : "Cycle counts"}
+              </h1>
               <p className="mt-1 text-sm text-slate-600">
-                Blind physical counts, recounts and approved variance posting.
+                {isGrand
+                  ? "Full blind stock counts for one warehouse and served customer."
+                  : "Blind physical counts, recounts and approved variance posting."}
               </p>
             </div>
           </div>
@@ -116,14 +132,14 @@ export function CycleCountsScreen({ timezone }: { timezone: string }) {
             disabled={!owner || !warehouse}
             onClick={() => void setFilters({ create: "true" })}
           >
-            <Plus className="size-4" /> Create cycle count
+            <Plus className="size-4" /> Create {singularLabel}
           </Button>
         ) : null}
       </header>
       <section className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-950">
-        Counts are blind until review. Variances outside tolerance require a
-        second count. Approval posts only selected lines; matching lines create
-        no inventory movement.
+        {isGrand
+          ? "Each document snapshots every positive balance for one served owner in active STORAGE and PICK_FACE locations. Operational locations such as receiving, QC, quarantine and docks remain outside the count."
+          : "Counts are blind until review. Variances outside tolerance require a second count. Approval posts only selected lines; matching lines create no inventory movement."}
       </section>
       <Panel className="overflow-hidden">
         <form
@@ -134,7 +150,7 @@ export function CycleCountsScreen({ timezone }: { timezone: string }) {
           }}
         >
           <Select
-            ariaLabel="Cycle count warehouse"
+            ariaLabel={`${isGrand ? "Grand stock opname" : "Cycle count"} warehouse`}
             value={filters.warehouse}
             options={(warehouses.data?.items ?? []).map((entry) => ({
               value: entry.warehouse_id,
@@ -151,7 +167,7 @@ export function CycleCountsScreen({ timezone }: { timezone: string }) {
             }
           />
           <Select
-            ariaLabel="Cycle count owner"
+            ariaLabel={`${isGrand ? "Grand stock opname" : "Cycle count"} owner`}
             value={filters.owner}
             options={owners.map((entry) => ({
               value: entry.owner_id,
@@ -164,7 +180,7 @@ export function CycleCountsScreen({ timezone }: { timezone: string }) {
             }
           />
           <Select
-            ariaLabel="Cycle count status"
+            ariaLabel={`${isGrand ? "Grand stock opname" : "Cycle count"} status`}
             value={filters.status}
             options={statuses}
             onValueChange={(status) => void setFilters({ status, page: 1 })}
@@ -189,9 +205,9 @@ export function CycleCountsScreen({ timezone }: { timezone: string }) {
         ) : !owner || !warehouse ? (
           <Empty text="Select a warehouse and owner." />
         ) : counts.isPending ? (
-          <Empty text="Loading cycle counts…" />
+          <Empty text={`Loading ${pluralLabel}…`} />
         ) : !counts.data?.items.length ? (
-          <Empty text="No cycle counts match this scope." />
+          <Empty text={`No ${pluralLabel} match this scope.`} />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
@@ -253,7 +269,7 @@ export function CycleCountsScreen({ timezone }: { timezone: string }) {
         {counts.data && counts.data.total_items > 0 ? (
           <footer className="flex flex-col gap-3 border-t border-slate-200 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
             <p className="text-slate-600">
-              {counts.data.total_items} cycle counts · page {page} of{" "}
+              {counts.data.total_items} {pluralLabel} · page {page} of{" "}
               {Math.max(1, totalPages)}
             </p>
             <div className="flex gap-2">
@@ -278,14 +294,27 @@ export function CycleCountsScreen({ timezone }: { timezone: string }) {
         ) : null}
       </Panel>
       {filters.create && owner && warehouse ? (
-        <CycleCountCreateDialog
-          ownerId={owner.owner_id}
-          warehouseId={warehouse.warehouse_id}
-          timezone={timezone}
-          onOpenChange={(open) => {
-            if (!open) void setFilters({ create: "" });
-          }}
-        />
+        isGrand ? (
+          <GrandStockOpnameCreateDialog
+            ownerId={owner.owner_id}
+            ownerName={`${owner.owner_name} (${owner.owner_code})`}
+            warehouseId={warehouse.warehouse_id}
+            warehouseName={`${warehouse.name} (${warehouse.code})`}
+            timezone={timezone}
+            onOpenChange={(open) => {
+              if (!open) void setFilters({ create: "" });
+            }}
+          />
+        ) : (
+          <CycleCountCreateDialog
+            ownerId={owner.owner_id}
+            warehouseId={warehouse.warehouse_id}
+            timezone={timezone}
+            onOpenChange={(open) => {
+              if (!open) void setFilters({ create: "" });
+            }}
+          />
+        )
       ) : null}
       {filters.count ? (
         <CycleCountDetailDialog

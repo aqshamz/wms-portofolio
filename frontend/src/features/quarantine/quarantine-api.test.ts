@@ -3,6 +3,7 @@ import { apiRequest } from "@/lib/api/client";
 import {
   createDisposition,
   listDispositionTypes,
+  listQuarantineReturnDocks,
   quarantineListPath,
   quarantineTargetPath,
 } from "./quarantine-api";
@@ -32,6 +33,14 @@ describe("quarantine requests", () => {
     expect(apiRequest).toHaveBeenCalledWith(
       "/api/v1/inbound/quarantine-disposition-types?active=true",
     );
+    await listQuarantineReturnDocks("Q/1", {
+      search: " DOCK ",
+      page: 1,
+      pageSize: 20,
+    });
+    expect(apiRequest).toHaveBeenLastCalledWith(
+      "/api/v1/inbound/quarantine-cases/Q%2F1/return-docks?page=1&page_size=20&search=DOCK",
+    );
   });
   it("posts a decision with both optimistic versions", async () => {
     const body = {
@@ -41,6 +50,7 @@ describe("quarantine requests", () => {
       disposition_qty: "2",
       business_date: "2026-09-17",
       decided_at: "2026-09-17T03:00:00.000Z",
+      target_location_id: "return-dock-1",
     };
     await createDisposition("Q/1", body);
     expect(apiRequest).toHaveBeenCalledWith(

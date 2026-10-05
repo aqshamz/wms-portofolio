@@ -97,7 +97,7 @@ it("lists scoped returns with their vendor and opens detail", async () => {
     await screen.findAllByText(testVendorReturn.vendor_return_id),
   ).toHaveLength(2);
   expect(screen.getByText(testVendorReturn.vendor_name)).toBeInTheDocument();
-  expect(screen.getByText(/Source Vendor · QC-AREA/)).toBeInTheDocument();
+  expect(screen.getByText(/Source Vendor · RETURN-DOCK/)).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "View" }));
   expect(
     await screen.findByText(`Detail ${testVendorReturn.vendor_return_id}`),

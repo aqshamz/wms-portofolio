@@ -33,6 +33,13 @@ export interface VendorReturn {
   source_location_code: string;
   source_inventory_status_id: string;
   source_inventory_status_code: string;
+  return_dock_location_id?: string | null;
+  return_dock_location_code?: string;
+  return_pending_status_id?: string | null;
+  return_pending_status_code?: string;
+  staged_balance_id?: string | null;
+  staging_movement_id?: string | null;
+  cancellation_movement_id?: string | null;
   quantity: string;
   uom_id: string;
   uom_code: string;
@@ -71,6 +78,7 @@ export interface VendorReturnCapabilities {
 }
 
 export function vendorReturnLabel(status: string) {
+  if (status === "COMPLETED") return "Dispatched";
   return status
     .toLowerCase()
     .replaceAll("_", " ")

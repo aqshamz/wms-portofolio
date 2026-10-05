@@ -19,6 +19,8 @@ export const quarantineKeys = {
   types: ["quarantine-disposition-types", "active"] as const,
   targets: (id: string, filters: QuarantineLookupFilters) =>
     ["quarantine-cases", "targets", id, filters] as const,
+  returnDocks: (id: string, filters: QuarantineLookupFilters) =>
+    ["quarantine-cases", "return-docks", id, filters] as const,
 };
 export function quarantineListPath(filters: QuarantineFilters) {
   const query = new URLSearchParams({
@@ -57,6 +59,19 @@ export const listQuarantineTargets = (
   apiRequest<PaginatedData<QuarantineTarget>>(
     quarantineTargetPath(id, filters),
   );
+export const listQuarantineReturnDocks = (
+  id: string,
+  filters: QuarantineLookupFilters,
+) => {
+  const query = new URLSearchParams({
+    page: String(filters.page),
+    page_size: String(filters.pageSize),
+  });
+  if (filters.search.trim()) query.set("search", filters.search.trim());
+  return apiRequest<PaginatedData<QuarantineTarget>>(
+    `${basePath}/${encodeURIComponent(id)}/return-docks?${query}`,
+  );
+};
 export const createDisposition = (id: string, body: DispositionRequest) =>
   apiRequest<QuarantineCase>(
     `${basePath}/${encodeURIComponent(id)}/dispositions`,
