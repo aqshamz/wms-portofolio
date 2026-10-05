@@ -68,6 +68,8 @@ func main() {
 		{Version: 17, Name: "replenishment tasks", Up: stockcontrolrepository.MigrateReplenishments},
 		{Version: 18, Name: "inventory adjustment approvals", Up: stockcontrolrepository.MigrateInventoryAdjustments},
 		{Version: 19, Name: "multi-line inventory adjustments", Up: stockcontrolrepository.MigrateInventoryAdjustmentLines},
+		{Version: 20, Name: "cycle count documents", Up: stockcontrolrepository.MigrateCycleCounts},
+		{Version: 21, Name: "warehouse transfer documents", Up: stockcontrolrepository.MigrateWarehouseTransfers},
 	}); err != nil {
 		log.Fatalf("apply database migrations: %v", err)
 	}
@@ -84,6 +86,11 @@ func main() {
 	}
 	if err := operationalService.SeedOperational(context.Background()); err != nil {
 		log.Fatalf("seed operational configuration: %v", err)
+	}
+	if err := authrepository.NewRolePermissionRepository(db).EnsureByCode(
+		context.Background(), "WHADMIN", middleware.PermissionInventoryCountApprove,
+	); err != nil {
+		log.Fatalf("seed warehouse supervisor cycle-count approval: %v", err)
 	}
 	operationalController := mastercontroller.NewOperationalController(operationalService)
 	if err := inboundrepository.SeedReferenceData(db); err != nil {

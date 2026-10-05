@@ -84,11 +84,14 @@ func (s *WarehouseService) Get(ctx context.Context, id string) (dto.WarehouseRes
 
 func (s *WarehouseService) List(
 	ctx context.Context,
-	operatorID, search *string,
+	operatorID, ownerID, search *string,
 	active *bool,
 	page, pageSize int,
 ) (dto.PageResponse[dto.WarehouseResponse], error) {
 	if operatorID != nil && validateID(*operatorID) != nil {
+		return dto.PageResponse[dto.WarehouseResponse]{}, ErrInvalidInput
+	}
+	if ownerID != nil && validateID(*ownerID) != nil {
 		return dto.PageResponse[dto.WarehouseResponse]{}, ErrInvalidInput
 	}
 	if search != nil {
@@ -96,7 +99,7 @@ func (s *WarehouseService) List(
 		search = &value
 	}
 	rows, total, err := s.warehouses.List(
-		ctx, operatorID, search, active, pageSize, (page-1)*pageSize,
+		ctx, operatorID, ownerID, search, active, pageSize, (page-1)*pageSize,
 	)
 	if err != nil {
 		return dto.PageResponse[dto.WarehouseResponse]{}, err

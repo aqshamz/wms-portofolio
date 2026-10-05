@@ -37,6 +37,15 @@ func (r *InventoryScopeRepository) Allowed(ctx context.Context, accountID, owner
 	return count > 0, Error(err)
 }
 
+func (r *InventoryScopeRepository) WarehouseServesOwner(ctx context.Context, ownerID, warehouseID string) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Table("warehouse_owner wo").
+		Joins("JOIN warehouse w ON w.warehouse_id=wo.warehouse_id AND w.is_active").
+		Where("wo.owner_id=? AND wo.warehouse_id=? AND wo.is_active", ownerID, warehouseID).
+		Count(&count).Error
+	return count > 0, Error(err)
+}
+
 func (r *InventoryScopeRepository) ResourceScope(ctx context.Context, resource, id string) (string, string, error) {
 	queries := map[string]string{
 		"balance":       "SELECT owner_id::text, warehouse_id::text FROM inventory_balance WHERE balance_id=?",

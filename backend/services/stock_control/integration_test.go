@@ -21,6 +21,7 @@ import (
 	inventoryrepo "wms-api/repository/inventory"
 	masterrepo "wms-api/repository/master"
 	repository "wms-api/repository/stock_control"
+	"wms-api/requestscope"
 	inventory "wms-api/services/inventory"
 )
 
@@ -73,6 +74,8 @@ func testStockControl(t *testing.T, fresh bool) {
 	okay(t, repository.MigrateReplenishments(tx))
 	okay(t, repository.MigrateInventoryAdjustments(tx))
 	okay(t, repository.MigrateInventoryAdjustmentLines(tx))
+	okay(t, repository.MigrateCycleCounts(tx))
+	okay(t, repository.MigrateWarehouseTransfers(tx))
 	ctx := context.Background()
 	inventoryModule := master.AppModule{Code: "INVENTORY", Name: "Inventory", IsActive: true}
 	okay(t, tx.Where("code=?", inventoryModule.Code).FirstOrCreate(&inventoryModule).Error)
@@ -83,6 +86,18 @@ func testStockControl(t *testing.T, fresh bool) {
 		{DocumentTypeID: adjustmentType.ID, Code: "PARTIALLY_POSTED", Name: "Partially posted", IsActive: true},
 		{DocumentTypeID: adjustmentType.ID, Code: "POSTED", Name: "Posted", IsFinal: true, IsActive: true},
 		{DocumentTypeID: adjustmentType.ID, Code: "CANCELLED", Name: "Cancelled", IsFinal: true, IsCancelled: true, IsActive: true},
+	} {
+		okay(t, tx.Where("document_type_id=? AND code=?", status.DocumentTypeID, status.Code).FirstOrCreate(&status).Error)
+	}
+	stockCountType := master.DocumentType{Code: "STOCK_COUNT", Name: "Stock count", ModuleCode: "INVENTORY", IsActive: true}
+	okay(t, tx.Where("code=?", stockCountType.Code).FirstOrCreate(&stockCountType).Error)
+	for _, status := range []master.DocumentStatus{
+		{DocumentTypeID: stockCountType.ID, Code: "DRAFT", Name: "Draft", IsInitial: true, IsActive: true},
+		{DocumentTypeID: stockCountType.ID, Code: "COUNTING", Name: "Counting", IsActive: true},
+		{DocumentTypeID: stockCountType.ID, Code: "REVIEW", Name: "Review", IsActive: true},
+		{DocumentTypeID: stockCountType.ID, Code: "PARTIALLY_POSTED", Name: "Partially posted", IsActive: true},
+		{DocumentTypeID: stockCountType.ID, Code: "POSTED", Name: "Posted", IsFinal: true, IsActive: true},
+		{DocumentTypeID: stockCountType.ID, Code: "CANCELLED", Name: "Cancelled", IsFinal: true, IsCancelled: true, IsActive: true},
 	} {
 		okay(t, tx.Where("document_type_id=? AND code=?", status.DocumentTypeID, status.Code).FirstOrCreate(&status).Error)
 	}
@@ -139,11 +154,13 @@ func testStockControl(t *testing.T, fresh bool) {
 	pickFace := master.WarehouseLocation{WarehouseID: wh1.ID, ZoneID: z1.ID, LocationTypeID: pickType.ID, Code: "P", IsPickFace: true}
 	receiving := master.WarehouseLocation{WarehouseID: wh1.ID, ZoneID: z1.ID, LocationTypeID: receivingType.ID, Code: "R"}
 	target := master.WarehouseLocation{WarehouseID: wh2.ID, ZoneID: z2.ID, LocationTypeID: storageType.ID, Code: "C"}
+	targetReceiving := master.WarehouseLocation{WarehouseID: wh2.ID, ZoneID: z2.ID, LocationTypeID: receivingType.ID, Code: "R2"}
 	okay(t, tx.Create(&loc1).Error)
 	okay(t, tx.Create(&loc2).Error)
 	okay(t, tx.Create(&pickFace).Error)
 	okay(t, tx.Create(&receiving).Error)
 	okay(t, tx.Create(&target).Error)
+	okay(t, tx.Create(&targetReceiving).Error)
 	available := master.InventoryStatus{Code: "AVAILABLE", Name: "Available", IsAllocatable: true, IsPickable: true, IsActive: true}
 	hold := master.InventoryStatus{Code: "H" + suffix, Name: "Hold"}
 	okay(t, tx.Where("code=?", available.Code).FirstOrCreate(&available).Error)
@@ -240,12 +257,35 @@ func testStockControl(t *testing.T, fresh bool) {
 		t.Fatal("no variance")
 	}
 	transferBase := dto.CommandBase{OperationKey: "transfer-" + suffix, BusinessDate: "2026-09-07", SourceDocumentID: "TRANSFER-" + suffix}
-	transferred, err := service.WarehouseTransfer(ctx, dto.WarehouseTransferRequest{CommandBase: transferBase, SourceBalanceID: counted.SourceBalance.ID, TargetWarehouseID: wh2.ID, TargetLocationID: target.ID, TargetInventoryStatusID: available.ID, Quantity: "2", ExpectedVersion: counted.SourceBalance.VersionNo}, account.ID)
+	nonAvailableTransfer := transferBase
+	nonAvailableTransfer.OperationKey = "transfer-non-available-" + suffix
+	_, err = service.WarehouseTransfer(ctx, dto.WarehouseTransferRequest{CommandBase: nonAvailableTransfer, SourceBalanceID: counted.SourceBalance.ID, TargetWarehouseID: wh2.ID, TargetLocationID: target.ID, TargetInventoryStatusID: hold.ID, Quantity: "1", ExpectedVersion: counted.SourceBalance.VersionNo}, account.ID)
+	wants(t, err, ErrInvalidInput)
+	nonStorageTransfer := transferBase
+	nonStorageTransfer.OperationKey = "transfer-non-storage-" + suffix
+	_, err = service.WarehouseTransfer(ctx, dto.WarehouseTransferRequest{CommandBase: nonStorageTransfer, SourceBalanceID: moved.SourceBalance.ID, TargetWarehouseID: wh2.ID, TargetLocationID: targetReceiving.ID, TargetInventoryStatusID: available.ID, Quantity: "1", ExpectedVersion: moved.SourceBalance.VersionNo}, account.ID)
+	wants(t, err, ErrInvalidInput)
+	invalidTransfer := transferBase
+	invalidTransfer.OperationKey = "transfer-status-" + suffix
+	_, err = service.WarehouseTransfer(ctx, dto.WarehouseTransferRequest{CommandBase: invalidTransfer, SourceBalanceID: moved.SourceBalance.ID, TargetWarehouseID: wh2.ID, TargetLocationID: target.ID, TargetInventoryStatusID: hold.ID, Quantity: "2", ExpectedVersion: moved.SourceBalance.VersionNo}, account.ID)
+	wants(t, err, ErrInvalidInput)
+	unservedWarehouse := master.Warehouse{OperatorID: owner.ID, Code: "W3_" + suffix, Name: "Unserved", TimezoneName: "Asia/Jakarta"}
+	okay(t, tx.Create(&unservedWarehouse).Error)
+	unservedZone := master.WarehouseZone{WarehouseID: unservedWarehouse.ID, Code: "Z3", Name: "Zone 3"}
+	okay(t, tx.Create(&unservedZone).Error)
+	unservedLocation := master.WarehouseLocation{WarehouseID: unservedWarehouse.ID, ZoneID: unservedZone.ID, LocationTypeID: storageType.ID, Code: "D"}
+	okay(t, tx.Create(&unservedLocation).Error)
+	unrestrictedCtx := requestscope.WithPrincipal(ctx, requestscope.Principal{AccountID: account.ID, Unrestricted: true})
+	unservedTransfer := transferBase
+	unservedTransfer.OperationKey = "transfer-unserved-" + suffix
+	_, err = service.WarehouseTransfer(unrestrictedCtx, dto.WarehouseTransferRequest{CommandBase: unservedTransfer, SourceBalanceID: moved.SourceBalance.ID, TargetWarehouseID: unservedWarehouse.ID, TargetLocationID: unservedLocation.ID, TargetInventoryStatusID: available.ID, Quantity: "1", ExpectedVersion: moved.SourceBalance.VersionNo}, account.ID)
+	wants(t, err, ErrInvalidInput)
+	transferred, err := service.WarehouseTransfer(ctx, dto.WarehouseTransferRequest{CommandBase: transferBase, SourceBalanceID: moved.SourceBalance.ID, TargetWarehouseID: wh2.ID, TargetLocationID: target.ID, TargetInventoryStatusID: available.ID, Quantity: "2", ExpectedVersion: moved.SourceBalance.VersionNo}, account.ID)
 	okay(t, err)
-	if len(transferred.Movements) != 2 || transferred.SourceBalance.OnHandQty != "1.000000" || transferred.DestinationBalance.OnHandQty != "2.000000" {
+	if len(transferred.Movements) != 2 || transferred.SourceBalance.OnHandQty != "4.000000" || transferred.DestinationBalance.OnHandQty != "2.000000" {
 		t.Fatal("warehouse transfer")
 	}
-	transferReplay, err := service.WarehouseTransfer(ctx, dto.WarehouseTransferRequest{CommandBase: transferBase, SourceBalanceID: counted.SourceBalance.ID, TargetWarehouseID: wh2.ID, TargetLocationID: target.ID, TargetInventoryStatusID: available.ID, Quantity: "2", ExpectedVersion: counted.SourceBalance.VersionNo}, account.ID)
+	transferReplay, err := service.WarehouseTransfer(ctx, dto.WarehouseTransferRequest{CommandBase: transferBase, SourceBalanceID: moved.SourceBalance.ID, TargetWarehouseID: wh2.ID, TargetLocationID: target.ID, TargetInventoryStatusID: available.ID, Quantity: "2", ExpectedVersion: moved.SourceBalance.VersionNo}, account.ID)
 	okay(t, err)
 	if !transferReplay.IdempotentReplay {
 		t.Fatal("transfer replay")
@@ -324,5 +364,42 @@ func testStockControl(t *testing.T, fresh bool) {
 	okay(t, tx.Where("balance_id=?", cancelTask.SourceBalanceID).Take(&reserved).Error)
 	if reserved.ReservedQty != "0.000000" {
 		t.Fatalf("cancelled reservation=%s", reserved.ReservedQty)
+	}
+
+	cycleBalanceOne, err := inv.GetBalance(ctx, cancelTask.SourceBalanceID)
+	okay(t, err)
+	cycleBalanceTwo, err := inv.GetBalance(ctx, statusResult.SourceBalance.ID)
+	okay(t, err)
+	cycle, err := service.CreateCycleCount(ctx, dto.CreateCycleCountRequest{BusinessDate: "2026-09-07", ToleranceQty: "0", BalanceIDs: []string{cycleBalanceOne.ID, cycleBalanceTwo.ID}}, account.ID)
+	okay(t, err)
+	if cycle.StatusCode != "DRAFT" || cycle.Lines[0].SystemQty != nil {
+		t.Fatalf("cycle count must start blind: %+v", cycle)
+	}
+	secondCount, _ := new(big.Rat).SetString(cycleBalanceTwo.OnHandQty)
+	secondCount.Sub(secondCount, big.NewRat(1, 1))
+	cycle, err = service.RecordCycleCount(ctx, cycle.ID, dto.RecordCycleCountRequest{ExpectedVersion: cycle.VersionNo, Lines: []dto.CycleCountEntryRequest{
+		{LineID: cycle.Lines[0].ID, CountedQty: cycleBalanceOne.OnHandQty},
+		{LineID: cycle.Lines[1].ID, CountedQty: secondCount.FloatString(6)},
+	}}, account.ID)
+	okay(t, err)
+	if cycle.StatusCode != "COUNTING" || cycle.RecountLines != 1 || cycle.Lines[0].SystemQty != nil {
+		t.Fatalf("cycle count recount state: %+v", cycle)
+	}
+	cycle, err = service.RecordCycleCount(ctx, cycle.ID, dto.RecordCycleCountRequest{ExpectedVersion: cycle.VersionNo, Lines: []dto.CycleCountEntryRequest{{LineID: cycle.Lines[1].ID, CountedQty: secondCount.FloatString(6)}}}, account.ID)
+	okay(t, err)
+	if cycle.StatusCode != "REVIEW" || cycle.Lines[0].SystemQty == nil {
+		t.Fatalf("cycle count review state: %+v", cycle)
+	}
+	_, err = service.ApproveCycleCount(ctx, cycle.ID, dto.CycleCountDecisionRequest{ExpectedVersion: cycle.VersionNo, LineIDs: []string{cycle.Lines[0].ID}}, account.ID)
+	wants(t, err, ErrInvalidInput)
+	cycle, err = service.ApproveCycleCount(ctx, cycle.ID, dto.CycleCountDecisionRequest{ExpectedVersion: cycle.VersionNo, LineIDs: []string{cycle.Lines[0].ID}}, approver.ID)
+	okay(t, err)
+	if cycle.StatusCode != "PARTIALLY_POSTED" {
+		t.Fatalf("cycle count partial approval: %+v", cycle)
+	}
+	cycle, err = service.ApproveCycleCount(ctx, cycle.ID, dto.CycleCountDecisionRequest{ExpectedVersion: cycle.VersionNo, LineIDs: []string{cycle.Lines[1].ID}}, approver.ID)
+	okay(t, err)
+	if cycle.StatusCode != "POSTED" || cycle.FinalLines != 2 || cycle.Lines[1].InventoryMovementID == nil {
+		t.Fatalf("cycle count completion: %+v", cycle)
 	}
 }

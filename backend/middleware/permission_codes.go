@@ -22,7 +22,9 @@ const (
 	PermissionInventoryAdjust        = "INVENTORY.ADJUST"
 	PermissionInventoryAdjustApprove = "INVENTORY.ADJUST_APPROVE"
 	PermissionInventoryCount         = "INVENTORY.COUNT"
+	PermissionInventoryCountApprove  = "INVENTORY.COUNT_APPROVE"
 	PermissionInventoryTransfer      = "INVENTORY.TRANSFER"
+	PermissionInventoryTransferForce = "INVENTORY.TRANSFER_FORCE"
 
 	PermissionOutboundRead           = "OUTBOUND.READ"
 	PermissionOutboundPlan           = "OUTBOUND.PLAN"

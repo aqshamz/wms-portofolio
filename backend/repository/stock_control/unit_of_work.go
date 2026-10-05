@@ -13,6 +13,8 @@ type Repositories struct {
 	Scope          *inventory.InventoryScopeRepository
 	Replenishments *ReplenishmentTaskRepository
 	Adjustments    *InventoryAdjustmentRepository
+	CycleCounts    *CycleCountRepository
+	Transfers      *WarehouseTransferRepository
 }
 
 func NewRepositories(db *gorm.DB) *Repositories {
@@ -23,6 +25,8 @@ func NewRepositories(db *gorm.DB) *Repositories {
 		Scope:          inventory.NewInventoryScopeRepository(db),
 		Replenishments: NewReplenishmentTaskRepository(db),
 		Adjustments:    NewInventoryAdjustmentRepository(db),
+		CycleCounts:    NewCycleCountRepository(db),
+		Transfers:      NewWarehouseTransferRepository(db),
 	}
 }
 func (r *Repositories) Transaction(ctx context.Context, work func(*Repositories, *inventory.Repositories) error) error {

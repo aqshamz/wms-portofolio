@@ -34,7 +34,7 @@ func (s *Service) studyOrganization(ctx context.Context, code string) (model.Org
 }
 
 func (s *Service) studyWarehouse(ctx context.Context, operatorID, code string) (model.Warehouse, error) {
-	rows, _, err := s.repositories.Warehouse.List(ctx, &operatorID, &code, nil, 100, 0)
+	rows, _, err := s.repositories.Warehouse.List(ctx, &operatorID, nil, &code, nil, 100, 0)
 	if err != nil {
 		return model.Warehouse{}, studyDataError("warehouse "+code, err)
 	}

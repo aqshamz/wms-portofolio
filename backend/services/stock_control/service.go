@@ -304,6 +304,19 @@ func (s *Service) WarehouseTransfer(ctx context.Context, q dto.WarehouseTransfer
 		if err := authorize(ctx, r, actor, source); err != nil {
 			return err
 		}
+		if source.InventoryStatusCode != "AVAILABLE" {
+			return invalid("warehouse transfers are limited to AVAILABLE inventory")
+		}
+		if err := validateStorageLocation(ctx, ir, source.WarehouseID, source.LocationID, "warehouse transfer source"); err != nil {
+			return err
+		}
+		servesOwner, err := r.Scope.WarehouseServesOwner(ctx, source.OwnerID, q.TargetWarehouseID)
+		if err != nil {
+			return err
+		}
+		if !servesOwner {
+			return invalid("target warehouse does not actively serve the inventory owner")
+		}
 		allowed, err := r.Scope.Allowed(ctx, actor, source.OwnerID, q.TargetWarehouseID)
 		if err != nil {
 			return err
@@ -313,6 +326,12 @@ func (s *Service) WarehouseTransfer(ctx context.Context, q dto.WarehouseTransfer
 		}
 		if source.WarehouseID == q.TargetWarehouseID {
 			return invalid("source and target warehouses must differ")
+		}
+		if err := validateStorageLocation(ctx, ir, q.TargetWarehouseID, q.TargetLocationID, "warehouse transfer target"); err != nil {
+			return err
+		}
+		if q.TargetInventoryStatusID != source.InventoryStatusID {
+			return invalid("warehouse transfer must preserve the source inventory status")
 		}
 		if source.HandlingUnitID != nil {
 			return invalid("direct warehouse transfer of a handling unit is not supported")

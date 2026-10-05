@@ -56,7 +56,7 @@ func (r *WarehouseRepository) FindByID(ctx context.Context, id string) (Warehous
 
 func (r *WarehouseRepository) List(
 	ctx context.Context,
-	operatorID, search *string,
+	operatorID, ownerID, search *string,
 	active *bool,
 	limit, offset int,
 ) ([]WarehouseListItem, int64, error) {
@@ -71,6 +71,10 @@ func (r *WarehouseRepository) List(
 	query = applyWarehouseAccess(ctx, query, "w.warehouse_id")
 	if operatorID != nil {
 		query = query.Where("w.operator_id = ?", *operatorID)
+	}
+	if ownerID != nil {
+		query = query.Joins("JOIN warehouse_owner wo ON wo.warehouse_id = w.warehouse_id AND wo.owner_id = ? AND wo.is_active", *ownerID)
+		query = applyOwnerAccess(ctx, query, "wo.owner_id")
 	}
 	if search != nil {
 		query = query.Where("w.code ILIKE ? OR w.name ILIKE ?", "%"+*search+"%", "%"+*search+"%")

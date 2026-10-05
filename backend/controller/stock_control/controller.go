@@ -98,6 +98,39 @@ func adjustmentListFilter(c *gin.Context) (repository.AdjustmentFilter, bool) {
 	return repository.AdjustmentFilter{OwnerID: c.Query("owner_id"), WarehouseID: c.Query("warehouse_id"), StatusCode: c.Query("status_code"), Search: c.Query("search"), Page: page, PageSize: size}, true
 }
 
+func cycleCountListFilter(c *gin.Context) (repository.CycleCountFilter, bool) {
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil {
+		utils.Failure(c, 400, "invalid page", nil)
+		return repository.CycleCountFilter{}, false
+	}
+	size, err := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if err != nil {
+		utils.Failure(c, 400, "invalid page_size", nil)
+		return repository.CycleCountFilter{}, false
+	}
+	allowed := map[string]bool{"owner_id": true, "warehouse_id": true, "status_code": true, "search": true, "page": true, "page_size": true}
+	for key, values := range c.Request.URL.Query() {
+		if !allowed[key] || len(values) != 1 {
+			utils.Failure(c, 400, "unsupported or repeated query parameter", nil)
+			return repository.CycleCountFilter{}, false
+		}
+	}
+	return repository.CycleCountFilter{OwnerID: c.Query("owner_id"), WarehouseID: c.Query("warehouse_id"), StatusCode: c.Query("status_code"), Search: c.Query("search"), Page: page, PageSize: size}, true
+}
+
+func warehouseTransferListFilter(c *gin.Context) (repository.WarehouseTransferFilter, bool) {
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil { utils.Failure(c, 400, "invalid page", nil); return repository.WarehouseTransferFilter{}, false }
+	size, err := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if err != nil { utils.Failure(c, 400, "invalid page_size", nil); return repository.WarehouseTransferFilter{}, false }
+	allowed := map[string]bool{"owner_id": true, "warehouse_id": true, "side": true, "status_code": true, "search": true, "page": true, "page_size": true}
+	for key, values := range c.Request.URL.Query() {
+		if !allowed[key] || len(values) != 1 { utils.Failure(c, 400, "unsupported or repeated query parameter", nil); return repository.WarehouseTransferFilter{}, false }
+	}
+	return repository.WarehouseTransferFilter{OwnerID: c.Query("owner_id"), WarehouseID: c.Query("warehouse_id"), Side: c.Query("side"), StatusCode: c.Query("status_code"), Search: c.Query("search"), Page: page, PageSize: size}, true
+}
+
 func replenishmentTargetLookup(c *gin.Context) (string, int, int, bool) {
 	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if err != nil {
@@ -363,6 +396,87 @@ func (controller *Controller) CancelAdjustment(c *gin.Context) {
 	}
 	utils.Success(c, http.StatusOK, "inventory adjustment cancelled", response)
 }
+
+func (controller *Controller) ListCycleCounts(c *gin.Context) {
+	filter, ok := cycleCountListFilter(c)
+	if !ok {
+		return
+	}
+	response, err := controller.service.ListCycleCounts(c.Request.Context(), filter, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "cycle counts retrieved", response)
+}
+func (controller *Controller) GetCycleCount(c *gin.Context) {
+	response, err := controller.service.GetCycleCount(c.Request.Context(), c.Param("id"), actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "cycle count retrieved", response)
+}
+func (controller *Controller) CreateCycleCount(c *gin.Context) {
+	var request dto.CreateCycleCountRequest
+	if !bind(c, &request) {
+		return
+	}
+	response, err := controller.service.CreateCycleCount(c.Request.Context(), request, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusCreated, "cycle count created", response)
+}
+func (controller *Controller) RecordCycleCount(c *gin.Context) {
+	var request dto.RecordCycleCountRequest
+	if !bind(c, &request) {
+		return
+	}
+	response, err := controller.service.RecordCycleCount(c.Request.Context(), c.Param("id"), request, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "cycle count entries recorded", response)
+}
+func (controller *Controller) ApproveCycleCount(c *gin.Context) {
+	var request dto.CycleCountDecisionRequest
+	if !bind(c, &request) {
+		return
+	}
+	response, err := controller.service.ApproveCycleCount(c.Request.Context(), c.Param("id"), request, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "cycle count lines approved", response)
+}
+func (controller *Controller) RejectCycleCount(c *gin.Context) {
+	var request dto.RejectCycleCountRequest
+	if !bind(c, &request) {
+		return
+	}
+	response, err := controller.service.RejectCycleCount(c.Request.Context(), c.Param("id"), request, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "cycle count lines rejected", response)
+}
+func (controller *Controller) CancelCycleCount(c *gin.Context) {
+	var request dto.CancelCycleCountRequest
+	if !bind(c, &request) {
+		return
+	}
+	response, err := controller.service.CancelCycleCount(c.Request.Context(), c.Param("id"), request, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "cycle count cancelled", response)
+}
 func (controller *Controller) ReconcileCount(c *gin.Context) {
 	var q dto.StockCountReconcileRequest
 	if !bind(c, &q) {
@@ -386,6 +500,54 @@ func (controller *Controller) WarehouseTransfer(c *gin.Context) {
 		return
 	}
 	utils.Success(c, http.StatusCreated, "warehouse transfer posted", r)
+}
+
+func (controller *Controller) ListWarehouseTransfers(c *gin.Context) {
+	filter, ok := warehouseTransferListFilter(c); if !ok { return }
+	response, err := controller.service.ListWarehouseTransfers(c.Request.Context(), filter, actor(c))
+	if err != nil { fail(c, err); return }
+	utils.Success(c, http.StatusOK, "warehouse transfers retrieved", response)
+}
+func (controller *Controller) GetWarehouseTransfer(c *gin.Context) {
+	response, err := controller.service.GetWarehouseTransfer(c.Request.Context(), c.Param("id"), actor(c))
+	if err != nil { fail(c, err); return }
+	utils.Success(c, http.StatusOK, "warehouse transfer retrieved", response)
+}
+func (controller *Controller) CreateWarehouseTransfer(c *gin.Context) {
+	var request dto.CreateWarehouseTransferRequest; if !bind(c, &request) { return }
+	response, err := controller.service.CreateWarehouseTransfer(c.Request.Context(), request, actor(c))
+	if err != nil { fail(c, err); return }
+	utils.Success(c, http.StatusCreated, "warehouse transfer created", response)
+}
+func (controller *Controller) ApproveWarehouseTransfer(c *gin.Context) {
+	var request dto.WarehouseTransferTransitionRequest; if !bind(c, &request) { return }
+	response, err := controller.service.ApproveWarehouseTransfer(c.Request.Context(), c.Param("id"), request, actor(c))
+	if err != nil { fail(c, err); return }
+	utils.Success(c, http.StatusOK, "warehouse transfer approved", response)
+}
+func (controller *Controller) DispatchWarehouseTransfer(c *gin.Context) {
+	var request dto.WarehouseTransferTransitionRequest; if !bind(c, &request) { return }
+	response, err := controller.service.DispatchWarehouseTransfer(c.Request.Context(), c.Param("id"), request, actor(c))
+	if err != nil { fail(c, err); return }
+	utils.Success(c, http.StatusOK, "warehouse transfer dispatched", response)
+}
+func (controller *Controller) CancelWarehouseTransfer(c *gin.Context) {
+	var request dto.CancelWarehouseTransferRequest; if !bind(c, &request) { return }
+	response, err := controller.service.CancelWarehouseTransfer(c.Request.Context(), c.Param("id"), request, actor(c))
+	if err != nil { fail(c, err); return }
+	utils.Success(c, http.StatusOK, "warehouse transfer cancelled", response)
+}
+func (controller *Controller) ReceiveWarehouseTransfer(c *gin.Context) {
+	var request dto.ReceiveWarehouseTransferRequest; if !bind(c, &request) { return }
+	response, err := controller.service.ReceiveWarehouseTransfer(c.Request.Context(), c.Param("id"), request, actor(c))
+	if err != nil { fail(c, err); return }
+	utils.Success(c, http.StatusOK, "warehouse transfer received", response)
+}
+func (controller *Controller) PutawayWarehouseTransfer(c *gin.Context) {
+	var request dto.PutawayWarehouseTransferRequest; if !bind(c, &request) { return }
+	response, err := controller.service.PutawayWarehouseTransfer(c.Request.Context(), c.Param("id"), request, actor(c))
+	if err != nil { fail(c, err); return }
+	utils.Success(c, http.StatusOK, "warehouse transfer put away", response)
 }
 
 func (controller *Controller) ListReasons(c *gin.Context) {

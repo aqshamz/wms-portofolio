@@ -8,10 +8,10 @@ balance changes plus immutable movement rows atomically. Commands derive their
 owner and warehouse from the source balance and enforce the authenticated
 account's owner/warehouse grants; unrestricted superadmins retain full access.
 
-Internal moves, status changes, count reconciliations and immediate transfers
-are operational postings. Inventory adjustments are approval documents: a
-requester creates a DRAFT, a different account approves it, and only approval
-posts the inventory movement.
+Internal moves, status changes and immediate transfers are operational
+postings. Inventory adjustments and cycle counts are controlled documents: a
+requester records the work, a different account reviews it, and only approval
+posts an inventory correction.
 
 ## Endpoints
 
@@ -33,7 +33,21 @@ GET  /api/v1/stock-control/adjustments/:id
 POST /api/v1/stock-control/adjustments/:id/approve
 POST /api/v1/stock-control/adjustments/:id/reject
 POST /api/v1/stock-control/adjustments/:id/cancel
-POST /api/v1/stock-control/stock-count-reconciliations
+GET  /api/v1/stock-control/cycle-counts
+POST /api/v1/stock-control/cycle-counts
+GET  /api/v1/stock-control/cycle-counts/:id
+POST /api/v1/stock-control/cycle-counts/:id/count
+POST /api/v1/stock-control/cycle-counts/:id/approve
+POST /api/v1/stock-control/cycle-counts/:id/reject
+POST /api/v1/stock-control/cycle-counts/:id/cancel
+GET  /api/v1/stock-control/warehouse-transfer-documents
+POST /api/v1/stock-control/warehouse-transfer-documents
+GET  /api/v1/stock-control/warehouse-transfer-documents/:id
+POST /api/v1/stock-control/warehouse-transfer-documents/:id/approve
+POST /api/v1/stock-control/warehouse-transfer-documents/:id/dispatch
+POST /api/v1/stock-control/warehouse-transfer-documents/:id/cancel
+POST /api/v1/stock-control/warehouse-transfer-documents/:id/receive
+POST /api/v1/stock-control/warehouse-transfer-documents/:id/putaway
 POST /api/v1/stock-control/warehouse-transfers
 ```
 
@@ -191,29 +205,49 @@ mandatory `reason`. Cancel is restricted to the requester and cancels all
 remaining pending lines. Neither rejection nor cancellation reverses lines that
 were already posted.
 
-## Stock-count reconciliation
+## Cycle counts
 
-```json
-{
-  "operation_key": "count:20260907:0001",
-  "business_date": "2026-09-07",
-  "source_document_id": "COUNT-0001",
-  "reason_code": "COUNT_VARIANCE",
-  "notes": "Physical recount confirmed",
-  "balance_id": "BAL-...",
-  "counted_qty": "9",
-  "expected_version": 4,
-  "serial_ids": []
-}
-```
+Create a document with a business date, absolute tolerance quantity, optional
+notes, and 1-100 distinct `balance_ids`. Creation requires
+`INVENTORY.COUNT`, captures immutable quantity and version snapshots, and is
+restricted to active, unlocked locations whose type is exactly `STORAGE`.
+All balances must belong to one owner and warehouse. The counter sees item and
+location identity but not the snapshot quantity or variance while the document
+is in `DRAFT` or `COUNTING`.
 
-The balance is locked and rechecked before comparison. A variance posts one
-`COUNT_CORRECTION` movement; no variance returns `no_variance: true` and no
-movement. A reason is required only when there is a variance. This immediate
-endpoint reconciles one balance; blind-count assignments and review approval
-belong to the later document workflow.
+Record any subset of pending lines through the `count` action using the
+document `expected_version` and entries containing `line_id`,
+`counted_quantity`, and optional notes. Every submission is retained as an
+immutable count attempt. A first count whose absolute variance exceeds the
+document tolerance requires a second count. Once all lines are counted and
+required recounts are complete, the document enters `REVIEW` and reveals its
+snapshots and variances.
+
+Approval requires `INVENTORY.COUNT_APPROVE`, must be performed by a different
+account, and accepts `expected_version` plus selected `line_ids`. Each
+selected variance is rechecked against the captured balance version and posts
+one `COUNT_CORRECTION` movement using reason `COUNT_VARIANCE`. A zero-variance
+line is finalized without a movement. Unselected lines remain pending in
+`PARTIALLY_POSTED`, so review can be completed in batches. Rejection also
+finalizes selected lines without changing stock. Cancellation is limited to the
+creator and affects only remaining lines.
+
+Serialized zero-variance lines can be finalized, but a serialized variance is
+rejected until it is resolved through serial reconciliation; the quantity
+ledger is never changed without matching serial state.
 
 ## Inter-warehouse transfer
+
+Normal transfers use `/warehouse-transfer-documents` and move through
+`DRAFT -> APPROVED -> IN_TRANSIT -> RECEIVED`. Dispatch posts `TRANSFER_OUT`.
+Destination receipt posts `TRANSFER_IN` into `PUTAWAY_PENDING` at an active
+receiving-capable location, and the final putaway action moves it to the stored
+STORAGE target as `AVAILABLE`. The source and target warehouses must both
+actively serve the inventory owner. Receipt and putaway use the destination
+account's warehouse scope.
+
+The legacy atomic endpoint below is an administrative exception guarded by
+`INVENTORY.TRANSFER_FORCE`; it is not used by the normal UI.
 
 ```json
 {
@@ -232,7 +266,10 @@ belong to the later document workflow.
 
 Source and target warehouses must differ and both must be assigned to the owner.
 The command atomically posts `TRANSFER_OUT` and `TRANSFER_IN`; either both commit
-or neither does. It models an immediate transfer, not an in-transit period.
+or neither does. Source stock must be `AVAILABLE`, both locations must be
+active, unlocked locations whose type is exactly `STORAGE`, and the target
+inventory status must equal the source status. It models an immediate transfer,
+not an in-transit period.
 Carrier, dispatch, receiving variance, partial receipts and approval use the
 existing transfer-order schema in a future document workflow. HU transfers are
 rejected; lot identity is preserved. Serialized units exit and re-enter state in

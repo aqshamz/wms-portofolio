@@ -148,6 +148,7 @@ func (controller *Controller) ListWarehouses(c *gin.Context) {
 	response, err := controller.warehouses.List(
 		c.Request.Context(),
 		optionalQuery(c.Query("operator_id")),
+		optionalQuery(c.Query("owner_id")),
 		optionalQuery(c.Query("search")),
 		active,
 		page,

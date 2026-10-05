@@ -104,7 +104,7 @@ func testCatalogPostgreSQL(t *testing.T, fresh bool) {
 	catalogOK(t, repository.NewWarehouseRepository(tx).Create(ctx, &otherWarehouse))
 	catalogOK(t, tx.Create(&model.AccountWarehouseAccess{AccountID: account.ID, WarehouseID: warehouse.ID}).Error)
 	warehouseRows, warehouseTotal, err := repository.NewWarehouseRepository(tx).List(
-		restrictedCtx, nil, nil, nil, 100, 0,
+		restrictedCtx, nil, nil, nil, nil, 100, 0,
 	)
 	catalogOK(t, err)
 	if warehouseTotal != 1 || len(warehouseRows) != 1 || warehouseRows[0].ID != warehouse.ID {

@@ -88,6 +88,16 @@ func TestPermissionAdministrationPostgreSQL(t *testing.T) {
 			t.Fatal("revoked permission is still present")
 		}
 	}
+	warehouseAdmin := authmodel.AppRole{Code: "WHADMIN", Name: "Warehouse Supervisor", IsActive: true}
+	authOK(t, tx.Create(&warehouseAdmin).Error)
+	rolePermissions := repository.NewRolePermissionRepository(tx)
+	authOK(t, rolePermissions.EnsureByCode(ctx, "WHADMIN", "INVENTORY.COUNT_APPROVE"))
+	authOK(t, rolePermissions.EnsureByCode(ctx, "WHADMIN", "INVENTORY.COUNT_APPROVE"))
+	grants, err := rolePermissions.List(ctx, warehouseAdmin.ID)
+	authOK(t, err)
+	if len(grants) != 1 || grants[0].Code != "INVENTORY.COUNT_APPROVE" {
+		t.Fatalf("warehouse supervisor cycle-count approval was not seeded once: %+v", grants)
+	}
 	// The full-access role is additive and idempotent, not a username bypass.
 	authOK(t, permissionRepository.EnsureSuperadmin(ctx, first.ID))
 	authOK(t, permissionRepository.EnsureSuperadmin(ctx, first.ID))
@@ -115,13 +125,13 @@ func TestPermissionAdministrationPostgreSQL(t *testing.T) {
 	authOK(t, tx.Create(&warehouse).Error)
 	warehouseRepository := masterrepository.NewWarehouseRepository(tx)
 	ordinaryContext := requestscope.WithPrincipal(ctx, requestscope.Principal{AccountID: second.ID})
-	rows, total, err := warehouseRepository.List(ordinaryContext, nil, nil, nil, 20, 0)
+	rows, total, err := warehouseRepository.List(ordinaryContext, nil, nil, nil, nil, 20, 0)
 	authOK(t, err)
 	if total != 0 || len(rows) != 0 {
 		t.Fatal("ordinary administrator unexpectedly bypassed warehouse scope")
 	}
 	superContext := requestscope.WithPrincipal(ctx, requestscope.Principal{AccountID: first.ID, Unrestricted: true})
-	rows, total, err = warehouseRepository.List(superContext, nil, nil, nil, 20, 0)
+	rows, total, err = warehouseRepository.List(superContext, nil, nil, nil, nil, 20, 0)
 	authOK(t, err)
 	if total != 1 || len(rows) != 1 || rows[0].ID != warehouse.ID {
 		t.Fatal("superadmin could not see warehouses without individual scope grants")

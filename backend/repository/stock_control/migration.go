@@ -213,3 +213,88 @@ func MigrateInventoryAdjustmentLines(db *gorm.DB) error {
 		return nil
 	})
 }
+
+func MigrateCycleCounts(db *gorm.DB) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.AutoMigrate(&stockmodel.CycleCount{}, &stockmodel.CycleCountLine{}, &stockmodel.CycleCountEntry{}); err != nil {
+			return err
+		}
+		for _, statement := range []string{
+			`CREATE INDEX IF NOT EXISTS ix_cycle_count_scope ON cycle_count(owner_id,warehouse_id,created_at DESC)`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS uq_cycle_count_line_number ON cycle_count_line(cycle_count_id,line_no)`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS uq_cycle_count_line_balance ON cycle_count_line(cycle_count_id,balance_id)`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS uq_cycle_count_entry_attempt ON cycle_count_entry(cycle_count_line_id,attempt_no)`,
+			`DO $$ BEGIN ALTER TABLE cycle_count ADD CONSTRAINT ck_cycle_count_tolerance CHECK(tolerance_qty>=0); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_line ADD CONSTRAINT ck_cycle_count_line_quantities CHECK(system_qty>=0 AND (counted_qty IS NULL OR counted_qty>=0)); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_line ADD CONSTRAINT ck_cycle_count_line_decision CHECK(decision_code IN ('OPEN','COUNTED','NO_VARIANCE','POSTED','REJECTED','CANCELLED')); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_entry ADD CONSTRAINT ck_cycle_count_entry_attempt CHECK(attempt_no>0 AND system_qty>=0 AND counted_qty>=0); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count ADD CONSTRAINT fk_cycle_count_document_type FOREIGN KEY(document_type_id) REFERENCES document_type(document_type_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count ADD CONSTRAINT fk_cycle_count_status FOREIGN KEY(status_id) REFERENCES document_status(status_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count ADD CONSTRAINT fk_cycle_count_owner FOREIGN KEY(owner_id) REFERENCES organization(organization_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count ADD CONSTRAINT fk_cycle_count_warehouse FOREIGN KEY(warehouse_id) REFERENCES warehouse(warehouse_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count ADD CONSTRAINT fk_cycle_count_creator FOREIGN KEY(created_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count ADD CONSTRAINT fk_cycle_count_canceller FOREIGN KEY(cancelled_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count ADD CONSTRAINT fk_cycle_count_updater FOREIGN KEY(updated_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_line ADD CONSTRAINT fk_cycle_count_line_document FOREIGN KEY(cycle_count_id) REFERENCES cycle_count(cycle_count_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_line ADD CONSTRAINT fk_cycle_count_line_balance FOREIGN KEY(balance_id) REFERENCES inventory_balance(balance_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_line ADD CONSTRAINT fk_cycle_count_line_item FOREIGN KEY(item_id) REFERENCES item(item_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_line ADD CONSTRAINT fk_cycle_count_line_lot FOREIGN KEY(lot_id) REFERENCES inventory_lot(lot_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_line ADD CONSTRAINT fk_cycle_count_line_hu FOREIGN KEY(handling_unit_id) REFERENCES handling_unit(handling_unit_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_line ADD CONSTRAINT fk_cycle_count_line_location FOREIGN KEY(location_id) REFERENCES warehouse_location(location_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_line ADD CONSTRAINT fk_cycle_count_line_status FOREIGN KEY(inventory_status_id) REFERENCES inventory_status(inventory_status_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_line ADD CONSTRAINT fk_cycle_count_line_uom FOREIGN KEY(uom_id) REFERENCES uom(uom_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_line ADD CONSTRAINT fk_cycle_count_line_counter FOREIGN KEY(counted_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_line ADD CONSTRAINT fk_cycle_count_line_decider FOREIGN KEY(decided_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_line ADD CONSTRAINT fk_cycle_count_line_creator FOREIGN KEY(created_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_line ADD CONSTRAINT fk_cycle_count_line_updater FOREIGN KEY(updated_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_line ADD CONSTRAINT fk_cycle_count_line_movement FOREIGN KEY(inventory_movement_id) REFERENCES inventory_movement(movement_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_line ADD CONSTRAINT fk_cycle_count_line_result_balance FOREIGN KEY(resulting_balance_id) REFERENCES inventory_balance(balance_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_entry ADD CONSTRAINT fk_cycle_count_entry_line FOREIGN KEY(cycle_count_line_id) REFERENCES cycle_count_line(cycle_count_line_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_entry ADD CONSTRAINT fk_cycle_count_entry_counter FOREIGN KEY(counted_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+		} {
+			if err := tx.Exec(statement).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func MigrateWarehouseTransfers(db *gorm.DB) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.AutoMigrate(&stockmodel.WarehouseTransfer{}, &stockmodel.WarehouseTransferLine{}); err != nil {
+			return err
+		}
+		for _, statement := range []string{
+			`CREATE INDEX IF NOT EXISTS ix_warehouse_transfer_source ON warehouse_transfer(owner_id,source_warehouse_id,created_at DESC)`,
+			`CREATE INDEX IF NOT EXISTS ix_warehouse_transfer_target ON warehouse_transfer(owner_id,target_warehouse_id,created_at DESC)`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS uq_warehouse_transfer_line_number ON warehouse_transfer_line(warehouse_transfer_id,line_no)`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer ADD CONSTRAINT ck_warehouse_transfer_warehouses CHECK(source_warehouse_id<>target_warehouse_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer_line ADD CONSTRAINT ck_warehouse_transfer_line_quantity CHECK(quantity>0); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer ADD CONSTRAINT fk_warehouse_transfer_document_type FOREIGN KEY(document_type_id) REFERENCES document_type(document_type_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer ADD CONSTRAINT fk_warehouse_transfer_status FOREIGN KEY(status_id) REFERENCES document_status(status_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer ADD CONSTRAINT fk_warehouse_transfer_owner FOREIGN KEY(owner_id) REFERENCES organization(organization_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer ADD CONSTRAINT fk_warehouse_transfer_source_warehouse FOREIGN KEY(source_warehouse_id) REFERENCES warehouse(warehouse_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer ADD CONSTRAINT fk_warehouse_transfer_target_warehouse FOREIGN KEY(target_warehouse_id) REFERENCES warehouse(warehouse_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer ADD CONSTRAINT fk_warehouse_transfer_creator FOREIGN KEY(created_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer ADD CONSTRAINT fk_warehouse_transfer_approver FOREIGN KEY(approved_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer ADD CONSTRAINT fk_warehouse_transfer_dispatcher FOREIGN KEY(dispatched_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer ADD CONSTRAINT fk_warehouse_transfer_receiver FOREIGN KEY(received_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer ADD CONSTRAINT fk_warehouse_transfer_canceller FOREIGN KEY(cancelled_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer_line ADD CONSTRAINT fk_warehouse_transfer_line_document FOREIGN KEY(warehouse_transfer_id) REFERENCES warehouse_transfer(warehouse_transfer_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer_line ADD CONSTRAINT fk_warehouse_transfer_line_source_balance FOREIGN KEY(source_balance_id) REFERENCES inventory_balance(balance_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer_line ADD CONSTRAINT fk_warehouse_transfer_line_item FOREIGN KEY(item_id) REFERENCES item(item_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer_line ADD CONSTRAINT fk_warehouse_transfer_line_lot FOREIGN KEY(lot_id) REFERENCES inventory_lot(lot_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer_line ADD CONSTRAINT fk_warehouse_transfer_line_serial FOREIGN KEY(serial_id) REFERENCES serial_number(serial_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer_line ADD CONSTRAINT fk_warehouse_transfer_line_source_location FOREIGN KEY(source_location_id) REFERENCES warehouse_location(location_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer_line ADD CONSTRAINT fk_warehouse_transfer_line_source_status FOREIGN KEY(source_inventory_status_id) REFERENCES inventory_status(inventory_status_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer_line ADD CONSTRAINT fk_warehouse_transfer_line_uom FOREIGN KEY(uom_id) REFERENCES uom(uom_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer_line ADD CONSTRAINT fk_warehouse_transfer_line_receipt_location FOREIGN KEY(receipt_location_id) REFERENCES warehouse_location(location_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer_line ADD CONSTRAINT fk_warehouse_transfer_line_putaway_location FOREIGN KEY(putaway_target_location_id) REFERENCES warehouse_location(location_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE warehouse_transfer_line ADD CONSTRAINT fk_warehouse_transfer_line_received_balance FOREIGN KEY(received_balance_id) REFERENCES inventory_balance(balance_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+		} {
+			if err := tx.Exec(statement).Error; err != nil { return err }
+		}
+		return nil
+	})
+}

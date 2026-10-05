@@ -37,3 +37,17 @@ func (r *RolePermissionRepository) Replace(ctx context.Context, roleID string, p
 	}
 	return r.db.WithContext(ctx).Create(&rows).Error
 }
+
+// EnsureByCode adds a permission to an existing built-in role without replacing
+// any administrator-managed grants. Missing roles are intentionally ignored so
+// environments that do not install the optional role remain valid.
+func (r *RolePermissionRepository) EnsureByCode(ctx context.Context, roleCode, permissionCode string) error {
+	return r.db.WithContext(ctx).Exec(`
+		INSERT INTO role_permission(role_id, permission_id)
+		SELECT role.role_id, permission.permission_id
+		FROM app_role role
+		JOIN app_permission permission ON permission.code = ?
+		WHERE role.code = ?
+		ON CONFLICT(role_id, permission_id) DO NOTHING
+	`, permissionCode, roleCode).Error
+}
