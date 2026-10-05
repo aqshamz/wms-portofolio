@@ -35,6 +35,7 @@ POST /api/v1/stock-control/adjustments/:id/reject
 POST /api/v1/stock-control/adjustments/:id/cancel
 GET  /api/v1/stock-control/cycle-counts
 POST /api/v1/stock-control/cycle-counts
+POST /api/v1/stock-control/cycle-counts/grand
 GET  /api/v1/stock-control/cycle-counts/:id
 POST /api/v1/stock-control/cycle-counts/:id/count
 POST /api/v1/stock-control/cycle-counts/:id/approve
@@ -214,6 +215,27 @@ restricted to active, unlocked locations whose type is exactly `STORAGE`.
 All balances must belong to one owner and warehouse. The counter sees item and
 location identity but not the snapshot quantity or variance while the document
 is in `DRAFT` or `COUNTING`.
+
+Grand stock opname uses the same blind-count, recount, independent approval and
+partial posting workflow, but creation is automatic:
+
+```json
+{
+  "owner_id": "CUSTOMER-UUID",
+  "warehouse_id": "WAREHOUSE-UUID",
+  "business_date": "2026-10-05",
+  "tolerance_quantity": "0",
+  "notes": "Annual customer stock opname"
+}
+```
+
+`POST /cycle-counts/grand` snapshots every positive balance for that one active
+warehouse/served-owner relationship in active, unlocked `STORAGE` and
+`PICK_FACE` locations. Receiving, QC, quarantine, dock and transfer
+locations are excluded. Only one unfinished grand opname may exist for the same
+warehouse and owner; a second customer served by the warehouse requires a
+separate grand opname. List ordinary and grand documents independently with
+`count_type_code=CYCLE` or `count_type_code=GRAND`.
 
 Record any subset of pending lines through the `count` action using the
 document `expected_version` and entries containing `line_id`,

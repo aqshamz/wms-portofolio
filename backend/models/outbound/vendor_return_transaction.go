@@ -20,6 +20,11 @@ type VendorReturnTransaction struct {
 	HandlingUnitID          *string    `gorm:"column:handling_unit_id;size:120"`
 	SourceLocationID        string     `gorm:"column:source_location_id;type:uuid;not null"`
 	SourceInventoryStatusID string     `gorm:"column:source_inventory_status_id;type:uuid;not null"`
+	ReturnDockLocationID    *string    `gorm:"column:return_dock_location_id;type:uuid"`
+	ReturnPendingStatusID   *string    `gorm:"column:return_pending_status_id;type:uuid"`
+	StagedBalanceID         *string    `gorm:"column:staged_balance_id;size:160"`
+	StagingMovementID       *string    `gorm:"column:staging_movement_id;size:140"`
+	CancellationMovementID  *string    `gorm:"column:cancellation_movement_id;size:140"`
 	Quantity                string     `gorm:"column:quantity;type:numeric(20,6);not null"`
 	UOMID                   string     `gorm:"column:uom_id;type:uuid;not null"`
 	Notes                   *string    `gorm:"column:notes;type:text"`

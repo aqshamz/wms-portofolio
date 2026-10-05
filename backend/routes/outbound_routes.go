@@ -106,6 +106,7 @@ func registerOutboundRoutes(api *gin.RouterGroup, controller *controller.Control
 	group.POST("/disposals/:id/cancel", cancel, controller.CancelDisposal)
 	group.GET("/vendor-returns", read, controller.ListVendorReturns)
 	group.GET("/vendor-returns/:id", read, controller.GetVendorReturn)
+	group.POST("/vendor-returns/:id/dispatch", returnToVendor, controller.CompleteVendorReturn)
 	group.POST("/vendor-returns/:id/complete", returnToVendor, controller.CompleteVendorReturn)
 	group.POST("/vendor-returns/:id/cancel", cancel, controller.CancelVendorReturn)
 }

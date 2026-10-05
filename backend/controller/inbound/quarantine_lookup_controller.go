@@ -18,3 +18,16 @@ func (controller *Controller) ListQuarantineTargets(c *gin.Context) {
 	}
 	utils.Success(c, http.StatusOK, "eligible quarantine storage targets retrieved", response)
 }
+
+func (controller *Controller) ListQuarantineReturnDocks(c *gin.Context) {
+	search, page, size, ok := putawayLookupQuery(c)
+	if !ok {
+		return
+	}
+	response, err := controller.service.ListQuarantineReturnDocks(c.Request.Context(), c.Param("id"), search, page, size)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "eligible quarantine return docks retrieved", response)
+}

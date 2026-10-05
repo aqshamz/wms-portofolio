@@ -51,3 +51,16 @@ func (r *QuarantineDispositionRepository) Process(ctx context.Context, id, statu
 	}
 	return nil
 }
+
+func (r *QuarantineDispositionRepository) Stage(ctx context.Context, id, movementID, balanceID string) error {
+	result := r.db.WithContext(ctx).Model(&model.QuarantineDisposition{}).
+		Where("quarantine_disposition_id=? AND processed_at IS NULL", id).
+		Updates(map[string]interface{}{"inventory_movement_id": movementID, "resulting_balance_id": balanceID})
+	if result.Error != nil {
+		return Error(result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return ErrConflict
+	}
+	return nil
+}

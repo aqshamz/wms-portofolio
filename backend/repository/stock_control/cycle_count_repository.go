@@ -6,14 +6,15 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	inventorymodel "wms-api/models/inventory"
 	mastermodel "wms-api/models/master"
 	model "wms-api/models/stock_control"
 	inventoryrepo "wms-api/repository/inventory"
 )
 
 type CycleCountFilter struct {
-	OwnerID, WarehouseID, StatusCode, Search string
-	Page, PageSize                           int
+	OwnerID, WarehouseID, CountTypeCode, StatusCode, Search string
+	Page, PageSize                                          int
 }
 type CycleCountRow struct {
 	model.CycleCount
@@ -72,6 +73,9 @@ func (r *CycleCountRepository) Lines(ctx context.Context, id string) ([]CycleCou
 }
 func (r *CycleCountRepository) List(ctx context.Context, f CycleCountFilter) ([]CycleCountRow, int64, error) {
 	q := cycleCountQuery(r.db.WithContext(ctx)).Where("count.owner_id=? AND count.warehouse_id=?", f.OwnerID, f.WarehouseID)
+	if f.CountTypeCode != "" {
+		q = q.Where("count.count_type_code=?", f.CountTypeCode)
+	}
 	if f.StatusCode != "" {
 		q = q.Where("status.code=?", f.StatusCode)
 	}
@@ -86,6 +90,25 @@ func (r *CycleCountRepository) List(ctx context.Context, f CycleCountFilter) ([]
 	var rows []CycleCountRow
 	err := q.Order("count.created_at DESC,count.cycle_count_id DESC").Limit(f.PageSize).Offset((f.Page - 1) * f.PageSize).Find(&rows).Error
 	return rows, total, inventoryrepo.Error(err)
+}
+
+func (r *CycleCountRepository) GrandBalances(ctx context.Context, ownerID, warehouseID string, limit int) ([]inventorymodel.InventoryBalance, error) {
+	rows := make([]inventorymodel.InventoryBalance, 0)
+	err := r.db.WithContext(ctx).Table("inventory_balance balance").Select("balance.*").
+		Joins("JOIN warehouse_location location ON location.location_id=balance.location_id AND location.warehouse_id=balance.warehouse_id AND location.is_active AND NOT location.is_locked").
+		Joins("JOIN warehouse_zone zone ON zone.zone_id=location.zone_id AND zone.is_active").
+		Joins("JOIN location_type kind ON kind.location_type_id=location.location_type_id AND kind.is_active AND kind.code IN ('STORAGE','PICK_FACE')").
+		Where("balance.owner_id=? AND balance.warehouse_id=? AND balance.on_hand_qty>0", ownerID, warehouseID).
+		Order("location.code,balance.item_id,balance.balance_id").Limit(limit).Find(&rows).Error
+	return rows, inventoryrepo.Error(err)
+}
+
+func (r *CycleCountRepository) ActiveGrandExists(ctx context.Context, ownerID, warehouseID string) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.CycleCount{}).
+		Where("owner_id=? AND warehouse_id=? AND count_type_code='GRAND' AND completed_at IS NULL AND cancelled_at IS NULL", ownerID, warehouseID).
+		Count(&count).Error
+	return count > 0, inventoryrepo.Error(err)
 }
 func (r *CycleCountRepository) Lock(ctx context.Context, id string) (model.CycleCount, error) {
 	var row model.CycleCount

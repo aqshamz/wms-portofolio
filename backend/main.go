@@ -70,6 +70,8 @@ func main() {
 		{Version: 19, Name: "multi-line inventory adjustments", Up: stockcontrolrepository.MigrateInventoryAdjustmentLines},
 		{Version: 20, Name: "cycle count documents", Up: stockcontrolrepository.MigrateCycleCounts},
 		{Version: 21, Name: "warehouse transfer documents", Up: stockcontrolrepository.MigrateWarehouseTransfers},
+		{Version: 22, Name: "return to vendor staging", Up: outboundrepository.MigrateVendorReturnStaging},
+		{Version: 23, Name: "grand stock opname documents", Up: stockcontrolrepository.MigrateGrandStockOpname},
 	}); err != nil {
 		log.Fatalf("apply database migrations: %v", err)
 	}

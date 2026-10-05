@@ -37,6 +37,7 @@ func (s *CatalogService) SeedCatalog(ctx context.Context) error {
 			{Code: "AVAILABLE", Name: "Available", IsActive: true, IsAllocatable: true, IsPickable: true},
 			{Code: "HOLD", Name: "Hold", IsActive: true, IsAllocatable: false, IsPickable: false},
 			{Code: "QUARANTINE", Name: "Quarantine", IsActive: true, IsAllocatable: false, IsPickable: false},
+			{Code: "RETURN_PENDING", Name: "Return pending", IsActive: true, IsAllocatable: false, IsPickable: false},
 			{Code: "DAMAGED", Name: "Damaged", IsActive: true, IsAllocatable: false, IsPickable: false},
 			{Code: "EXPIRED", Name: "Expired", IsActive: true, IsAllocatable: false, IsPickable: false},
 		}); err != nil {

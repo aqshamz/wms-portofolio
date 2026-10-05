@@ -113,6 +113,26 @@ func (s *Service) validatePutawayTarget(ctx context.Context, ownerID, warehouseI
 	return target, invalid("target location does not match the active putaway strategy")
 }
 
+func (s *Service) validateReturnDock(ctx context.Context, warehouseID, targetID string) (mastermodel.WarehouseLocation, error) {
+	targetID = strings.ToLower(strings.TrimSpace(targetID))
+	if !inboundUUID(targetID) {
+		return mastermodel.WarehouseLocation{}, invalid("target_location_id must be a UUID")
+	}
+	target, err := s.repositories.Inventory.Location.GetShared(ctx, targetID)
+	if err != nil || target.WarehouseID != warehouseID || !target.IsActive || target.IsLocked {
+		return target, invalid("return dock is unavailable")
+	}
+	zone, err := s.repositories.Inventory.Zone.GetShared(ctx, target.ZoneID)
+	if err != nil || !zone.IsActive || zone.WarehouseID != warehouseID {
+		return target, invalid("return dock must belong to an active warehouse zone")
+	}
+	locationType, err := s.repositories.Inventory.LocationType.GetShared(ctx, target.LocationTypeID)
+	if err != nil || !locationType.IsActive || !locationType.AllowsShipping {
+		return target, invalid("return dock must use an active shipping-capable location type")
+	}
+	return target, nil
+}
+
 func putawayRuleMatches(item mastermodel.Item, target mastermodel.WarehouseLocation, rule mastermodel.PutawayStrategyRule) bool {
 	return (rule.CategoryID == nil || (item.CategoryID != nil && *rule.CategoryID == *item.CategoryID)) &&
 		(rule.LocationTypeID == nil || *rule.LocationTypeID == target.LocationTypeID) &&

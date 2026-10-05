@@ -109,14 +109,14 @@ func cycleCountListFilter(c *gin.Context) (repository.CycleCountFilter, bool) {
 		utils.Failure(c, 400, "invalid page_size", nil)
 		return repository.CycleCountFilter{}, false
 	}
-	allowed := map[string]bool{"owner_id": true, "warehouse_id": true, "status_code": true, "search": true, "page": true, "page_size": true}
+	allowed := map[string]bool{"owner_id": true, "warehouse_id": true, "count_type_code": true, "status_code": true, "search": true, "page": true, "page_size": true}
 	for key, values := range c.Request.URL.Query() {
 		if !allowed[key] || len(values) != 1 {
 			utils.Failure(c, 400, "unsupported or repeated query parameter", nil)
 			return repository.CycleCountFilter{}, false
 		}
 	}
-	return repository.CycleCountFilter{OwnerID: c.Query("owner_id"), WarehouseID: c.Query("warehouse_id"), StatusCode: c.Query("status_code"), Search: c.Query("search"), Page: page, PageSize: size}, true
+	return repository.CycleCountFilter{OwnerID: c.Query("owner_id"), WarehouseID: c.Query("warehouse_id"), CountTypeCode: c.Query("count_type_code"), StatusCode: c.Query("status_code"), Search: c.Query("search"), Page: page, PageSize: size}, true
 }
 
 func warehouseTransferListFilter(c *gin.Context) (repository.WarehouseTransferFilter, bool) {
@@ -428,6 +428,18 @@ func (controller *Controller) CreateCycleCount(c *gin.Context) {
 		return
 	}
 	utils.Success(c, http.StatusCreated, "cycle count created", response)
+}
+func (controller *Controller) CreateGrandStockOpname(c *gin.Context) {
+	var request dto.CreateGrandStockOpnameRequest
+	if !bind(c, &request) {
+		return
+	}
+	response, err := controller.service.CreateGrandStockOpname(c.Request.Context(), request, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusCreated, "grand stock opname created", response)
 }
 func (controller *Controller) RecordCycleCount(c *gin.Context) {
 	var request dto.RecordCycleCountRequest

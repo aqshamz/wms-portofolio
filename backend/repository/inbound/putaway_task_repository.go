@@ -173,6 +173,24 @@ func (r *PutawayTaskRepository) ListAssignees(ctx context.Context, ownerID, ware
 
 type PutawayTargetRow struct{ LocationID, Code, ZoneCode, LocationTypeCode string }
 
+func (r *PutawayTaskRepository) ListReturnDocks(ctx context.Context, warehouseID, search string, page, size int) ([]PutawayTargetRow, int64, error) {
+	query := r.db.WithContext(ctx).Table("warehouse_location location").
+		Joins("JOIN location_type kind ON kind.location_type_id=location.location_type_id").
+		Joins("JOIN warehouse_zone zone ON zone.zone_id=location.zone_id").
+		Where("location.warehouse_id=? AND location.is_active AND NOT location.is_locked AND zone.is_active AND kind.is_active AND kind.allows_shipping", warehouseID)
+	if search != "" {
+		query = query.Where("location.code ILIKE ? OR zone.code ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, Error(err)
+	}
+	rows := make([]PutawayTargetRow, 0)
+	err := query.Select("location.location_id,location.code,zone.code zone_code,kind.code location_type_code").
+		Order("location.code,location.location_id").Limit(size).Offset((page - 1) * size).Find(&rows).Error
+	return rows, total, Error(err)
+}
+
 func (r *PutawayTaskRepository) ListTargets(ctx context.Context, warehouseID string, item mastermodel.Item, rules []mastermodel.PutawayStrategyRule, search string, page, size int) ([]PutawayTargetRow, int64, error) {
 	query := r.db.WithContext(ctx).Table("warehouse_location location").Joins("JOIN location_type kind ON kind.location_type_id=location.location_type_id").Joins("JOIN warehouse_zone zone ON zone.zone_id=location.zone_id").Where("location.warehouse_id=? AND location.is_active AND NOT location.is_locked AND kind.is_active AND kind.allows_storage", warehouseID)
 	conditions := make([]string, 0)

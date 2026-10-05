@@ -260,6 +260,23 @@ func MigrateCycleCounts(db *gorm.DB) error {
 	})
 }
 
+func MigrateGrandStockOpname(db *gorm.DB) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		for _, statement := range []string{
+			`ALTER TABLE cycle_count ADD COLUMN IF NOT EXISTS count_type_code varchar(20) NOT NULL DEFAULT 'CYCLE'`,
+			`UPDATE cycle_count SET count_type_code='CYCLE' WHERE count_type_code IS NULL OR count_type_code=''`,
+			`DO $$ BEGIN ALTER TABLE cycle_count ADD CONSTRAINT ck_cycle_count_type CHECK(count_type_code IN ('CYCLE','GRAND')); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`CREATE INDEX IF NOT EXISTS ix_cycle_count_type_scope ON cycle_count(count_type_code,owner_id,warehouse_id,created_at DESC)`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS uq_active_grand_stock_opname ON cycle_count(owner_id,warehouse_id) WHERE count_type_code='GRAND' AND completed_at IS NULL AND cancelled_at IS NULL`,
+		} {
+			if err := tx.Exec(statement).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func MigrateWarehouseTransfers(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.AutoMigrate(&stockmodel.WarehouseTransfer{}, &stockmodel.WarehouseTransferLine{}); err != nil {

@@ -40,7 +40,7 @@ func (cn *Controller) CompleteVendorReturn(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	utils.Success(c, http.StatusOK, "return to vendor completed and inventory removed", value)
+	utils.Success(c, http.StatusOK, "return to vendor dispatched and inventory removed", value)
 }
 
 func (cn *Controller) CancelVendorReturn(c *gin.Context) {

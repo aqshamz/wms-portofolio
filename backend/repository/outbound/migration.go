@@ -6,8 +6,10 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	inventorymodel "wms-api/models/inventory"
 	mastermodel "wms-api/models/master"
 	model "wms-api/models/outbound"
+	inventoryrepository "wms-api/repository/inventory"
 )
 
 func Migrate(db *gorm.DB) error {
@@ -240,6 +242,34 @@ func MigrateVendorReturns(db *gorm.DB) error {
 			}
 		}
 		return nil
+	})
+}
+
+func MigrateVendorReturnStaging(db *gorm.DB) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		statements := []string{
+			"ALTER TABLE vendor_return_transaction ADD COLUMN IF NOT EXISTS return_dock_location_id uuid",
+			"ALTER TABLE vendor_return_transaction ADD COLUMN IF NOT EXISTS return_pending_status_id uuid",
+			"ALTER TABLE vendor_return_transaction ADD COLUMN IF NOT EXISTS staged_balance_id varchar(160)",
+			"ALTER TABLE vendor_return_transaction ADD COLUMN IF NOT EXISTS staging_movement_id varchar(140)",
+			"ALTER TABLE vendor_return_transaction ADD COLUMN IF NOT EXISTS cancellation_movement_id varchar(140)",
+			"CREATE INDEX IF NOT EXISTS ix_vendor_return_staged_balance ON vendor_return_transaction(staged_balance_id)",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT ck_vendor_return_staging_refs CHECK((return_dock_location_id IS NULL AND return_pending_status_id IS NULL AND staged_balance_id IS NULL AND staging_movement_id IS NULL) OR (return_dock_location_id IS NOT NULL AND return_pending_status_id IS NOT NULL AND staged_balance_id IS NOT NULL AND staging_movement_id IS NOT NULL)); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_dock FOREIGN KEY(return_dock_location_id) REFERENCES warehouse_location(location_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_pending_status FOREIGN KEY(return_pending_status_id) REFERENCES inventory_status(inventory_status_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_staged_balance FOREIGN KEY(staged_balance_id) REFERENCES inventory_balance(balance_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_staging_movement FOREIGN KEY(staging_movement_id) REFERENCES inventory_movement(movement_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+			"DO $$ BEGIN ALTER TABLE vendor_return_transaction ADD CONSTRAINT fk_vendor_return_cancellation_movement FOREIGN KEY(cancellation_movement_id) REFERENCES inventory_movement(movement_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+		}
+		for _, statement := range statements {
+			if err := tx.Exec(statement).Error; err != nil {
+				return err
+			}
+		}
+		return inventoryrepository.NewMovementTypeRepository(tx).Seed(context.Background(), []inventorymodel.MovementType{
+			{Code: "RETURN_STAGING", Name: "Stage return at dock"},
+			{Code: "RETURN_STAGING_CANCEL", Name: "Cancel staged return"},
+		})
 	})
 }
 

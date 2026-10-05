@@ -22,7 +22,11 @@ func mapVendorReturn(row repository.VendorReturnRow) dto.VendorReturnResponse {
 		HandlingUnitID: row.HandlingUnitID, HandlingUnitBarcode: row.HandlingUnitBarcode,
 		SourceLocationID: row.SourceLocationID, SourceLocationCode: row.SourceLocationCode,
 		SourceInventoryStatusID: row.SourceInventoryStatusID, SourceInventoryStatusCode: row.SourceInventoryStatusCode,
-		Quantity: row.Quantity, UOMID: row.UOMID, UOMCode: row.UOMCode, StatusCode: row.StatusCode,
+		ReturnDockLocationID: row.ReturnDockLocationID, ReturnDockLocationCode: row.ReturnDockLocationCode,
+		ReturnPendingStatusID: row.ReturnPendingStatusID, ReturnPendingStatusCode: row.ReturnPendingStatusCode,
+		StagedBalanceID: row.StagedBalanceID, StagingMovementID: row.StagingMovementID,
+		CancellationMovementID: row.CancellationMovementID,
+		Quantity:               row.Quantity, UOMID: row.UOMID, UOMCode: row.UOMCode, StatusCode: row.StatusCode,
 		Notes: row.Notes, PlannedAt: row.PlannedAt, CompletedAt: row.CompletedAt, CompletedBy: row.CompletedBy,
 		CompletedByDisplayName: row.CompletedByDisplayName, CancelledAt: row.CancelledAt, CancelledBy: row.CancelledBy,
 		CancelledByDisplayName: row.CancelledByDisplayName, CancellationReason: row.CancellationReason,
@@ -36,7 +40,11 @@ func (s *Service) vendorReturnResponse(ctx context.Context, row repository.Vendo
 	if row.StatusCode != "PLANNED" {
 		return result, nil
 	}
-	balance, err := s.repositories.Inventory.Balance.Get(ctx, row.SourceBalanceID)
+	balanceID := row.SourceBalanceID
+	if row.StagedBalanceID != nil {
+		balanceID = *row.StagedBalanceID
+	}
+	balance, err := s.repositories.Inventory.Balance.Get(ctx, balanceID)
 	if err != nil {
 		return result, err
 	}
@@ -101,20 +109,27 @@ func (s *Service) CompleteVendorReturn(ctx context.Context, id string, request d
 		if contextRow.DispositionStatusCode != "DECIDED" {
 			return state("linked quarantine disposition is not pending")
 		}
-		balance, err := local.repositories.Inventory.Balance.Get(ctx, vendorReturn.SourceBalanceID)
+		balanceID, locationID, inventoryStatusID, inventoryStatusCode := vendorReturn.SourceBalanceID, vendorReturn.SourceLocationID, vendorReturn.SourceInventoryStatusID, "QUARANTINE"
+		if vendorReturn.StagedBalanceID != nil {
+			if vendorReturn.ReturnDockLocationID == nil || vendorReturn.ReturnPendingStatusID == nil || vendorReturn.StagingMovementID == nil {
+				return state("return staging references are incomplete")
+			}
+			balanceID, locationID, inventoryStatusID, inventoryStatusCode = *vendorReturn.StagedBalanceID, *vendorReturn.ReturnDockLocationID, *vendorReturn.ReturnPendingStatusID, "RETURN_PENDING"
+		}
+		balance, err := local.repositories.Inventory.Balance.Get(ctx, balanceID)
 		if err != nil || balance.VersionNo != request.ExpectedBalanceVersion {
 			if err != nil {
 				return err
 			}
 			return repository.ErrConcurrentWrite
 		}
-		if balance.OwnerID != vendorReturn.OwnerID || balance.WarehouseID != vendorReturn.WarehouseID || balance.ItemID != vendorReturn.ItemID || balance.LocationID != vendorReturn.SourceLocationID || balance.InventoryStatusID != vendorReturn.SourceInventoryStatusID || balance.InventoryStatusCode != "QUARANTINE" {
-			return state("return source stock no longer matches the planned quarantine balance")
+		if balance.OwnerID != vendorReturn.OwnerID || balance.WarehouseID != vendorReturn.WarehouseID || balance.ItemID != vendorReturn.ItemID || balance.LocationID != locationID || balance.InventoryStatusID != inventoryStatusID || balance.InventoryStatusCode != inventoryStatusCode {
+			return state("return stock no longer matches its planned staging balance")
 		}
 		plannedQty, ok := new(big.Rat).SetString(vendorReturn.Quantity)
 		availableQty, availableOK := new(big.Rat).SetString(balance.AvailableQty)
 		if !ok || !availableOK || availableQty.Cmp(plannedQty) < 0 {
-			return state("insufficient quarantine stock for return to vendor")
+			return state("insufficient staged stock for return to vendor")
 		}
 		if vendorReturn.HandlingUnitID != nil && availableQty.Cmp(plannedQty) != 0 {
 			return state("handling-unit return must process its entire source balance")
@@ -124,10 +139,10 @@ func (s *Service) CompleteVendorReturn(ctx context.Context, id string, request d
 			serialIDs = append(serialIDs, *vendorReturn.SerialID)
 		}
 		posted, err := inventoryservice.NewService(local.repositories.Inventory).PostMovement(ctx, inventorydto.PostingRequest{
-			OperationKey: "outbound.vendor-return." + vendorReturn.ID, MovementTypeCode: "RETURN_TO_VENDOR",
+			OperationKey: "outbound.vendor-return." + vendorReturn.ID + ".dispatch", MovementTypeCode: "RETURN_TO_VENDOR",
 			OwnerID: vendorReturn.OwnerID, WarehouseID: vendorReturn.WarehouseID, BusinessDate: vendorReturn.BusinessDate.Format("2006-01-02"),
 			ItemID: vendorReturn.ItemID, LotID: vendorReturn.LotID, HandlingUnitID: vendorReturn.HandlingUnitID,
-			From:     &inventorydto.BalanceDimension{LocationID: vendorReturn.SourceLocationID, InventoryStatusID: vendorReturn.SourceInventoryStatusID},
+			From:     &inventorydto.BalanceDimension{LocationID: locationID, InventoryStatusID: inventoryStatusID},
 			Quantity: vendorReturn.Quantity, SerialIDs: serialIDs, ExpectedSourceVersion: &request.ExpectedBalanceVersion,
 			SourceDocumentID: vendorReturn.ID, SourceLineID: &vendorReturn.QuarantineDispositionID, Notes: vendorReturn.Notes,
 		}, actor)
@@ -178,7 +193,7 @@ func (s *Service) CompleteVendorReturn(ctx context.Context, id string, request d
 }
 
 func (s *Service) CancelVendorReturn(ctx context.Context, id string, request dto.CancelVendorReturnRequest, actor string) (dto.VendorReturnResponse, error) {
-	if !validID(id, 140) || !validUUID(actor) || request.ExpectedVersion < 1 {
+	if !validID(id, 140) || !validUUID(actor) || request.ExpectedVersion < 1 || request.ExpectedBalanceVersion < 1 {
 		return dto.VendorReturnResponse{}, invalid("invalid vendor return cancellation")
 	}
 	reason, err := clean(request.Reason, 4000, "reason")
@@ -207,11 +222,53 @@ func (s *Service) CancelVendorReturn(ctx context.Context, id string, request dto
 		if contextRow.DispositionStatusCode != "DECIDED" {
 			return state("linked quarantine disposition is not pending")
 		}
+		var cancellationMovementID *string
+		if vendorReturn.StagedBalanceID != nil {
+			if vendorReturn.ReturnDockLocationID == nil || vendorReturn.ReturnPendingStatusID == nil || vendorReturn.StagingMovementID == nil {
+				return state("return staging references are incomplete")
+			}
+			balance, err := local.repositories.Inventory.Balance.Get(ctx, *vendorReturn.StagedBalanceID)
+			if err != nil || balance.VersionNo != request.ExpectedBalanceVersion {
+				if err != nil {
+					return err
+				}
+				return repository.ErrConcurrentWrite
+			}
+			if balance.OwnerID != vendorReturn.OwnerID || balance.WarehouseID != vendorReturn.WarehouseID || balance.ItemID != vendorReturn.ItemID || balance.LocationID != *vendorReturn.ReturnDockLocationID || balance.InventoryStatusID != *vendorReturn.ReturnPendingStatusID || balance.InventoryStatusCode != "RETURN_PENDING" {
+				return state("return stock no longer matches its planned staging balance")
+			}
+			plannedQty, plannedOK := new(big.Rat).SetString(vendorReturn.Quantity)
+			availableQty, availableOK := new(big.Rat).SetString(balance.AvailableQty)
+			if !plannedOK || !availableOK || availableQty.Cmp(plannedQty) < 0 {
+				return state("insufficient staged stock to cancel the return")
+			}
+			if vendorReturn.HandlingUnitID != nil && availableQty.Cmp(plannedQty) != 0 {
+				return state("handling-unit return cancellation must restore the entire staged balance")
+			}
+			serialIDs := make([]string, 0, 1)
+			if vendorReturn.SerialID != nil {
+				serialIDs = append(serialIDs, *vendorReturn.SerialID)
+			}
+			posted, err := inventoryservice.NewService(local.repositories.Inventory).PostMovement(ctx, inventorydto.PostingRequest{
+				OperationKey: "outbound.vendor-return." + vendorReturn.ID + ".cancel", MovementTypeCode: "RETURN_STAGING_CANCEL",
+				OwnerID: vendorReturn.OwnerID, WarehouseID: vendorReturn.WarehouseID, BusinessDate: vendorReturn.BusinessDate.Format("2006-01-02"),
+				ItemID: vendorReturn.ItemID, LotID: vendorReturn.LotID, HandlingUnitID: vendorReturn.HandlingUnitID,
+				From:     &inventorydto.BalanceDimension{LocationID: *vendorReturn.ReturnDockLocationID, InventoryStatusID: *vendorReturn.ReturnPendingStatusID},
+				To:       &inventorydto.BalanceDimension{LocationID: vendorReturn.SourceLocationID, InventoryStatusID: vendorReturn.SourceInventoryStatusID},
+				Quantity: vendorReturn.Quantity, SerialIDs: serialIDs, ExpectedSourceVersion: &request.ExpectedBalanceVersion,
+				SourceDocumentID: vendorReturn.ID, SourceLineID: &vendorReturn.QuarantineDispositionID, Notes: &reason, RelocateHandlingUnit: true,
+			}, actor)
+			if err != nil {
+				return err
+			}
+			movementID := posted.Movement.ID
+			cancellationMovementID = &movementID
+		}
 		cancelled, err := local.transition(ctx, vendorReturn.DocumentTypeID, vendorReturn.StatusID, "CANCELLED")
 		if err != nil {
 			return err
 		}
-		if err := local.repositories.VendorReturn.Cancel(ctx, id, cancelled.ID, reason, actor, request.ExpectedVersion); err != nil {
+		if err := local.repositories.VendorReturn.Cancel(ctx, id, cancelled.ID, reason, actor, cancellationMovementID, request.ExpectedVersion); err != nil {
 			return err
 		}
 		dispositionCancelled, err := local.transition(ctx, contextRow.DispositionDocumentTypeID, contextRow.DispositionStatusID, "CANCELLED")

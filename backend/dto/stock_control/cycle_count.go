@@ -8,6 +8,13 @@ type CreateCycleCountRequest struct {
 	Notes        *string  `json:"notes" binding:"omitempty,max=4000"`
 	BalanceIDs   []string `json:"balance_ids" binding:"required,min=1,max=100,dive,max=160"`
 }
+type CreateGrandStockOpnameRequest struct {
+	OwnerID      string  `json:"owner_id" binding:"required,max=36"`
+	WarehouseID  string  `json:"warehouse_id" binding:"required,max=36"`
+	BusinessDate string  `json:"business_date" binding:"required"`
+	ToleranceQty string  `json:"tolerance_quantity" binding:"omitempty,max=30"`
+	Notes        *string `json:"notes" binding:"omitempty,max=4000"`
+}
 type CycleCountEntryRequest struct {
 	LineID     string  `json:"line_id" binding:"required,max=180"`
 	CountedQty string  `json:"counted_quantity" binding:"required,max=30"`
@@ -15,15 +22,15 @@ type CycleCountEntryRequest struct {
 }
 type RecordCycleCountRequest struct {
 	ExpectedVersion int64                    `json:"expected_version" binding:"required,min=1"`
-	Lines           []CycleCountEntryRequest `json:"lines" binding:"required,min=1,max=100,dive"`
+	Lines           []CycleCountEntryRequest `json:"lines" binding:"required,min=1,max=5000,dive"`
 }
 type CycleCountDecisionRequest struct {
 	ExpectedVersion int64    `json:"expected_version" binding:"required,min=1"`
-	LineIDs         []string `json:"line_ids" binding:"required,min=1,max=100,dive,max=180"`
+	LineIDs         []string `json:"line_ids" binding:"required,min=1,max=5000,dive,max=180"`
 }
 type RejectCycleCountRequest struct {
 	ExpectedVersion int64    `json:"expected_version" binding:"required,min=1"`
-	LineIDs         []string `json:"line_ids" binding:"required,min=1,max=100,dive,max=180"`
+	LineIDs         []string `json:"line_ids" binding:"required,min=1,max=5000,dive,max=180"`
 	Reason          string   `json:"reason" binding:"required,max=4000"`
 }
 type CancelCycleCountRequest struct {
@@ -61,6 +68,7 @@ type CycleCountLineResponse struct {
 }
 type CycleCountResponse struct {
 	ID                   string                   `json:"cycle_count_id"`
+	CountTypeCode        string                   `json:"count_type_code"`
 	StatusCode           string                   `json:"status_code"`
 	OwnerID              string                   `json:"owner_id"`
 	OwnerCode            string                   `json:"owner_code"`

@@ -29,6 +29,7 @@ func registerStockControlRoutes(api *gin.RouterGroup, controller *controller.Con
 	group.POST("/adjustments/:id/cancel", authorization.RequirePermission(middleware.PermissionInventoryAdjust), controller.CancelAdjustment)
 	group.GET("/cycle-counts", authorization.RequireAnyPermission(middleware.PermissionInventoryCount, middleware.PermissionInventoryCountApprove), controller.ListCycleCounts)
 	group.POST("/cycle-counts", authorization.RequirePermission(middleware.PermissionInventoryCount), controller.CreateCycleCount)
+	group.POST("/cycle-counts/grand", authorization.RequirePermission(middleware.PermissionInventoryCount), controller.CreateGrandStockOpname)
 	group.GET("/cycle-counts/:id", authorization.RequireAnyPermission(middleware.PermissionInventoryCount, middleware.PermissionInventoryCountApprove), controller.GetCycleCount)
 	group.POST("/cycle-counts/:id/count", authorization.RequirePermission(middleware.PermissionInventoryCount), controller.RecordCycleCount)
 	group.POST("/cycle-counts/:id/approve", authorization.RequirePermission(middleware.PermissionInventoryCountApprove), controller.ApproveCycleCount)

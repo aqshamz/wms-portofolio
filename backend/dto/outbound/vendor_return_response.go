@@ -33,6 +33,13 @@ type VendorReturnResponse struct {
 	SourceLocationCode        string     `json:"source_location_code"`
 	SourceInventoryStatusID   string     `json:"source_inventory_status_id"`
 	SourceInventoryStatusCode string     `json:"source_inventory_status_code"`
+	ReturnDockLocationID      *string    `json:"return_dock_location_id"`
+	ReturnDockLocationCode    string     `json:"return_dock_location_code,omitempty"`
+	ReturnPendingStatusID     *string    `json:"return_pending_status_id"`
+	ReturnPendingStatusCode   string     `json:"return_pending_status_code,omitempty"`
+	StagedBalanceID           *string    `json:"staged_balance_id"`
+	StagingMovementID         *string    `json:"staging_movement_id"`
+	CancellationMovementID    *string    `json:"cancellation_movement_id"`
 	Quantity                  string     `json:"quantity"`
 	UOMID                     string     `json:"uom_id"`
 	UOMCode                   string     `json:"uom_code"`

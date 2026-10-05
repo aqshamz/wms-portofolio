@@ -17,15 +17,17 @@ import (
 	inventory "wms-api/services/inventory"
 )
 
-func cycleCountID() (string, error) {
+const maxGrandStockOpnameLines = 5000
+
+func cycleCountID(prefix string) (string, error) {
 	data := make([]byte, 10)
 	if _, err := rand.Read(data); err != nil {
 		return "", err
 	}
-	return "CC-" + strings.ToUpper(hex.EncodeToString(data)), nil
+	return prefix + "-" + strings.ToUpper(hex.EncodeToString(data)), nil
 }
 func mapCycleCount(row repository.CycleCountRow) dto.CycleCountResponse {
-	return dto.CycleCountResponse{ID: row.ID, StatusCode: row.StatusCode, OwnerID: row.OwnerID, OwnerCode: row.OwnerCode, OwnerName: row.OwnerName, WarehouseID: row.WarehouseID, WarehouseCode: row.WarehouseCode, WarehouseName: row.WarehouseName, BusinessDate: row.BusinessDate.Format("2006-01-02"), ToleranceQty: row.ToleranceQty, BlindCount: row.BlindCount, Notes: row.Notes, TotalLines: row.TotalLines, OpenLines: row.OpenLines, CountedLines: row.CountedLines, RecountLines: row.RecountLines, FinalLines: row.FinalLines, Lines: []dto.CycleCountLineResponse{}, CompletedAt: row.CompletedAt, CancelledAt: row.CancelledAt, CancellationReason: row.CancellationReason, CreatedAt: row.CreatedAt, CreatedBy: row.CreatedBy, CreatedByDisplayName: row.CreatedByDisplayName, VersionNo: row.VersionNo}
+	return dto.CycleCountResponse{ID: row.ID, CountTypeCode: row.CountTypeCode, StatusCode: row.StatusCode, OwnerID: row.OwnerID, OwnerCode: row.OwnerCode, OwnerName: row.OwnerName, WarehouseID: row.WarehouseID, WarehouseCode: row.WarehouseCode, WarehouseName: row.WarehouseName, BusinessDate: row.BusinessDate.Format("2006-01-02"), ToleranceQty: row.ToleranceQty, BlindCount: row.BlindCount, Notes: row.Notes, TotalLines: row.TotalLines, OpenLines: row.OpenLines, CountedLines: row.CountedLines, RecountLines: row.RecountLines, FinalLines: row.FinalLines, Lines: []dto.CycleCountLineResponse{}, CompletedAt: row.CompletedAt, CancelledAt: row.CancelledAt, CancellationReason: row.CancellationReason, CreatedAt: row.CreatedAt, CreatedBy: row.CreatedBy, CreatedByDisplayName: row.CreatedByDisplayName, VersionNo: row.VersionNo}
 }
 func mapCycleCountLine(row repository.CycleCountLineRow, reveal bool) dto.CycleCountLineResponse {
 	var system *string
@@ -67,9 +69,13 @@ func (s *Service) ListCycleCounts(ctx context.Context, f repository.CycleCountFi
 	f.OwnerID = strings.ToLower(strings.TrimSpace(f.OwnerID))
 	f.WarehouseID = strings.ToLower(strings.TrimSpace(f.WarehouseID))
 	f.StatusCode = strings.ToUpper(strings.TrimSpace(f.StatusCode))
+	f.CountTypeCode = strings.ToUpper(strings.TrimSpace(f.CountTypeCode))
 	f.Search = strings.TrimSpace(f.Search)
 	if f.OwnerID == "" || f.WarehouseID == "" || f.Page < 1 || f.PageSize < 1 || f.PageSize > 100 {
 		return dto.PageResponse[dto.CycleCountResponse]{}, invalid("invalid cycle count filters")
+	}
+	if f.CountTypeCode != "" && f.CountTypeCode != "CYCLE" && f.CountTypeCode != "GRAND" {
+		return dto.PageResponse[dto.CycleCountResponse]{}, invalid("count_type_code must be CYCLE or GRAND")
 	}
 	allowed, err := s.repositories.Scope.Allowed(ctx, actor, f.OwnerID, f.WarehouseID)
 	if err != nil {
@@ -104,7 +110,7 @@ func (s *Service) CreateCycleCount(ctx context.Context, q dto.CreateCycleCountRe
 	if err != nil {
 		return dto.CycleCountResponse{}, invalid("business_date must be YYYY-MM-DD")
 	}
-	id, err := cycleCountID()
+	id, err := cycleCountID("CC")
 	if err != nil {
 		return dto.CycleCountResponse{}, err
 	}
@@ -143,8 +149,82 @@ func (s *Service) CreateCycleCount(ctx context.Context, q dto.CreateCycleCountRe
 			}
 			lines = append(lines, model.CycleCountLine{ID: fmt.Sprintf("%s-L%04d", id, index+1), CycleCountID: id, LineNo: index + 1, BalanceID: balance.ID, SnapshotVersionNo: balance.VersionNo, ItemID: balance.ItemID, LotID: balance.LotID, HandlingUnitID: balance.HandlingUnitID, LocationID: balance.LocationID, InventoryStatusID: balance.InventoryStatusID, UOMID: balance.UOMID, SystemQty: balance.OnHandQty, DecisionCode: "OPEN", CreatedBy: actor, UpdatedBy: &actor, VersionNo: 1})
 		}
-		header := &model.CycleCount{ID: id, DocumentTypeID: doc.ID, StatusID: status.ID, OwnerID: ownerID, WarehouseID: warehouseID, BusinessDate: date, ToleranceQty: tolerance, BlindCount: true, Notes: q.Notes, CreatedBy: actor, UpdatedBy: &actor, VersionNo: 1}
+		header := &model.CycleCount{ID: id, CountTypeCode: "CYCLE", DocumentTypeID: doc.ID, StatusID: status.ID, OwnerID: ownerID, WarehouseID: warehouseID, BusinessDate: date, ToleranceQty: tolerance, BlindCount: true, Notes: q.Notes, CreatedBy: actor, UpdatedBy: &actor, VersionNo: 1}
 		return r.CycleCounts.Create(ctx, header, lines)
+	})
+	if err != nil {
+		return dto.CycleCountResponse{}, err
+	}
+	return s.GetCycleCount(ctx, id, actor)
+}
+
+func (s *Service) CreateGrandStockOpname(ctx context.Context, q dto.CreateGrandStockOpnameRequest, actor string) (dto.CycleCountResponse, error) {
+	ownerID := strings.ToLower(strings.TrimSpace(q.OwnerID))
+	warehouseID := strings.ToLower(strings.TrimSpace(q.WarehouseID))
+	if ownerID == "" || warehouseID == "" {
+		return dto.CycleCountResponse{}, invalid("owner_id and warehouse_id are required")
+	}
+	tolerance := strings.TrimSpace(q.ToleranceQty)
+	if tolerance == "" {
+		tolerance = "0"
+	}
+	tolerance, _, err := number(tolerance, false)
+	if err != nil {
+		return dto.CycleCountResponse{}, err
+	}
+	date, err := time.Parse("2006-01-02", q.BusinessDate)
+	if err != nil {
+		return dto.CycleCountResponse{}, invalid("business_date must be YYYY-MM-DD")
+	}
+	id, err := cycleCountID("GSO")
+	if err != nil {
+		return dto.CycleCountResponse{}, err
+	}
+	err = s.repositories.Transaction(ctx, func(r *repository.Repositories, _ *inventoryrepo.Repositories) error {
+		served, err := r.Scope.WarehouseServesOwner(ctx, ownerID, warehouseID)
+		if err != nil {
+			return err
+		}
+		if !served {
+			return invalid("warehouse does not actively serve the selected owner")
+		}
+		if err = authorize(ctx, r, actor, scopeBalance(ownerID, warehouseID)); err != nil {
+			return err
+		}
+		active, err := r.CycleCounts.ActiveGrandExists(ctx, ownerID, warehouseID)
+		if err != nil {
+			return err
+		}
+		if active {
+			return invalid("an active grand stock opname already exists for this owner and warehouse")
+		}
+		balances, err := r.CycleCounts.GrandBalances(ctx, ownerID, warehouseID, maxGrandStockOpnameLines+1)
+		if err != nil {
+			return err
+		}
+		if len(balances) == 0 {
+			return invalid("no positive stock exists in active STORAGE or PICK_FACE locations for this owner and warehouse")
+		}
+		if len(balances) > maxGrandStockOpnameLines {
+			return invalid("grand stock opname exceeds the 5000-line document limit")
+		}
+		doc, err := r.CycleCounts.DocumentType(ctx)
+		if err != nil {
+			return invalid("STOCK_COUNT document type is not configured")
+		}
+		status, err := r.CycleCounts.Status(ctx, doc.ID, "DRAFT")
+		if err != nil {
+			return invalid("STOCK_COUNT DRAFT status is not configured")
+		}
+		lines := make([]model.CycleCountLine, 0, len(balances))
+		for index, balance := range balances {
+			lines = append(lines, model.CycleCountLine{ID: fmt.Sprintf("%s-L%04d", id, index+1), CycleCountID: id, LineNo: index + 1, BalanceID: balance.ID, SnapshotVersionNo: balance.VersionNo, ItemID: balance.ItemID, LotID: balance.LotID, HandlingUnitID: balance.HandlingUnitID, LocationID: balance.LocationID, InventoryStatusID: balance.InventoryStatusID, UOMID: balance.UOMID, SystemQty: balance.OnHandQty, DecisionCode: "OPEN", CreatedBy: actor, UpdatedBy: &actor, VersionNo: 1})
+		}
+		header := &model.CycleCount{ID: id, CountTypeCode: "GRAND", DocumentTypeID: doc.ID, StatusID: status.ID, OwnerID: ownerID, WarehouseID: warehouseID, BusinessDate: date, ToleranceQty: tolerance, BlindCount: true, Notes: q.Notes, CreatedBy: actor, UpdatedBy: &actor, VersionNo: 1}
+		if err = r.CycleCounts.Create(ctx, header, lines); err == inventoryrepo.ErrConflict {
+			return invalid("an active grand stock opname already exists for this owner and warehouse")
+		}
+		return err
 	})
 	if err != nil {
 		return dto.CycleCountResponse{}, err

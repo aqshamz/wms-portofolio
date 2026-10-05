@@ -99,10 +99,6 @@ func (s *Service) CreateQuarantineDisposition(ctx context.Context, caseID string
 		if err != nil {
 			return err
 		}
-		disposed, err := storedRatio(caseRow.DisposedQty)
-		if err != nil {
-			return err
-		}
 		committed, err := storedRatio(caseRow.CommittedQty)
 		if err != nil {
 			return err
@@ -126,8 +122,8 @@ func (s *Service) CreateQuarantineDisposition(ctx context.Context, caseID string
 			return repository.ErrConcurrentWrite
 		}
 		available, err := storedRatio(balance.AvailableQty)
-		pending := new(big.Rat).Sub(committed, disposed)
-		if err != nil || available.Cmp(new(big.Rat).Add(pending, quantityNumber)) < 0 {
+		reserved, reservedErr := storedRatio(caseRow.ReservedQuarantineQty)
+		if err != nil || reservedErr != nil || available.Cmp(new(big.Rat).Add(reserved, quantityNumber)) < 0 {
 			return invalid("insufficient unreserved quarantine quantity")
 		}
 		if batch.HandlingUnitID != nil && available.Cmp(quantityNumber) != 0 {
@@ -169,17 +165,34 @@ func (s *Service) CreateQuarantineDisposition(ctx context.Context, caseID string
 			target = &inventorydto.BalanceDimension{LocationID: location.ID, InventoryStatusID: availableStatus.ID}
 			movementTypeCode = "PUTAWAY"
 		} else if kind.RemovesInventory {
-			if request.TargetLocationID != nil {
-				return invalid("target_location_id is not allowed for inventory removal")
+			if typeCode == "RETURN" {
+				if request.TargetLocationID == nil {
+					return invalid("target_location_id is required for RETURN")
+				}
+				location, err := local.validateReturnDock(ctx, caseModel.WarehouseID, *request.TargetLocationID)
+				if err != nil {
+					return err
+				}
+				returnPending, err := local.inventoryStatus(ctx, "RETURN_PENDING")
+				if err != nil {
+					return err
+				}
+				targetLocationID = &location.ID
+				target = &inventorydto.BalanceDimension{LocationID: location.ID, InventoryStatusID: returnPending.ID}
+				movementTypeCode = "RETURN_STAGING"
+			} else {
+				if request.TargetLocationID != nil {
+					return invalid("target_location_id is not allowed for inventory removal")
+				}
+				if kind.RemovalMovementTypeID == nil {
+					return state("disposition removal movement type is not configured")
+				}
+				movementType, err := local.repositories.Inventory.MovementType.Get(ctx, *kind.RemovalMovementTypeID)
+				if err != nil || !movementType.IsActive {
+					return state("disposition removal movement type is unavailable")
+				}
+				movementTypeCode = movementType.Code
 			}
-			if kind.RemovalMovementTypeID == nil {
-				return state("disposition removal movement type is not configured")
-			}
-			movementType, err := local.repositories.Inventory.MovementType.Get(ctx, *kind.RemovalMovementTypeID)
-			if err != nil || !movementType.IsActive {
-				return state("disposition removal movement type is unavailable")
-			}
-			movementTypeCode = movementType.Code
 		} else {
 			return state("disposition type has no supported inventory action")
 		}
@@ -202,12 +215,8 @@ func (s *Service) CreateQuarantineDisposition(ctx context.Context, caseID string
 		if err := local.repositories.Disposition.Create(ctx, &disposition); err != nil {
 			return err
 		}
-		if typeCode == "DISPOSE" || typeCode == "RETURN" {
-			transactionTypeCode := "DISPOSAL"
-			if typeCode == "RETURN" {
-				transactionTypeCode = "RETURN_TO_VENDOR"
-			}
-			transactionType, err := local.documentType(ctx, transactionTypeCode)
+		if typeCode == "DISPOSE" {
+			transactionType, err := local.documentType(ctx, "DISPOSAL")
 			if err != nil {
 				return err
 			}
@@ -219,34 +228,18 @@ func (s *Service) CreateQuarantineDisposition(ctx context.Context, caseID string
 			if err != nil {
 				return err
 			}
-			if typeCode == "DISPOSE" {
-				planned := outboundmodel.DisposalTransaction{
-					ID: transactionID, DocumentTypeID: transactionType.ID, StatusID: transactionStatus.ID,
-					QuarantineDispositionID: dispositionID, QuarantineCaseID: caseID,
-					OwnerID: caseModel.OwnerID, WarehouseID: caseModel.WarehouseID, BusinessDate: businessDate,
-					SourceBalanceID: balance.ID, PlannedBalanceVersionNo: balance.VersionNo,
-					ItemID: batch.ItemID, LotID: batch.LotID, SerialID: batch.SerialID, HandlingUnitID: batch.HandlingUnitID,
-					SourceLocationID: balance.LocationID, SourceInventoryStatusID: balance.InventoryStatusID,
-					Quantity: quantity, UOMID: caseModel.UOMID, Notes: decisionNotes,
-					PlannedAt: decidedAt, CreatedBy: actor, UpdatedBy: &actor, VersionNo: 1,
-				}
-				if err := local.repositories.Disposal.Create(ctx, &planned); err != nil {
-					return err
-				}
-			} else {
-				planned := outboundmodel.VendorReturnTransaction{
-					ID: transactionID, DocumentTypeID: transactionType.ID, StatusID: transactionStatus.ID,
-					QuarantineDispositionID: dispositionID, QuarantineCaseID: caseID,
-					OwnerID: caseModel.OwnerID, VendorID: batch.VendorID, WarehouseID: caseModel.WarehouseID, BusinessDate: businessDate,
-					SourceBalanceID: balance.ID, PlannedBalanceVersionNo: balance.VersionNo,
-					ItemID: batch.ItemID, LotID: batch.LotID, SerialID: batch.SerialID, HandlingUnitID: batch.HandlingUnitID,
-					SourceLocationID: balance.LocationID, SourceInventoryStatusID: balance.InventoryStatusID,
-					Quantity: quantity, UOMID: caseModel.UOMID, Notes: decisionNotes,
-					PlannedAt: decidedAt, CreatedBy: actor, UpdatedBy: &actor, VersionNo: 1,
-				}
-				if err := local.repositories.VendorReturn.Create(ctx, &planned); err != nil {
-					return err
-				}
+			planned := outboundmodel.DisposalTransaction{
+				ID: transactionID, DocumentTypeID: transactionType.ID, StatusID: transactionStatus.ID,
+				QuarantineDispositionID: dispositionID, QuarantineCaseID: caseID,
+				OwnerID: caseModel.OwnerID, WarehouseID: caseModel.WarehouseID, BusinessDate: businessDate,
+				SourceBalanceID: balance.ID, PlannedBalanceVersionNo: balance.VersionNo,
+				ItemID: batch.ItemID, LotID: batch.LotID, SerialID: batch.SerialID, HandlingUnitID: batch.HandlingUnitID,
+				SourceLocationID: balance.LocationID, SourceInventoryStatusID: balance.InventoryStatusID,
+				Quantity: quantity, UOMID: caseModel.UOMID, Notes: decisionNotes,
+				PlannedAt: decidedAt, CreatedBy: actor, UpdatedBy: &actor, VersionNo: 1,
+			}
+			if err := local.repositories.Disposal.Create(ctx, &planned); err != nil {
+				return err
 			}
 			if caseRow.StatusCode == "OPEN" {
 				targetStatus, err := local.transitionTarget(ctx, caseModel.DocumentTypeID, caseModel.StatusID, "PARTIALLY_DECIDED")
@@ -261,9 +254,54 @@ func (s *Service) CreateQuarantineDisposition(ctx context.Context, caseID string
 		if batch.SerialID != nil {
 			serialIDs = append(serialIDs, *batch.SerialID)
 		}
-		posted, err := inventoryservice.NewService(local.repositories.Inventory).PostMovement(ctx, inventorydto.PostingRequest{OperationKey: "inbound.quarantine." + dispositionID, MovementTypeCode: movementTypeCode, OwnerID: caseModel.OwnerID, WarehouseID: caseModel.WarehouseID, BusinessDate: request.BusinessDate, ItemID: batch.ItemID, LotID: batch.LotID, HandlingUnitID: batch.HandlingUnitID, From: &inventorydto.BalanceDimension{LocationID: balance.LocationID, InventoryStatusID: balance.InventoryStatusID}, To: target, Quantity: quantity, SerialIDs: serialIDs, ExpectedSourceVersion: &request.ExpectedBalanceVersion, SourceDocumentID: dispositionID, SourceLineID: &caseID, Notes: decisionNotes, RelocateHandlingUnit: kind.ReleasesToAvailable}, actor)
+		posted, err := inventoryservice.NewService(local.repositories.Inventory).PostMovement(ctx, inventorydto.PostingRequest{OperationKey: "inbound.quarantine." + dispositionID, MovementTypeCode: movementTypeCode, OwnerID: caseModel.OwnerID, WarehouseID: caseModel.WarehouseID, BusinessDate: request.BusinessDate, ItemID: batch.ItemID, LotID: batch.LotID, HandlingUnitID: batch.HandlingUnitID, From: &inventorydto.BalanceDimension{LocationID: balance.LocationID, InventoryStatusID: balance.InventoryStatusID}, To: target, Quantity: quantity, SerialIDs: serialIDs, ExpectedSourceVersion: &request.ExpectedBalanceVersion, SourceDocumentID: dispositionID, SourceLineID: &caseID, Notes: decisionNotes, RelocateHandlingUnit: kind.ReleasesToAvailable || typeCode == "RETURN"}, actor)
 		if err != nil {
 			return err
+		}
+		if typeCode == "RETURN" {
+			if target == nil || posted.ToBalance == nil || targetLocationID == nil {
+				return state("return staging did not create a pending balance")
+			}
+			transactionType, err := local.documentType(ctx, "RETURN_TO_VENDOR")
+			if err != nil {
+				return err
+			}
+			transactionStatus, err := local.initialStatus(ctx, transactionType.ID)
+			if err != nil {
+				return err
+			}
+			transactionID, err := local.generateID(ctx, transactionType.ID, request.BusinessDate, batch.VendorID, batch.WarehouseID)
+			if err != nil {
+				return err
+			}
+			stagedBalanceID, stagingMovementID := posted.ToBalance.ID, posted.Movement.ID
+			returnDockLocationID, returnPendingStatusID := *targetLocationID, target.InventoryStatusID
+			planned := outboundmodel.VendorReturnTransaction{
+				ID: transactionID, DocumentTypeID: transactionType.ID, StatusID: transactionStatus.ID,
+				QuarantineDispositionID: dispositionID, QuarantineCaseID: caseID,
+				OwnerID: caseModel.OwnerID, VendorID: batch.VendorID, WarehouseID: caseModel.WarehouseID, BusinessDate: businessDate,
+				SourceBalanceID: balance.ID, PlannedBalanceVersionNo: balance.VersionNo,
+				ItemID: batch.ItemID, LotID: batch.LotID, SerialID: batch.SerialID, HandlingUnitID: batch.HandlingUnitID,
+				SourceLocationID: balance.LocationID, SourceInventoryStatusID: balance.InventoryStatusID,
+				ReturnDockLocationID: &returnDockLocationID, ReturnPendingStatusID: &returnPendingStatusID,
+				StagedBalanceID: &stagedBalanceID, StagingMovementID: &stagingMovementID,
+				Quantity: quantity, UOMID: caseModel.UOMID, Notes: decisionNotes,
+				PlannedAt: decidedAt, CreatedBy: actor, UpdatedBy: &actor, VersionNo: 1,
+			}
+			if err := local.repositories.VendorReturn.Create(ctx, &planned); err != nil {
+				return err
+			}
+			if err := local.repositories.Disposition.Stage(ctx, dispositionID, stagingMovementID, stagedBalanceID); err != nil {
+				return err
+			}
+			if caseRow.StatusCode == "OPEN" {
+				targetStatus, err := local.transitionTarget(ctx, caseModel.DocumentTypeID, caseModel.StatusID, "PARTIALLY_DECIDED")
+				if err != nil {
+					return err
+				}
+				return local.repositories.QuarantineCase.SetStatus(ctx, caseID, targetStatus.ID, actor, false, caseModel.VersionNo)
+			}
+			return local.repositories.QuarantineCase.Touch(ctx, caseID, actor, caseModel.VersionNo)
 		}
 		processed, err := local.transitionTarget(ctx, documentType.ID, initial.ID, "PROCESSED")
 		if err != nil {

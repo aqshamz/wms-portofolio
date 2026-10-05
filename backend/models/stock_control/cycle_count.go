@@ -4,6 +4,7 @@ import "time"
 
 type CycleCount struct {
 	ID                 string     `gorm:"column:cycle_count_id;size:140;primaryKey"`
+	CountTypeCode      string     `gorm:"column:count_type_code;size:20;not null;default:CYCLE"`
 	DocumentTypeID     string     `gorm:"column:document_type_id;type:uuid;not null"`
 	StatusID           string     `gorm:"column:status_id;type:uuid;not null"`
 	OwnerID            string     `gorm:"column:owner_id;type:uuid;not null"`

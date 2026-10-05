@@ -12,8 +12,8 @@ func TestAllStockControlRoutesRequireSession(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	registerStockControlRoutes(router.Group("/api/v1"), controller.NewController(nil), middleware.NewAuthentication(nil))
-	if len(router.Routes()) != 34 {
-		t.Fatalf("expected 34 routes got %d", len(router.Routes()))
+	if len(router.Routes()) != 35 {
+		t.Fatalf("expected 35 routes got %d", len(router.Routes()))
 	}
 	for _, route := range router.Routes() {
 		w := httptest.NewRecorder()

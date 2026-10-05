@@ -69,6 +69,7 @@ func registerInboundRoutes(api *gin.RouterGroup, controller *controller.Controll
 	group.GET("/quarantine-cases", read, controller.ListQuarantineCases)
 	group.GET("/quarantine-cases/:id", read, controller.GetQuarantineCase)
 	group.GET("/quarantine-cases/:id/targets", dispose, controller.ListQuarantineTargets)
+	group.GET("/quarantine-cases/:id/return-docks", dispose, controller.ListQuarantineReturnDocks)
 	group.POST("/quarantine-cases/:id/dispositions", dispose, controller.CreateQuarantineDisposition)
 	group.GET("/exceptions", read, controller.ListInboundExceptions)
 	group.GET("/exceptions/:id", read, controller.GetInboundException)

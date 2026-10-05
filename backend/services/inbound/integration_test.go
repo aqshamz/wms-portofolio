@@ -84,6 +84,7 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	inboundOK(t, repository.Migrate(tx))
 	inboundOK(t, outboundrepository.MigrateDisposals(tx))
 	inboundOK(t, outboundrepository.MigrateVendorReturns(tx))
+	inboundOK(t, outboundrepository.MigrateVendorReturnStaging(tx))
 	inboundOK(t, repository.SeedReferenceData(tx))
 
 	ctx := context.Background()
@@ -742,23 +743,28 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 		t.Fatalf("completed disposal did not close the fully processed case: %+v", disposedCase)
 	}
 	inboundOK(t, tx.RollbackTo("quarantine_accept_check").Error)
-	caseResult, err = service.CreateQuarantineDisposition(ctx, caseResult.ID, dto.CreateQuarantineDispositionRequest{ExpectedCaseVersion: caseResult.VersionNo, ExpectedBalanceVersion: quarantineBalance.VersionNo, DispositionTypeCode: "RETURN", DispositionQty: "1", BusinessDate: businessDate, DecidedAt: businessDate + "T11:00:00+07:00"}, account.ID)
+	returnDocks, err := service.ListQuarantineReturnDocks(ctx, caseResult.ID, "DOCK", 1, 20)
 	inboundOK(t, err)
-	if caseResult.StatusCode != "PARTIALLY_DECIDED" || caseResult.DisposedQty != "0" || caseResult.CommittedQty != "1.000000" || caseResult.PendingQty != "1.000000" || caseResult.AvailableQty != "2.000000" {
-		t.Fatalf("return decision did not leave stock pending: %+v", caseResult)
+	if returnDocks.TotalItems != 1 || len(returnDocks.Items) != 1 || returnDocks.Items[0].LocationID != dock.ID {
+		t.Fatalf("return-dock lookup did not filter shipping-capable locations: %+v", returnDocks)
+	}
+	caseResult, err = service.CreateQuarantineDisposition(ctx, caseResult.ID, dto.CreateQuarantineDispositionRequest{ExpectedCaseVersion: caseResult.VersionNo, ExpectedBalanceVersion: quarantineBalance.VersionNo, DispositionTypeCode: "RETURN", DispositionQty: "1", BusinessDate: businessDate, DecidedAt: businessDate + "T11:00:00+07:00", TargetLocationID: &dock.ID}, account.ID)
+	inboundOK(t, err)
+	if caseResult.StatusCode != "PARTIALLY_DECIDED" || caseResult.DisposedQty != "0" || caseResult.CommittedQty != "1.000000" || caseResult.PendingQty != "1.000000" || caseResult.AvailableQty != "1.000000" {
+		t.Fatalf("return decision did not stage stock: %+v", caseResult)
 	}
 	returnDisposition := caseResult.Dispositions[0]
-	if returnDisposition.DispositionTypeCode != "RETURN" || returnDisposition.StatusCode != "DECIDED" || returnDisposition.VendorReturnID == nil || returnDisposition.InventoryMovementID != nil {
+	if returnDisposition.DispositionTypeCode != "RETURN" || returnDisposition.StatusCode != "DECIDED" || returnDisposition.VendorReturnID == nil || returnDisposition.InventoryMovementID == nil || returnDisposition.ResultingBalanceID == nil || returnDisposition.TargetLocationCode == nil || *returnDisposition.TargetLocationCode != dock.Code {
 		t.Fatalf("pending vendor return lineage is incomplete: %+v", returnDisposition)
 	}
 	plannedReturn, err := outbound.GetVendorReturn(ctx, *returnDisposition.VendorReturnID)
 	inboundOK(t, err)
-	if plannedReturn.StatusCode != "PLANNED" || plannedReturn.VendorID != vendor.ID || plannedReturn.VendorCode != vendor.Code || plannedReturn.SourceBalanceVersionNo == nil || plannedReturn.AvailableQty != "2.000000" {
+	if plannedReturn.StatusCode != "PLANNED" || plannedReturn.VendorID != vendor.ID || plannedReturn.VendorCode != vendor.Code || plannedReturn.SourceBalanceVersionNo == nil || plannedReturn.AvailableQty != "1.000000" || plannedReturn.ReturnDockLocationID == nil || *plannedReturn.ReturnDockLocationID != dock.ID || plannedReturn.ReturnPendingStatusCode != "RETURN_PENDING" || plannedReturn.StagingMovementID == nil {
 		t.Fatalf("planned vendor return snapshot is incomplete: %+v", plannedReturn)
 	}
-	cancelledReturn, err := outbound.CancelVendorReturn(ctx, plannedReturn.ID, outbounddto.CancelVendorReturnRequest{ExpectedVersion: plannedReturn.VersionNo, Reason: "Vendor requested review"}, account.ID)
+	cancelledReturn, err := outbound.CancelVendorReturn(ctx, plannedReturn.ID, outbounddto.CancelVendorReturnRequest{ExpectedVersion: plannedReturn.VersionNo, ExpectedBalanceVersion: *plannedReturn.SourceBalanceVersionNo, Reason: "Vendor requested review"}, account.ID)
 	inboundOK(t, err)
-	if cancelledReturn.StatusCode != "CANCELLED" || cancelledReturn.CancellationReason == nil {
+	if cancelledReturn.StatusCode != "CANCELLED" || cancelledReturn.CancellationReason == nil || cancelledReturn.CancellationMovementID == nil {
 		t.Fatalf("vendor return cancellation did not retain its reason: %+v", cancelledReturn)
 	}
 	caseResult, err = service.GetQuarantineCase(ctx, caseResult.ID)
@@ -766,7 +772,7 @@ func testInboundWorkflow(t *testing.T, fresh bool) {
 	if caseResult.StatusCode != "OPEN" || caseResult.CommittedQty != "0" || caseResult.PendingQty != "0.000000" || caseResult.AvailableQty != "2.000000" {
 		t.Fatalf("cancelled vendor return did not release committed quantity: %+v", caseResult)
 	}
-	caseResult, err = service.CreateQuarantineDisposition(ctx, caseResult.ID, dto.CreateQuarantineDispositionRequest{ExpectedCaseVersion: caseResult.VersionNo, ExpectedBalanceVersion: *caseResult.QuarantineBalanceVersionNo, DispositionTypeCode: "RETURN", DispositionQty: "1", BusinessDate: businessDate, DecidedAt: businessDate + "T11:30:00+07:00"}, account.ID)
+	caseResult, err = service.CreateQuarantineDisposition(ctx, caseResult.ID, dto.CreateQuarantineDispositionRequest{ExpectedCaseVersion: caseResult.VersionNo, ExpectedBalanceVersion: *caseResult.QuarantineBalanceVersionNo, DispositionTypeCode: "RETURN", DispositionQty: "1", BusinessDate: businessDate, DecidedAt: businessDate + "T11:30:00+07:00", TargetLocationID: &dock.ID}, account.ID)
 	inboundOK(t, err)
 	returnDisposition = caseResult.Dispositions[len(caseResult.Dispositions)-1]
 	plannedReturn, err = outbound.GetVendorReturn(ctx, *returnDisposition.VendorReturnID)

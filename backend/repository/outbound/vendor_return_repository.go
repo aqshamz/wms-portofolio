@@ -15,6 +15,7 @@ type VendorReturnRow struct {
 	WarehouseCode, WarehouseName, ItemCode, ItemName         string
 	LotNumber, SerialNo, HandlingUnitBarcode                 string
 	SourceLocationCode, SourceInventoryStatusCode, UOMCode   string
+	ReturnDockLocationCode, ReturnPendingStatusCode          string
 	CreatedByDisplayName                                     string
 	CompletedByDisplayName, CancelledByDisplayName           *string
 }
@@ -31,7 +32,9 @@ func vendorReturnQuery(db *gorm.DB) *gorm.DB {
 			vendor.code vendor_code,vendor.name vendor_name,warehouse.code warehouse_code,warehouse.name warehouse_name,
 			item.code item_code,item.name item_name,COALESCE(lot.lot_number,'') lot_number,
 			COALESCE(serial.serial_no,'') serial_no,COALESCE(hu.barcode,'') handling_unit_barcode,
-			location.code source_location_code,inventory_status.code source_inventory_status_code,uom.code uom_code,
+			location.code source_location_code,inventory_status.code source_inventory_status_code,
+			COALESCE(return_dock.code,'') return_dock_location_code,
+			COALESCE(return_status.code,'') return_pending_status_code,uom.code uom_code,
 			creator.display_name created_by_display_name,completer.display_name completed_by_display_name,
 			canceller.display_name cancelled_by_display_name`).
 		Joins("JOIN document_status status ON status.status_id=r.status_id").
@@ -44,6 +47,8 @@ func vendorReturnQuery(db *gorm.DB) *gorm.DB {
 		Joins("LEFT JOIN handling_unit hu ON hu.handling_unit_id=r.handling_unit_id").
 		Joins("JOIN warehouse_location location ON location.location_id=r.source_location_id").
 		Joins("JOIN inventory_status ON inventory_status.inventory_status_id=r.source_inventory_status_id").
+		Joins("LEFT JOIN warehouse_location return_dock ON return_dock.location_id=r.return_dock_location_id").
+		Joins("LEFT JOIN inventory_status return_status ON return_status.inventory_status_id=r.return_pending_status_id").
 		Joins("JOIN uom ON uom.uom_id=r.uom_id").
 		Joins("JOIN app_account creator ON creator.account_id=r.created_by").
 		Joins("LEFT JOIN app_account completer ON completer.account_id=r.completed_by").
@@ -101,14 +106,18 @@ func (r *VendorReturnRepository) Complete(ctx context.Context, id, statusID, mov
 	return nil
 }
 
-func (r *VendorReturnRepository) Cancel(ctx context.Context, id, statusID, reason, actor string, expectedVersion int64) error {
+func (r *VendorReturnRepository) Cancel(ctx context.Context, id, statusID, reason, actor string, cancellationMovementID *string, expectedVersion int64) error {
+	changes := map[string]interface{}{
+		"status_id": statusID, "cancelled_at": time.Now(), "cancelled_by": actor,
+		"cancellation_reason": reason, "updated_at": gorm.Expr("clock_timestamp()"),
+		"updated_by": actor, "version_no": gorm.Expr("version_no+1"),
+	}
+	if cancellationMovementID != nil {
+		changes["cancellation_movement_id"] = *cancellationMovementID
+	}
 	result := r.db.WithContext(ctx).Model(&model.VendorReturnTransaction{}).
 		Where("vendor_return_id=? AND version_no=? AND completed_at IS NULL AND cancelled_at IS NULL", id, expectedVersion).
-		Updates(map[string]interface{}{
-			"status_id": statusID, "cancelled_at": time.Now(), "cancelled_by": actor,
-			"cancellation_reason": reason, "updated_at": gorm.Expr("clock_timestamp()"),
-			"updated_by": actor, "version_no": gorm.Expr("version_no+1"),
-		})
+		Updates(changes)
 	if result.Error != nil {
 		return Error(result.Error)
 	}

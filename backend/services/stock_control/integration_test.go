@@ -75,6 +75,7 @@ func testStockControl(t *testing.T, fresh bool) {
 	okay(t, repository.MigrateInventoryAdjustments(tx))
 	okay(t, repository.MigrateInventoryAdjustmentLines(tx))
 	okay(t, repository.MigrateCycleCounts(tx))
+	okay(t, repository.MigrateGrandStockOpname(tx))
 	okay(t, repository.MigrateWarehouseTransfers(tx))
 	ctx := context.Background()
 	inventoryModule := master.AppModule{Code: "INVENTORY", Name: "Inventory", IsActive: true}
@@ -364,6 +365,56 @@ func testStockControl(t *testing.T, fresh bool) {
 	okay(t, tx.Where("balance_id=?", cancelTask.SourceBalanceID).Take(&reserved).Error)
 	if reserved.ReservedQty != "0.000000" {
 		t.Fatalf("cancelled reservation=%s", reserved.ReservedQty)
+	}
+
+	receivingStock, err := inv.PostMovement(ctx, inventorydto.PostingRequest{OperationKey: "grand-receiving-" + suffix, MovementTypeCode: "RECEIVE", OwnerID: owner.ID, WarehouseID: wh1.ID, BusinessDate: "2026-09-07", ItemID: item.ID, To: &inventorydto.BalanceDimension{LocationID: receiving.ID, InventoryStatusID: available.ID}, Quantity: "3", SourceDocumentID: "GRAND-RECEIVING"}, account.ID)
+	okay(t, err)
+	otherOwner := master.Organization{Code: "GO" + suffix, Name: "Other customer", TimezoneName: "Asia/Jakarta"}
+	okay(t, tx.Create(&otherOwner).Error)
+	okay(t, tx.Create(&master.WarehouseOwner{OwnerID: otherOwner.ID, WarehouseID: wh1.ID}).Error)
+	okay(t, tx.Create(&master.AccountOwnerAccess{AccountID: account.ID, OwnerID: otherOwner.ID}).Error)
+	otherItem := master.Item{OwnerID: otherOwner.ID, Code: "GI" + suffix, Name: "Other customer item", BaseUOMID: unit.ID}
+	okay(t, tx.Create(&otherItem).Error)
+	otherBalance := inventorymodel.InventoryBalance{ID: "BAL-GRAND-OTHER-" + suffix, OwnerID: otherOwner.ID, WarehouseID: wh1.ID, LocationID: loc1.ID, ItemID: otherItem.ID, InventoryStatusID: available.ID, OnHandQty: "9", ReservedQty: "0", UOMID: unit.ID, VersionNo: 1}
+	okay(t, tx.Create(&otherBalance).Error)
+	grand, err := service.CreateGrandStockOpname(ctx, dto.CreateGrandStockOpnameRequest{OwnerID: owner.ID, WarehouseID: wh1.ID, BusinessDate: "2026-09-07", ToleranceQty: "0"}, account.ID)
+	okay(t, err)
+	if grand.CountTypeCode != "GRAND" || grand.StatusCode != "DRAFT" || grand.TotalLines == 0 || grand.Lines[0].SystemQty != nil {
+		t.Fatalf("grand stock opname must be a populated blind count: %+v", grand)
+	}
+	var includesPickFace bool
+	for _, line := range grand.Lines {
+		balance, balanceErr := inventoryrepo.NewInventoryBalanceRepository(tx).Get(ctx, line.BalanceID)
+		okay(t, balanceErr)
+		if balance.OwnerID != owner.ID || balance.WarehouseID != wh1.ID {
+			t.Fatalf("grand stock opname crossed its owner/warehouse scope: %+v", balance)
+		}
+		if balance.ID == receivingStock.ToBalance.ID {
+			t.Fatal("grand stock opname included stock in a receiving location")
+		}
+		if balance.ID == otherBalance.ID {
+			t.Fatal("grand stock opname included another served customer's stock")
+		}
+		if balance.LocationID == pickFace.ID {
+			includesPickFace = true
+		}
+	}
+	if !includesPickFace {
+		t.Fatal("grand stock opname omitted storage-capable pick-face stock")
+	}
+	_, err = service.CreateGrandStockOpname(ctx, dto.CreateGrandStockOpnameRequest{OwnerID: owner.ID, WarehouseID: wh1.ID, BusinessDate: "2026-09-07"}, account.ID)
+	wants(t, err, ErrInvalidInput)
+	otherGrand, err := service.CreateGrandStockOpname(ctx, dto.CreateGrandStockOpnameRequest{OwnerID: otherOwner.ID, WarehouseID: wh1.ID, BusinessDate: "2026-09-07"}, account.ID)
+	okay(t, err)
+	if otherGrand.OwnerID != otherOwner.ID || otherGrand.TotalLines != 1 || otherGrand.Lines[0].BalanceID != otherBalance.ID {
+		t.Fatalf("second served customer must have its own grand stock opname: %+v", otherGrand)
+	}
+	_, err = service.CancelCycleCount(ctx, otherGrand.ID, dto.CancelCycleCountRequest{ExpectedVersion: otherGrand.VersionNo, Reason: "Test completed"}, account.ID)
+	okay(t, err)
+	grand, err = service.CancelCycleCount(ctx, grand.ID, dto.CancelCycleCountRequest{ExpectedVersion: grand.VersionNo, Reason: "Test completed"}, account.ID)
+	okay(t, err)
+	if grand.StatusCode != "CANCELLED" {
+		t.Fatalf("grand stock opname cancellation: %+v", grand)
 	}
 
 	cycleBalanceOne, err := inv.GetBalance(ctx, cancelTask.SourceBalanceID)
