@@ -16,6 +16,10 @@ type OutboundOrderLineResponse struct {
 	ItemCode              string  `json:"item_code"`
 	ItemName              string  `json:"item_name"`
 	OrderedQty            string  `json:"ordered_qty"`
+	UOMConversionToBase   string  `json:"uom_conversion_to_base"`
+	OrderedBaseQty        string  `json:"ordered_base_qty"`
+	BaseUOMID             string  `json:"base_uom_id"`
+	BaseUOMCode           string  `json:"base_uom_code"`
 	AllocatedQty          string  `json:"allocated_qty"`
 	PickedQty             string  `json:"picked_qty"`
 	CheckedQty            string  `json:"checked_qty"`

@@ -72,6 +72,10 @@ func main() {
 		{Version: 21, Name: "warehouse transfer documents", Up: stockcontrolrepository.MigrateWarehouseTransfers},
 		{Version: 22, Name: "return to vendor staging", Up: outboundrepository.MigrateVendorReturnStaging},
 		{Version: 23, Name: "grand stock opname documents", Up: stockcontrolrepository.MigrateGrandStockOpname},
+		{Version: 24, Name: "cycle count serial reconciliation", Up: stockcontrolrepository.MigrateCycleCountSerialReconciliation},
+		{Version: 25, Name: "grand stock opname freeze", Up: stockcontrolrepository.MigrateGrandStockOpnameFreeze},
+		{Version: 26, Name: "count found stock handling", Up: stockcontrolrepository.MigrateCountFoundStock},
+		{Version: 27, Name: "outbound quantity snapshots", Up: outboundrepository.MigrateQuantitySnapshots},
 	}); err != nil {
 		log.Fatalf("apply database migrations: %v", err)
 	}

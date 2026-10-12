@@ -68,6 +68,7 @@ func testOutboundPartOne(t *testing.T, fresh bool) {
 	outboundOK(t, inventoryrepository.Migrate(tx))
 	outboundOK(t, stockrepository.Migrate(tx))
 	outboundOK(t, repository.Migrate(tx))
+	outboundOK(t, repository.MigrateQuantitySnapshots(tx))
 	ctx := context.Background()
 	outboundOK(t, masterservice.NewCatalogService(masterrepository.NewCatalogRepositories(tx)).SeedCatalog(ctx))
 	operational, err := masterservice.NewOperationalService(masterrepository.NewOperationalRepositories(tx), "Asia/Jakarta")
@@ -119,6 +120,13 @@ func testOutboundPartOne(t *testing.T, fresh bool) {
 	item := mastermodel.Item{OwnerID: owner.ID, Code: "OBI_" + suffix, Name: "Outbound item", BaseUOMID: each.ID}
 	outboundOK(t, tx.Create(&item).Error)
 	outboundOK(t, tx.Create(&mastermodel.ItemUOM{ItemID: item.ID, UOMID: each.ID, ConversionToBase: "1", IsPickingUOM: true}).Error)
+	carton := mastermodel.UOM{Code: "CTN_" + suffix, Name: "Test carton"}
+	outboundOK(t, tx.Create(&carton).Error)
+	cartonMapping := mastermodel.ItemUOM{ItemID: item.ID, UOMID: carton.ID, ConversionToBase: "3", IsPickingUOM: true}
+	outboundOK(t, tx.Create(&cartonMapping).Error)
+	// Client order packaging is independent of receiving/picking UOM flags.
+	// Update explicitly because GORM supplies true defaults when inserting false.
+	outboundOK(t, tx.Model(&cartonMapping).Updates(map[string]any{"is_picking_uom": false, "is_receiving_uom": false}).Error)
 	var available mastermodel.InventoryStatus
 	outboundOK(t, tx.Where("code='AVAILABLE'").Take(&available).Error)
 	var fefo mastermodel.PickingSortMethod
@@ -143,8 +151,14 @@ func testOutboundPartOne(t *testing.T, fresh bool) {
 		t.Fatal("account without owner/warehouse grants was allowed")
 	}
 	businessDate := time.Now().Format("2006-01-02")
-	order, err := service.CreateOutboundOrder(ctx, dto.CreateOutboundOrderRequest{OwnerID: owner.ID, CustomerID: customer.ID, ShipToPartnerID: shipTo.ID, WarehouseID: warehouse.ID, BusinessDate: businessDate, ClientDeliveryOrderNo: "CLIENT-DO-" + suffix, RequestedShipAt: businessDate + "T15:00:00+07:00", Lines: []dto.OutboundOrderLineRequest{{ItemID: item.ID, OrderedQty: "6"}}}, account.ID)
+	order, err := service.CreateOutboundOrder(ctx, dto.CreateOutboundOrderRequest{OwnerID: owner.ID, CustomerID: customer.ID, ShipToPartnerID: shipTo.ID, WarehouseID: warehouse.ID, BusinessDate: businessDate, ClientDeliveryOrderNo: "CLIENT-DO-" + suffix, RequestedShipAt: businessDate + "T15:00:00+07:00", Lines: []dto.OutboundOrderLineRequest{{ItemID: item.ID, OrderedQty: "2", UOMID: &carton.ID}}}, account.ID)
 	outboundOK(t, err)
+	outboundOK(t, tx.Model(&cartonMapping).Update("conversion_to_base", "12").Error)
+	order, err = service.UpdateOutboundOrderLine(ctx, order.ID, order.Lines[0].ID, dto.UpdateOutboundOrderLineRequest{ExpectedVersion: order.VersionNo, OrderedQty: "2"}, account.ID)
+	outboundOK(t, err)
+	if order.Lines[0].OrderedBaseQty != "6.000000" || order.Lines[0].UOMConversionToBase != "3.000000" || order.Lines[0].BaseUOMID != each.ID {
+		t.Fatalf("historical conversion changed: %+v", order.Lines[0])
+	}
 	scopeOwner, scopeWarehouse, err := service.ResourceScope(ctx, "orders", order.ID)
 	outboundOK(t, err)
 	if scopeOwner != owner.ID || scopeWarehouse != warehouse.ID {

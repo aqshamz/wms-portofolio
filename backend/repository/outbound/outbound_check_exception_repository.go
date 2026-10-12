@@ -21,7 +21,7 @@ func NewOutboundCheckExceptionRepository(db *gorm.DB) *OutboundCheckExceptionRep
 }
 func exceptionQuery(db *gorm.DB) *gorm.DB {
 	return db.Table("outbound_check_exception e").
-		Select("e.*,l.outbound_check_id check_id,c.staging_id,l.staging_line_id,sl.staging_balance_id,r.code result_code,s.code status_code,p.outbound_line_id,ol.item_id,ol.uom_id,o.owner_id,o.warehouse_id,COALESCE((SELECT sum(x.resolved_qty) FROM outbound_check_resolution x WHERE x.outbound_check_exception_id=e.outbound_check_exception_id),0) resolved_qty").
+		Select("e.*,l.outbound_check_id check_id,c.staging_id,l.staging_line_id,sl.staging_balance_id,r.code result_code,s.code status_code,p.outbound_line_id,ol.item_id,ol.base_uom_id uom_id,o.owner_id,o.warehouse_id,COALESCE((SELECT sum(x.resolved_qty) FROM outbound_check_resolution x WHERE x.outbound_check_exception_id=e.outbound_check_exception_id),0) resolved_qty").
 		Joins("JOIN outbound_check_line l ON l.outbound_check_line_id=e.outbound_check_line_id").
 		Joins("JOIN outbound_check c ON c.outbound_check_id=l.outbound_check_id").
 		Joins("JOIN outbound_staging_line sl ON sl.staging_line_id=l.staging_line_id").

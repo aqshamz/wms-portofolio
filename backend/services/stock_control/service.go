@@ -105,6 +105,10 @@ func authorize(ctx context.Context, r *repository.Repositories, actor string, ba
 }
 
 func validateStorageLocation(ctx context.Context, r *inventoryrepo.Repositories, warehouseID, locationID, operation string) error {
+	return validateCountStorageLocation(ctx, r, warehouseID, locationID, operation, false)
+}
+
+func validateCountStorageLocation(ctx context.Context, r *inventoryrepo.Repositories, warehouseID, locationID, operation string, allowPickFace bool) error {
 	location, err := r.Location.GetShared(ctx, locationID)
 	if err != nil {
 		return err
@@ -120,7 +124,10 @@ func validateStorageLocation(ctx context.Context, r *inventoryrepo.Repositories,
 	if err != nil {
 		return err
 	}
-	if !zone.IsActive || !locationType.IsActive || locationType.Code != "STORAGE" {
+	if !zone.IsActive || !locationType.IsActive || (locationType.Code != "STORAGE" && !(allowPickFace && locationType.Code == "PICK_FACE")) {
+		if allowPickFace {
+			return invalid(operation + " is limited to active STORAGE and PICK_FACE locations")
+		}
 		return invalid(operation + " is limited to active STORAGE locations")
 	}
 	return nil
@@ -175,6 +182,19 @@ func (s *Service) StatusChange(ctx context.Context, q dto.StatusChangeRequest, a
 			return err
 		}
 		if err := authorize(ctx, r, actor, source); err != nil {
+			return err
+		}
+		target, err := ir.Catalog.InventoryStatus.GetShared(ctx, q.TargetInventoryStatusID)
+		if err != nil {
+			return err
+		}
+		if err = validateManualStatusChange(source.InventoryStatusCode, target.Code); err != nil {
+			return err
+		}
+		if !target.IsActive {
+			return invalid("target inventory status is inactive")
+		}
+		if err = validateCountStorageLocation(ctx, ir, source.WarehouseID, source.LocationID, "inventory status change", true); err != nil {
 			return err
 		}
 		p := base(q.CommandBase)

@@ -8,6 +8,9 @@ type OutboundOrderLine struct {
 	LineNo                int       `gorm:"column:line_no;not null"`
 	ItemID                string    `gorm:"column:item_id;type:uuid;not null"`
 	OrderedQty            string    `gorm:"column:ordered_qty;type:numeric(20,6);not null"`
+	UOMConversionToBase   string    `gorm:"column:uom_conversion_to_base;type:numeric(20,6);not null"`
+	OrderedBaseQty        string    `gorm:"column:ordered_base_qty;type:numeric(20,6);not null"`
+	BaseUOMID             string    `gorm:"column:base_uom_id;type:uuid;not null"`
 	AllocatedQty          string    `gorm:"column:allocated_qty;type:numeric(20,6);not null;default:0"`
 	PickedQty             string    `gorm:"column:picked_qty;type:numeric(20,6);not null;default:0"`
 	CheckedQty            string    `gorm:"column:checked_qty;type:numeric(20,6);not null;default:0"`

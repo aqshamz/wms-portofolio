@@ -27,6 +27,16 @@ type CycleCountLineRow struct {
 	LotNumber, HandlingUnitBarcode, CountedByDisplayName, DecidedByDisplayName *string
 	SerialControlled                                                           bool
 	CurrentBalanceVersionNo                                                    *int64
+	CreatedByDisplayName                                                       string
+	DiscoveryNotes                                                             *string
+}
+type CycleCountSerialRow struct {
+	ID       string
+	SerialNo string
+}
+type CycleCountSerialReconciliationRow struct {
+	model.CycleCountSerialReconciliation
+	SerialNo, CreatedByDisplayName string
 }
 type CycleCountRepository struct{ db *gorm.DB }
 
@@ -47,17 +57,22 @@ func cycleCountQuery(db *gorm.DB) *gorm.DB {
 func cycleCountLineQuery(db *gorm.DB) *gorm.DB {
 	return db.Table("cycle_count_line line").Select(`line.*,item.code item_code,item.name item_name,item.serial_controlled,
 		location.code location_code,status.code inventory_status_code,uom.code uom_code,lot.lot_number,
-		hu.barcode handling_unit_barcode,counter.display_name counted_by_display_name,
+		hu.barcode handling_unit_barcode,counter.display_name counted_by_display_name,recorder.display_name created_by_display_name,
+		(SELECT e.notes FROM cycle_count_entry e WHERE e.cycle_count_line_id=line.cycle_count_line_id AND e.attempt_no=1) discovery_notes,
 		decider.display_name decided_by_display_name,balance.version_no current_balance_version_no`).
 		Joins("JOIN item ON item.item_id=line.item_id").Joins("JOIN warehouse_location location ON location.location_id=line.location_id").
 		Joins("JOIN inventory_status status ON status.inventory_status_id=line.inventory_status_id").Joins("JOIN uom ON uom.uom_id=line.uom_id").
 		Joins("LEFT JOIN inventory_lot lot ON lot.lot_id=line.lot_id").Joins("LEFT JOIN handling_unit hu ON hu.handling_unit_id=line.handling_unit_id").
 		Joins("LEFT JOIN app_account counter ON counter.account_id=line.counted_by").Joins("LEFT JOIN app_account decider ON decider.account_id=line.decided_by").
+		Joins("JOIN app_account recorder ON recorder.account_id=line.created_by").
 		Joins("LEFT JOIN inventory_balance balance ON balance.balance_id=line.balance_id")
 }
 func (r *CycleCountRepository) Create(ctx context.Context, header *model.CycleCount, lines []model.CycleCountLine) error {
 	if err := r.db.WithContext(ctx).Create(header).Error; err != nil {
 		return inventoryrepo.Error(err)
+	}
+	if len(lines) == 0 {
+		return nil
 	}
 	return inventoryrepo.Error(r.db.WithContext(ctx).Create(&lines).Error)
 }
@@ -70,6 +85,26 @@ func (r *CycleCountRepository) Lines(ctx context.Context, id string) ([]CycleCou
 	var rows []CycleCountLineRow
 	err := cycleCountLineQuery(r.db.WithContext(ctx)).Where("line.cycle_count_id=?", id).Order("line.line_no").Find(&rows).Error
 	return rows, inventoryrepo.Error(err)
+}
+func (r *CycleCountRepository) SerialsByBalance(ctx context.Context, balanceID string) ([]CycleCountSerialRow, error) {
+	rows := make([]CycleCountSerialRow, 0)
+	err := r.db.WithContext(ctx).Table("serial_inventory state").Select("state.serial_id id,serial.serial_no").
+		Joins("JOIN serial_number serial ON serial.serial_id=state.serial_id").
+		Where("state.balance_id=?", balanceID).Order("serial.serial_no").Find(&rows).Error
+	return rows, inventoryrepo.Error(err)
+}
+func (r *CycleCountRepository) SerialReconciliations(ctx context.Context, cycleCountID string) ([]CycleCountSerialReconciliationRow, error) {
+	rows := make([]CycleCountSerialReconciliationRow, 0)
+	err := r.db.WithContext(ctx).Table("cycle_count_serial_reconciliation reconciliation").Select("reconciliation.*,serial.serial_no,actor.display_name created_by_display_name").
+		Joins("JOIN cycle_count_line line ON line.cycle_count_line_id=reconciliation.cycle_count_line_id").
+		Joins("JOIN serial_number serial ON serial.serial_id=reconciliation.serial_id").
+		Joins("JOIN app_account actor ON actor.account_id=reconciliation.created_by").
+		Where("line.cycle_count_id=?", cycleCountID).
+		Order("line.line_no,reconciliation.created_at,reconciliation.cycle_count_serial_reconciliation_id").Find(&rows).Error
+	return rows, inventoryrepo.Error(err)
+}
+func (r *CycleCountRepository) CreateSerialReconciliation(ctx context.Context, value *model.CycleCountSerialReconciliation) error {
+	return inventoryrepo.Error(r.db.WithContext(ctx).Create(value).Error)
 }
 func (r *CycleCountRepository) List(ctx context.Context, f CycleCountFilter) ([]CycleCountRow, int64, error) {
 	q := cycleCountQuery(r.db.WithContext(ctx)).Where("count.owner_id=? AND count.warehouse_id=?", f.OwnerID, f.WarehouseID)

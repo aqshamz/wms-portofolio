@@ -30,7 +30,8 @@ type CycleCountLine struct {
 	ID                  string     `gorm:"column:cycle_count_line_id;size:180;primaryKey"`
 	CycleCountID        string     `gorm:"column:cycle_count_id;size:140;not null"`
 	LineNo              int        `gorm:"column:line_no;not null"`
-	BalanceID           string     `gorm:"column:balance_id;size:160;not null"`
+	BalanceID           *string    `gorm:"column:balance_id;size:160"`
+	FoundStock          bool       `gorm:"column:found_stock;not null;default:false"`
 	SnapshotVersionNo   int64      `gorm:"column:snapshot_version_no;not null"`
 	ItemID              string     `gorm:"column:item_id;type:uuid;not null"`
 	LotID               *string    `gorm:"column:lot_id;size:120"`
@@ -75,3 +76,17 @@ type CycleCountEntry struct {
 }
 
 func (CycleCountEntry) TableName() string { return "cycle_count_entry" }
+
+type CycleCountSerialReconciliation struct {
+	ID                  string    `gorm:"column:cycle_count_serial_reconciliation_id;size:220;primaryKey"`
+	CycleCountLineID    string    `gorm:"column:cycle_count_line_id;size:180;not null"`
+	SerialID            string    `gorm:"column:serial_id;size:160;not null"`
+	DirectionCode       string    `gorm:"column:direction_code;size:20;not null"`
+	InventoryMovementID string    `gorm:"column:inventory_movement_id;size:140;not null"`
+	CreatedAt           time.Time `gorm:"column:created_at;not null;default:clock_timestamp()"`
+	CreatedBy           string    `gorm:"column:created_by;type:uuid;not null"`
+}
+
+func (CycleCountSerialReconciliation) TableName() string {
+	return "cycle_count_serial_reconciliation"
+}

@@ -28,6 +28,9 @@ func defaultMovementTypes() []model.MovementType {
 // quality metadata is removed because quality belongs to inspections and stock.
 func Migrate(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
+		if err := MigrateStockFreezes(tx); err != nil {
+			return err
+		}
 		if err := master.MigrateHandlingUnitTypes(tx); err != nil {
 			return err
 		}

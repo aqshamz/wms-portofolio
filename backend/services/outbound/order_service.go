@@ -123,7 +123,11 @@ func (s *Service) CreateOutboundOrder(ctx context.Context, request dto.CreateOut
 			if err != nil || !item.IsActive || item.OwnerID != request.OwnerID {
 				return invalid("line item does not belong to the active owner")
 			}
-			qty, _, err := quantity(x.OrderedQty, "ordered_qty", false)
+			uomID, factor, err := local.orderUnit(ctx, item, x.UOMID, nil)
+			if err != nil {
+				return err
+			}
+			qty, factor, baseQty, err := orderQuantitySnapshot(x.OrderedQty, factor, item.SerialControlled)
 			if err != nil {
 				return err
 			}
@@ -140,7 +144,7 @@ func (s *Service) CreateOutboundOrder(ctx context.Context, request dto.CreateOut
 				return err
 			}
 			no := i + 1
-			lines = append(lines, model.OutboundOrderLine{ID: fmt.Sprintf("%s-L%04d", id, no), OutboundID: id, LineNo: no, ItemID: item.ID, OrderedQty: qty, AllocatedQty: "0", PickedQty: "0", CheckedQty: "0", PackedQty: "0", ShippedQty: "0", DeliveredQty: "0", RejectedQty: "0", ShortAcceptedQty: "0", UOMID: item.BaseUOMID, RequestedLotNo: lot, CustomerLineReference: reference, Notes: lineNotes, CreatedBy: actor})
+			lines = append(lines, model.OutboundOrderLine{ID: fmt.Sprintf("%s-L%04d", id, no), OutboundID: id, LineNo: no, ItemID: item.ID, OrderedQty: qty, UOMConversionToBase: factor, OrderedBaseQty: baseQty, BaseUOMID: item.BaseUOMID, AllocatedQty: "0", PickedQty: "0", CheckedQty: "0", PackedQty: "0", ShippedQty: "0", DeliveredQty: "0", RejectedQty: "0", ShortAcceptedQty: "0", UOMID: uomID, RequestedLotNo: lot, CustomerLineReference: reference, Notes: lineNotes, CreatedBy: actor})
 		}
 		return local.repositories.Line.CreateBatch(ctx, lines)
 	})
@@ -248,7 +252,15 @@ func (s *Service) AddOutboundOrderLine(ctx context.Context, id string, input dto
 		if err != nil {
 			return err
 		}
-		line := model.OutboundOrderLine{ID: fmt.Sprintf("%s-L%04d", id, lineNo), OutboundID: id, LineNo: lineNo, ItemID: item.ID, OrderedQty: qty, AllocatedQty: "0", PickedQty: "0", CheckedQty: "0", PackedQty: "0", ShippedQty: "0", DeliveredQty: "0", RejectedQty: "0", ShortAcceptedQty: "0", UOMID: item.BaseUOMID, RequestedLotNo: lot, CustomerLineReference: reference, Notes: notes, CreatedBy: actor}
+		uomID, factor, err := local.orderUnit(ctx, item, request.UOMID, nil)
+		if err != nil {
+			return err
+		}
+		qty, factor, baseQty, err := orderQuantitySnapshot(qty, factor, item.SerialControlled)
+		if err != nil {
+			return err
+		}
+		line := model.OutboundOrderLine{ID: fmt.Sprintf("%s-L%04d", id, lineNo), OutboundID: id, LineNo: lineNo, ItemID: item.ID, OrderedQty: qty, UOMConversionToBase: factor, OrderedBaseQty: baseQty, BaseUOMID: item.BaseUOMID, AllocatedQty: "0", PickedQty: "0", CheckedQty: "0", PackedQty: "0", ShippedQty: "0", DeliveredQty: "0", RejectedQty: "0", ShortAcceptedQty: "0", UOMID: uomID, RequestedLotNo: lot, CustomerLineReference: reference, Notes: notes, CreatedBy: actor}
 		if err := local.repositories.Line.Create(ctx, &line); err != nil {
 			return err
 		}
@@ -295,7 +307,26 @@ func (s *Service) UpdateOutboundOrderLine(ctx context.Context, id, lineID string
 		if order.VersionNo != request.ExpectedVersion {
 			return repository.ErrConcurrentWrite
 		}
-		if err := local.repositories.Line.UpdateDraft(ctx, lineID, id, map[string]interface{}{"ordered_qty": qty, "requested_lot_no": lot, "customer_line_reference": reference, "notes": notes}); err != nil {
+		line, err := local.repositories.Line.Get(ctx, lineID)
+		if err != nil {
+			return err
+		}
+		if line.OutboundID != id {
+			return repository.ErrNotFound
+		}
+		item, err := local.repositories.Master.Catalog.Item.Get(ctx, line.ItemID)
+		if err != nil || !item.IsActive || item.OwnerID != order.OwnerID {
+			return invalid("line item does not belong to the active owner")
+		}
+		uomID, factor, err := local.orderUnit(ctx, item, request.UOMID, &line.OutboundOrderLine)
+		if err != nil {
+			return err
+		}
+		qty, factor, baseQty, err := orderQuantitySnapshot(qty, factor, item.SerialControlled)
+		if err != nil {
+			return err
+		}
+		if err := local.repositories.Line.UpdateDraft(ctx, lineID, id, map[string]interface{}{"ordered_qty": qty, "uom_id": uomID, "uom_conversion_to_base": factor, "ordered_base_qty": baseQty, "base_uom_id": item.BaseUOMID, "requested_lot_no": lot, "customer_line_reference": reference, "notes": notes}); err != nil {
 			return err
 		}
 		return local.repositories.Order.UpdateDraft(ctx, id, actor, request.ExpectedVersion, map[string]interface{}{})
@@ -439,7 +470,7 @@ func (s *Service) ValidateOutboundOrder(ctx context.Context, id string, request 
 				ok = true
 				for _, line := range lines {
 					item, e := local.repositories.Master.Catalog.Item.Get(ctx, line.ItemID)
-					if e != nil || line.UOMID != item.BaseUOMID {
+					if e != nil || validateOrderSnapshot(line.OutboundOrderLine, item) != nil {
 						ok = false
 						break
 					}

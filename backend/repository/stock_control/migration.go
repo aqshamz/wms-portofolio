@@ -277,6 +277,27 @@ func MigrateGrandStockOpname(db *gorm.DB) error {
 	})
 }
 
+func MigrateCycleCountSerialReconciliation(db *gorm.DB) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.AutoMigrate(&stockmodel.CycleCountSerialReconciliation{}); err != nil {
+			return err
+		}
+		for _, statement := range []string{
+			`CREATE UNIQUE INDEX IF NOT EXISTS uq_cycle_count_serial_reconciliation ON cycle_count_serial_reconciliation(cycle_count_line_id,serial_id)`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_serial_reconciliation ADD CONSTRAINT ck_cycle_count_serial_reconciliation_direction CHECK(direction_code IN ('FOUND','MISSING')); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_serial_reconciliation ADD CONSTRAINT fk_cycle_count_serial_reconciliation_line FOREIGN KEY(cycle_count_line_id) REFERENCES cycle_count_line(cycle_count_line_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_serial_reconciliation ADD CONSTRAINT fk_cycle_count_serial_reconciliation_serial FOREIGN KEY(serial_id) REFERENCES serial_number(serial_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_serial_reconciliation ADD CONSTRAINT fk_cycle_count_serial_reconciliation_movement FOREIGN KEY(inventory_movement_id) REFERENCES inventory_movement(movement_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+			`DO $$ BEGIN ALTER TABLE cycle_count_serial_reconciliation ADD CONSTRAINT fk_cycle_count_serial_reconciliation_actor FOREIGN KEY(created_by) REFERENCES app_account(account_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+		} {
+			if err := tx.Exec(statement).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func MigrateWarehouseTransfers(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.AutoMigrate(&stockmodel.WarehouseTransfer{}, &stockmodel.WarehouseTransferLine{}); err != nil {

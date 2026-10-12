@@ -8,7 +8,7 @@ import (
 
 type OutboundOrderLineRow struct {
 	model.OutboundOrderLine
-	ItemCode, ItemName, UOMCode string
+	ItemCode, ItemName, UOMCode, BaseUOMCode string
 }
 type OutboundOrderLineRepository struct{ db *gorm.DB }
 
@@ -51,12 +51,12 @@ func (r *OutboundOrderLineRepository) DeleteDraft(ctx context.Context, id, outbo
 }
 func (r *OutboundOrderLineRepository) List(ctx context.Context, id string) ([]OutboundOrderLineRow, error) {
 	rows := make([]OutboundOrderLineRow, 0)
-	err := r.db.WithContext(ctx).Table("outbound_order_line l").Select("l.*,i.code item_code,i.name item_name,u.code uom_code").Joins("JOIN item i ON i.item_id=l.item_id").Joins("JOIN uom u ON u.uom_id=l.uom_id").Where("l.outbound_id=?", id).Order("l.line_no").Find(&rows).Error
+	err := r.db.WithContext(ctx).Table("outbound_order_line l").Select("l.*,i.code item_code,i.name item_name,u.code uom_code,bu.code base_uom_code").Joins("JOIN item i ON i.item_id=l.item_id").Joins("JOIN uom u ON u.uom_id=l.uom_id").Joins("JOIN uom bu ON bu.uom_id=l.base_uom_id").Where("l.outbound_id=?", id).Order("l.line_no").Find(&rows).Error
 	return rows, Error(err)
 }
 func (r *OutboundOrderLineRepository) Get(ctx context.Context, id string) (OutboundOrderLineRow, error) {
 	var v OutboundOrderLineRow
-	err := r.db.WithContext(ctx).Table("outbound_order_line l").Select("l.*,i.code item_code,i.name item_name,u.code uom_code").Joins("JOIN item i ON i.item_id=l.item_id").Joins("JOIN uom u ON u.uom_id=l.uom_id").Where("l.outbound_line_id=?", id).Take(&v).Error
+	err := r.db.WithContext(ctx).Table("outbound_order_line l").Select("l.*,i.code item_code,i.name item_name,u.code uom_code,bu.code base_uom_code").Joins("JOIN item i ON i.item_id=l.item_id").Joins("JOIN uom u ON u.uom_id=l.uom_id").Joins("JOIN uom bu ON bu.uom_id=l.base_uom_id").Where("l.outbound_line_id=?", id).Take(&v).Error
 	return v, Error(err)
 }
 func (r *OutboundOrderLineRepository) AddAllocated(ctx context.Context, id, qty string) error {
@@ -88,7 +88,7 @@ func (r *OutboundOrderLineRepository) AcceptShort(ctx context.Context, id, qty s
 }
 func (r *OutboundOrderLineRepository) AllAllocated(ctx context.Context, id string) (bool, error) {
 	var n int64
-	err := r.db.WithContext(ctx).Model(&model.OutboundOrderLine{}).Where("outbound_id=? AND allocated_qty<ordered_qty", id).Count(&n).Error
+	err := r.db.WithContext(ctx).Model(&model.OutboundOrderLine{}).Where("outbound_id=? AND allocated_qty<ordered_base_qty", id).Count(&n).Error
 	return n == 0, Error(err)
 }
 func (r *OutboundOrderLineRepository) HasAllocation(ctx context.Context, id string) (bool, error) {

@@ -76,6 +76,9 @@ func testStockControl(t *testing.T, fresh bool) {
 	okay(t, repository.MigrateInventoryAdjustmentLines(tx))
 	okay(t, repository.MigrateCycleCounts(tx))
 	okay(t, repository.MigrateGrandStockOpname(tx))
+	okay(t, repository.MigrateCycleCountSerialReconciliation(tx))
+	okay(t, repository.MigrateGrandStockOpnameFreeze(tx))
+	okay(t, repository.MigrateCountFoundStock(tx))
 	okay(t, repository.MigrateWarehouseTransfers(tx))
 	ctx := context.Background()
 	inventoryModule := master.AppModule{Code: "INVENTORY", Name: "Inventory", IsActive: true}
@@ -204,6 +207,24 @@ func testStockControl(t *testing.T, fresh bool) {
 	okay(t, err)
 	receivingBalance := inventorymodel.InventoryBalance{ID: "BAL-RECEIVING-" + suffix, OwnerID: owner.ID, WarehouseID: wh1.ID, LocationID: receiving.ID, ItemID: item.ID, InventoryStatusID: available.ID, OnHandQty: "1", ReservedQty: "0", UOMID: unit.ID, VersionNo: 1}
 	okay(t, tx.Create(&receivingBalance).Error)
+	invalidStatusCommand := statusCommand
+	invalidStatusCommand.OperationKey = "status-receiving-" + suffix
+	_, err = service.StatusChange(ctx, dto.StatusChangeRequest{CommandBase: invalidStatusCommand, SourceBalanceID: receivingBalance.ID, TargetInventoryStatusID: hold.ID, Quantity: "1", ExpectedVersion: 1}, account.ID)
+	wants(t, err, ErrInvalidInput)
+	for _, code := range []string{"QC_PENDING", "PUTAWAY_PENDING", "QUARANTINE", "RETURN_PENDING"} {
+		workflowStatus := master.InventoryStatus{Code: code, Name: code, IsActive: true}
+		okay(t, tx.Where("code=?", code).FirstOrCreate(&workflowStatus).Error)
+		invalidStatusCommand.OperationKey = "status-target-" + code + "-" + suffix
+		_, err = service.StatusChange(ctx, dto.StatusChangeRequest{CommandBase: invalidStatusCommand, SourceBalanceID: moved.SourceBalance.ID, TargetInventoryStatusID: workflowStatus.ID, Quantity: "1", ExpectedVersion: moved.SourceBalance.VersionNo}, account.ID)
+		wants(t, err, ErrInvalidInput)
+		workflowBalance := inventorymodel.InventoryBalance{ID: "BAL-WORKFLOW-" + code + "-" + suffix, OwnerID: owner.ID, WarehouseID: wh1.ID, LocationID: loc1.ID, ItemID: item.ID, InventoryStatusID: workflowStatus.ID, OnHandQty: "1", ReservedQty: "0", UOMID: unit.ID, VersionNo: 1}
+		okay(t, tx.Create(&workflowBalance).Error)
+		invalidStatusCommand.OperationKey = "status-source-" + code + "-" + suffix
+		_, err = service.StatusChange(ctx, dto.StatusChangeRequest{CommandBase: invalidStatusCommand, SourceBalanceID: workflowBalance.ID, TargetInventoryStatusID: available.ID, Quantity: "1", ExpectedVersion: 1}, account.ID)
+		wants(t, err, ErrInvalidInput)
+		// Keep later count/transfer scenarios focused on their original fixtures.
+		okay(t, tx.Delete(&workflowBalance).Error)
+	}
 	_, err = service.CreateAdjustment(ctx, dto.CreateAdjustmentRequest{BusinessDate: "2026-09-07", Direction: "DECREASE", ReasonCode: "EXPIRY", Lines: []dto.CreateAdjustmentLineRequest{{BalanceID: receivingBalance.ID, Quantity: "1", ExpectedVersion: 1}}}, account.ID)
 	wants(t, err, ErrInvalidInput)
 	increaseRequest, err := service.CreateAdjustment(ctx, dto.CreateAdjustmentRequest{BusinessDate: "2026-09-07", Direction: "INCREASE", ReasonCode: "EXPIRY", Lines: []dto.CreateAdjustmentLineRequest{
@@ -384,7 +405,7 @@ func testStockControl(t *testing.T, fresh bool) {
 	}
 	var includesPickFace bool
 	for _, line := range grand.Lines {
-		balance, balanceErr := inventoryrepo.NewInventoryBalanceRepository(tx).Get(ctx, line.BalanceID)
+		balance, balanceErr := inventoryrepo.NewInventoryBalanceRepository(tx).Get(ctx, *line.BalanceID)
 		okay(t, balanceErr)
 		if balance.OwnerID != owner.ID || balance.WarehouseID != wh1.ID {
 			t.Fatalf("grand stock opname crossed its owner/warehouse scope: %+v", balance)
@@ -406,14 +427,25 @@ func testStockControl(t *testing.T, fresh bool) {
 	wants(t, err, ErrInvalidInput)
 	otherGrand, err := service.CreateGrandStockOpname(ctx, dto.CreateGrandStockOpnameRequest{OwnerID: otherOwner.ID, WarehouseID: wh1.ID, BusinessDate: "2026-09-07"}, account.ID)
 	okay(t, err)
-	if otherGrand.OwnerID != otherOwner.ID || otherGrand.TotalLines != 1 || otherGrand.Lines[0].BalanceID != otherBalance.ID {
+	if otherGrand.OwnerID != otherOwner.ID || otherGrand.TotalLines != 1 || otherGrand.Lines[0].BalanceID == nil || *otherGrand.Lines[0].BalanceID != otherBalance.ID {
 		t.Fatalf("second served customer must have its own grand stock opname: %+v", otherGrand)
 	}
 	_, err = service.CancelCycleCount(ctx, otherGrand.ID, dto.CancelCycleCountRequest{ExpectedVersion: otherGrand.VersionNo, Reason: "Test completed"}, account.ID)
 	okay(t, err)
+	grandEntries := make([]dto.CycleCountEntryRequest, 0, len(grand.Lines))
+	for _, line := range grand.Lines {
+		balance, balanceErr := inv.GetBalance(ctx, *line.BalanceID)
+		okay(t, balanceErr)
+		grandEntries = append(grandEntries, dto.CycleCountEntryRequest{LineID: line.ID, CountedQty: balance.OnHandQty})
+	}
+	grand, err = service.RecordCycleCount(ctx, grand.ID, dto.RecordCycleCountRequest{ExpectedVersion: grand.VersionNo, Lines: grandEntries}, account.ID)
+	okay(t, err)
+	if grand.StatusCode != "REVIEW" || !grand.StockFrozen {
+		t.Fatalf("grand opname must accept storage and pick-face counts while staying frozen: %+v", grand)
+	}
 	grand, err = service.CancelCycleCount(ctx, grand.ID, dto.CancelCycleCountRequest{ExpectedVersion: grand.VersionNo, Reason: "Test completed"}, account.ID)
 	okay(t, err)
-	if grand.StatusCode != "CANCELLED" {
+	if grand.StatusCode != "CANCELLED" || grand.StockFrozen {
 		t.Fatalf("grand stock opname cancellation: %+v", grand)
 	}
 
@@ -453,4 +485,61 @@ func testStockControl(t *testing.T, fresh bool) {
 	if cycle.StatusCode != "POSTED" || cycle.FinalLines != 2 || cycle.Lines[1].InventoryMovementID == nil {
 		t.Fatalf("cycle count completion: %+v", cycle)
 	}
+
+	serialItem := master.Item{OwnerID: owner.ID, Code: "SI" + suffix, Name: "Serialized item", BaseUOMID: unit.ID, SerialControlled: true}
+	okay(t, tx.Create(&serialItem).Error)
+	serialOne, err := inv.CreateSerial(ctx, inventorydto.CreateSerialRequest{OwnerID: owner.ID, ItemID: serialItem.ID, SerialNo: "COUNT-SERIAL-1-" + suffix}, account.ID)
+	okay(t, err)
+	serialTwo, err := inv.CreateSerial(ctx, inventorydto.CreateSerialRequest{OwnerID: owner.ID, ItemID: serialItem.ID, SerialNo: "COUNT-SERIAL-2-" + suffix}, account.ID)
+	okay(t, err)
+	serializedStock, err := inv.PostMovement(ctx, inventorydto.PostingRequest{OperationKey: "serial-count-seed-1-" + suffix, MovementTypeCode: "RECEIVE", OwnerID: owner.ID, WarehouseID: wh1.ID, BusinessDate: "2026-09-07", ItemID: serialItem.ID, To: &inventorydto.BalanceDimension{LocationID: loc1.ID, InventoryStatusID: available.ID}, Quantity: "1", SerialIDs: []string{serialOne.ID}, SourceDocumentID: "SERIAL-COUNT-SEED"}, account.ID)
+	okay(t, err)
+	serializedStock, err = inv.PostMovement(ctx, inventorydto.PostingRequest{OperationKey: "serial-count-seed-2-" + suffix, MovementTypeCode: "RECEIVE", OwnerID: owner.ID, WarehouseID: wh1.ID, BusinessDate: "2026-09-07", ItemID: serialItem.ID, To: &inventorydto.BalanceDimension{LocationID: loc1.ID, InventoryStatusID: available.ID}, Quantity: "1", SerialIDs: []string{serialTwo.ID}, ExpectedDestinationVersion: &serializedStock.ToBalance.VersionNo, SourceDocumentID: "SERIAL-COUNT-SEED"}, account.ID)
+	okay(t, err)
+
+	serialShortage, err := service.CreateCycleCount(ctx, dto.CreateCycleCountRequest{BusinessDate: "2026-09-07", ToleranceQty: "0", BalanceIDs: []string{serializedStock.ToBalance.ID}}, account.ID)
+	okay(t, err)
+	serialShortage, err = service.RecordCycleCount(ctx, serialShortage.ID, dto.RecordCycleCountRequest{ExpectedVersion: serialShortage.VersionNo, Lines: []dto.CycleCountEntryRequest{{LineID: serialShortage.Lines[0].ID, CountedQty: "1"}}}, account.ID)
+	okay(t, err)
+	serialShortage, err = service.RecordCycleCount(ctx, serialShortage.ID, dto.RecordCycleCountRequest{ExpectedVersion: serialShortage.VersionNo, Lines: []dto.CycleCountEntryRequest{{LineID: serialShortage.Lines[0].ID, CountedQty: "1"}}}, account.ID)
+	okay(t, err)
+	if serialShortage.StatusCode != "REVIEW" || len(serialShortage.Lines[0].CurrentSerials) != 2 {
+		t.Fatalf("serialized shortage was not prepared for reconciliation: %+v", serialShortage)
+	}
+	_, err = service.ApproveCycleCount(ctx, serialShortage.ID, dto.CycleCountDecisionRequest{ExpectedVersion: serialShortage.VersionNo, LineIDs: []string{serialShortage.Lines[0].ID}}, approver.ID)
+	wants(t, err, ErrInvalidInput)
+	serialShortage, err = service.ReconcileCycleCountSerials(ctx, serialShortage.ID, dto.ReconcileCycleCountSerialsRequest{ExpectedVersion: serialShortage.VersionNo, LineID: serialShortage.Lines[0].ID, MissingSerialIDs: []string{serialTwo.ID}}, approver.ID)
+	okay(t, err)
+	if serialShortage.StatusCode != "POSTED" || len(serialShortage.Lines[0].SerialReconciliations) != 1 || serialShortage.Lines[0].SerialReconciliations[0].DirectionCode != "MISSING" || serialShortage.Lines[0].SerialReconciliations[0].SerialID != serialTwo.ID {
+		t.Fatalf("serialized shortage reconciliation audit: %+v", serialShortage)
+	}
+	_, err = inv.GetSerialState(ctx, serialTwo.ID)
+	wants(t, err, inventoryrepo.ErrNotFound)
+
+	serializedBalance, err := inv.GetBalance(ctx, serializedStock.ToBalance.ID)
+	okay(t, err)
+	serialOverage, err := service.CreateCycleCount(ctx, dto.CreateCycleCountRequest{BusinessDate: "2026-09-07", ToleranceQty: "0", BalanceIDs: []string{serializedBalance.ID}}, account.ID)
+	okay(t, err)
+	serialOverage, err = service.RecordCycleCount(ctx, serialOverage.ID, dto.RecordCycleCountRequest{ExpectedVersion: serialOverage.VersionNo, Lines: []dto.CycleCountEntryRequest{{LineID: serialOverage.Lines[0].ID, CountedQty: "2"}}}, account.ID)
+	okay(t, err)
+	serialOverage, err = service.RecordCycleCount(ctx, serialOverage.ID, dto.RecordCycleCountRequest{ExpectedVersion: serialOverage.VersionNo, Lines: []dto.CycleCountEntryRequest{{LineID: serialOverage.Lines[0].ID, CountedQty: "2"}}}, account.ID)
+	okay(t, err)
+	foundSerialNumber := "COUNT-FOUND-" + suffix
+	serialOverage, err = service.ReconcileCycleCountSerials(ctx, serialOverage.ID, dto.ReconcileCycleCountSerialsRequest{ExpectedVersion: serialOverage.VersionNo, LineID: serialOverage.Lines[0].ID, FoundSerialNumbers: []string{foundSerialNumber}}, approver.ID)
+	okay(t, err)
+	if serialOverage.StatusCode != "POSTED" || len(serialOverage.Lines[0].SerialReconciliations) != 1 || serialOverage.Lines[0].SerialReconciliations[0].DirectionCode != "FOUND" || serialOverage.Lines[0].SerialReconciliations[0].SerialNo != foundSerialNumber {
+		t.Fatalf("serialized overage reconciliation audit: %+v", serialOverage)
+	}
+	foundSerials, err := inv.ListSerial(ctx, inventoryrepo.Filter{OwnerID: owner.ID, ItemID: serialItem.ID, Number: foundSerialNumber, Page: 1, PageSize: 2})
+	okay(t, err)
+	if foundSerials.TotalItems != 1 {
+		t.Fatalf("found serial identity was not created: %+v", foundSerials)
+	}
+	foundState, err := inv.GetSerialState(ctx, foundSerials.Items[0].ID)
+	okay(t, err)
+	if foundState.Balance.ID != serializedBalance.ID {
+		t.Fatalf("found serial was not placed into the counted balance: %+v", foundState)
+	}
+	testGrandOpnameFreeze(t, tx, suffix, owner.ID, wh1.ID, wh2.ID, account.ID, approver.ID, item.ID, loc1.ID, loc2.ID, available.ID)
+	testCountFoundStock(t, tx, suffix, wh1.ID, account.ID, approver.ID, loc1.ID, loc2.ID, pickFace.ID, receiving.ID, available.ID, unit.ID)
 }

@@ -271,6 +271,8 @@ func actor(c *gin.Context) string {
 }
 func fail(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, inventoryrepo.ErrStockFrozen):
+		utils.Failure(c, http.StatusConflict, err.Error(), nil)
 	case errors.Is(err, service.ErrForbidden):
 		utils.Failure(c, 403, err.Error(), nil)
 	case errors.Is(err, service.ErrInvalidInput):
@@ -464,6 +466,18 @@ func (controller *Controller) ApproveCycleCount(c *gin.Context) {
 		return
 	}
 	utils.Success(c, http.StatusOK, "cycle count lines approved", response)
+}
+func (controller *Controller) ReconcileCycleCountSerials(c *gin.Context) {
+	var request dto.ReconcileCycleCountSerialsRequest
+	if !bind(c, &request) {
+		return
+	}
+	response, err := controller.service.ReconcileCycleCountSerials(c.Request.Context(), c.Param("id"), request, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "cycle count serials reconciled", response)
 }
 func (controller *Controller) RejectCycleCount(c *gin.Context) {
 	var request dto.RejectCycleCountRequest

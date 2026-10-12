@@ -1,6 +1,7 @@
 package outbound
 
 type OutboundOrderLineRequest struct {
+	UOMID                 *string `json:"uom_id" binding:"omitempty,uuid"`
 	ItemID                string  `json:"item_id" binding:"required,uuid"`
 	OrderedQty            string  `json:"ordered_qty" binding:"required,max=30"`
 	RequestedLotNo        *string `json:"requested_lot_no" binding:"omitempty,max=100"`
@@ -33,6 +34,7 @@ type AddOutboundOrderLineRequest struct {
 	OutboundOrderLineRequest
 }
 type UpdateOutboundOrderLineRequest struct {
+	UOMID                 *string `json:"uom_id" binding:"omitempty,uuid"`
 	ExpectedVersion       int64   `json:"expected_version" binding:"required,min=1"`
 	OrderedQty            string  `json:"ordered_qty" binding:"required,max=30"`
 	RequestedLotNo        *string `json:"requested_lot_no" binding:"omitempty,max=100"`

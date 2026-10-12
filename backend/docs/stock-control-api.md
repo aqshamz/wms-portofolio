@@ -137,6 +137,26 @@ may be cancelled only by its assignee.
 
 ## Status change
 
+The UI is available under **Stock control → Inventory status changes** and
+requires `INVENTORY.READ` plus `INVENTORY.STATUS_CHANGE`. Select an accessible
+warehouse and served owner, filter by source status and location type, then
+review and confirm the change. This is an immediate posting, not an adjustment
+approval document. Movement history is the audit trail.
+
+Manual status changes are restricted in both the UI and API to `AVAILABLE`,
+`HOLD`, `DAMAGED` and `EXPIRED` in active, unlocked `STORAGE` or `PICK_FACE`
+locations with an active zone and location type. The target must be active and
+different from the source. QC, putaway, quarantine, vendor-return and outbound
+workflow statuses cannot be bypassed through this endpoint.
+
+Quantity is in base units and cannot exceed unreserved stock. For serialized
+items, select one current serial and quantity 1 per command. A status change
+keeps the existing location and HU identity, so loose or HU stock may be split
+between statuses without physically relocating it. Reason is required; notes
+are required when the selected inventory reason requires them. The UI retains
+the exact command and retry key after a failure; refreshing stock requires a new
+review. Grand-opname freeze and balance-version checks still apply.
+
 ```json
 {
   "operation_key": "status:20260907:0001",
@@ -236,6 +256,71 @@ locations are excluded. Only one unfinished grand opname may exist for the same
 warehouse and owner; a second customer served by the warehouse requires a
 separate grand opname. List ordinary and grand documents independently with
 `count_type_code=CYCLE` or `count_type_code=GRAND`.
+
+Creating a grand opname immediately freezes inventory for that entire customer
+and warehouse. Finish or cancel existing stock reservations/replenishments first;
+creation is rejected while reserved quantities remain. Snapshot creation and
+freeze activation share a transaction and an exclusive scope lock, so a stock
+write cannot slip between them.
+
+The freeze blocks new stock balances, receipts, putaway, internal moves,
+replenishment reservations/releases, adjustments, status changes, transfer
+dispatch/receipt, returns, disposal, and outbound allocation/pick/pack/ship in
+that scope. It covers all locations, including locations excluded from the
+storage count, and items/balances that were not in the original snapshot.
+Reads and document preparation remain available. Other customers in the same
+warehouse and the same customer in other warehouses are unaffected.
+
+Only approved corrections belonging to that grand opname can change its stock
+during the freeze, including serial reconciliation. A client-supplied source
+document reference does not grant an exception, and superadmin access does not
+bypass the freeze. Blocked writes return HTTP 409 and identify the freezing
+document. Retry of an already-posted idempotent command is still allowed because
+it does not change stock.
+
+`stock_frozen` in the list/detail response indicates an active grand opname.
+Partial posting keeps the freeze. Finalizing all lines, including rejected
+lines, or cancelling the remaining lines releases the freeze atomically with
+the document transition. Already-posted corrections remain posted on cancellation.
+Ordinary cycle counts do not freeze stock. Migration 25 activates freezes for
+existing unfinished grand opnames too; if their pre-migration snapshots are
+already stale, cancel them and create a fresh grand opname.
+
+Found stock can be recorded on either an open cycle count or an open grand
+opname through `POST /cycle-counts/:id/found-stock` (`INVENTORY.COUNT`). Supply
+`expected_version`, `item_id`, `location_id`, `inventory_status_id`, positive
+`counted_quantity` in base units, and required discovery `notes`. Optional
+`lot_id` and `handling_unit_id` identify the actual stock. The item must belong
+to the count's customer; the location must be active, unlocked STORAGE (or
+PICK_FACE for a grand opname). Lots must belong to the item/customer and are
+required for lot-controlled items. Select an open, unnested handling unit
+already at that location, or leave it empty for loose stock.
+
+`GET /cycle-counts/:id/found-stock-options` uses the count's authorized scope
+and supports `item_id`, `location_id`, `item_search`, `location_search`,
+`lot_search`, and `hu_search`. Lookup lists are limited to 100 matches plus the
+selected item/location; use search for larger catalogs. A new lot must first
+be registered through Inventory lots.
+
+Recording found stock adds a flagged count line and an immutable first count
+entry with system quantity zero. It does not create inventory or release the
+freeze. Its `balance_id` can be null until posting; `resulting_balance_id`
+links the actual balance after approval. `discovery_notes` and
+`created_by_display_name` preserve the original discovery across recounts.
+An existing zero balance retains its version snapshot. An existing positive
+balance or duplicate count identity is rejected: count the existing balance
+instead. Stock appearing after discovery prevents posting from stale data.
+
+The count's existing tolerance/recount and partial-review rules apply.
+`INVENTORY.COUNT_APPROVE` is required to post or reject found stock, and its
+recorder, latest counter, and document creator cannot review their own line.
+Serialized discoveries must use whole quantities (up to 5000 base units) and
+the serial reconciliation action with the exact found serial numbers.
+Posting creates a `COUNT_CORRECTION` movement; rejecting or cancelling the
+line creates no stock. Pending found lines keep a grand opname frozen.
+Migration 26 adds nullable balance snapshots and found-line identity checks.
+A grand opname may start with an empty snapshot to capture found stock; if
+none is discovered, cancel the empty document with an explanatory reason.
 
 Record any subset of pending lines through the `count` action using the
 document `expected_version` and entries containing `line_id`,

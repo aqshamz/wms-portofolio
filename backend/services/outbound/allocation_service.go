@@ -55,7 +55,14 @@ func (s *Service) AllocateOutboundOrder(ctx context.Context, id string, request 
 			return err
 		}
 		for _, line := range lines {
-			_, ordered, err := quantity(line.OrderedQty, "ordered_qty", false)
+			item, err := local.repositories.Master.Catalog.Item.Get(ctx, line.ItemID)
+			if err != nil {
+				return err
+			}
+			if err := validateOrderSnapshot(line.OutboundOrderLine, item); err != nil {
+				return err
+			}
+			_, ordered, err := quantity(line.OrderedBaseQty, "ordered_base_qty", false)
 			if err != nil {
 				return err
 			}
@@ -109,7 +116,7 @@ func (s *Service) AllocateOutboundOrder(ctx context.Context, id string, request 
 				if err != nil {
 					return err
 				}
-				reservation := model.InventoryReservation{ID: reservationID, DocumentTypeID: kind.ID, StatusID: active.ID, PickingStrategyID: &strategy.ID, OutboundLineID: line.ID, BalanceID: balance.ID, ReservedQty: qty, PickedQty: "0", UOMID: line.UOMID, CreatedBy: actor}
+				reservation := model.InventoryReservation{ID: reservationID, DocumentTypeID: kind.ID, StatusID: active.ID, PickingStrategyID: &strategy.ID, OutboundLineID: line.ID, BalanceID: balance.ID, ReservedQty: qty, PickedQty: "0", UOMID: line.BaseUOMID, CreatedBy: actor}
 				if err := local.repositories.Reservation.Create(ctx, &reservation); err != nil {
 					return err
 				}

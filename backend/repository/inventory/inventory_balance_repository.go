@@ -33,6 +33,9 @@ func NewInventoryBalanceRepository(db *gorm.DB) *InventoryBalanceRepository {
 	return &InventoryBalanceRepository{db: db}
 }
 func (r *InventoryBalanceRepository) LockStockKey(ctx context.Context, ownerID, warehouseID, itemID string) error {
+	if err := r.CheckStockFreeze(ctx, ownerID, warehouseID); err != nil {
+		return err
+	}
 	return Error(r.db.WithContext(ctx).Exec("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", ownerID+"|"+warehouseID+"|"+itemID).Error)
 }
 func balanceIdentity(q *gorm.DB, k BalanceIdentity) *gorm.DB {
@@ -49,15 +52,29 @@ func balanceIdentity(q *gorm.DB, k BalanceIdentity) *gorm.DB {
 	}
 	return q
 }
+func (r *InventoryBalanceRepository) FindIdentity(ctx context.Context, k BalanceIdentity) (model.InventoryBalance, error) {
+	var row model.InventoryBalance
+	err := balanceIdentity(r.db.WithContext(ctx), k).Take(&row).Error
+	return row, Error(err)
+}
 func (r *InventoryBalanceRepository) FindLocked(ctx context.Context, k BalanceIdentity) (model.InventoryBalance, error) {
+	if err := r.CheckStockFreeze(ctx, k.OwnerID, k.WarehouseID); err != nil {
+		return model.InventoryBalance{}, err
+	}
 	var v model.InventoryBalance
 	err := balanceIdentity(r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}), k).Take(&v).Error
 	return v, Error(err)
 }
 func (r *InventoryBalanceRepository) Create(ctx context.Context, v *model.InventoryBalance) error {
+	if err := r.CheckStockFreeze(ctx, v.OwnerID, v.WarehouseID); err != nil {
+		return err
+	}
 	return Error(r.db.WithContext(ctx).Create(v).Error)
 }
 func (r *InventoryBalanceRepository) SetOnHand(ctx context.Context, id, quantity string) error {
+	if err := r.checkBalanceFreeze(ctx, id); err != nil {
+		return err
+	}
 	result := r.db.WithContext(ctx).Model(&model.InventoryBalance{}).Where("balance_id=?", id).Updates(map[string]interface{}{"on_hand_qty": quantity, "version_no": gorm.Expr("version_no+1"), "updated_at": gorm.Expr("clock_timestamp()")})
 	if result.Error != nil {
 		return Error(result.Error)
@@ -69,6 +86,9 @@ func (r *InventoryBalanceRepository) SetOnHand(ctx context.Context, id, quantity
 }
 
 func (r *InventoryBalanceRepository) SetQuantities(ctx context.Context, id, onHand, reserved string) error {
+	if err := r.checkBalanceFreeze(ctx, id); err != nil {
+		return err
+	}
 	result := r.db.WithContext(ctx).Model(&model.InventoryBalance{}).Where("balance_id=?", id).Updates(map[string]interface{}{"on_hand_qty": onHand, "reserved_qty": reserved, "version_no": gorm.Expr("version_no+1"), "updated_at": gorm.Expr("clock_timestamp()")})
 	if result.Error != nil {
 		return Error(result.Error)

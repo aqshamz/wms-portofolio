@@ -41,6 +41,8 @@ func actor(c *gin.Context) string {
 }
 func fail(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, repository.ErrStockFrozen):
+		utils.Failure(c, http.StatusConflict, err.Error(), nil)
 	case errors.Is(err, service.ErrInvalidInput):
 		utils.Failure(c, 400, err.Error(), nil)
 	case errors.Is(err, service.ErrForbidden):
