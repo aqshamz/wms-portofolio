@@ -6,7 +6,9 @@ import type {
   CycleCount,
   CycleCountFilters,
   CycleCountPage,
+  FoundStockOptions,
   InternalMoveRequest,
+  InventoryStatusChangeRequest,
   InventoryAdjustment,
   StockControlCommandResponse,
   StockControlReason,
@@ -186,6 +188,15 @@ export function postInternalMove(request: InternalMoveRequest) {
   });
 }
 
+export function postInventoryStatusChange(
+  request: InventoryStatusChangeRequest,
+) {
+  return apiRequest<StockControlCommandResponse>(`${root}/status-changes`, {
+    method: "POST",
+    body: request,
+  });
+}
+
 export function postWarehouseTransfer(request: WarehouseTransferRequest) {
   return apiRequest<StockControlCommandResponse>(
     `${root}/warehouse-transfers`,
@@ -360,6 +371,40 @@ export function listCycleCounts(filters: CycleCountFilters) {
 export function getCycleCount(id: string) {
   return apiRequest<CycleCount>(`${cycleCountRoot}/${encodeURIComponent(id)}`);
 }
+export function getFoundStockOptions(
+  id: string,
+  filters: {
+    item_id?: string;
+    location_id?: string;
+    item_search?: string;
+    location_search?: string;
+    lot_search?: string;
+    hu_search?: string;
+  },
+) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value?.trim()) query.set(key, value.trim());
+  }
+  return apiRequest<FoundStockOptions>(
+    `${cycleCountRoot}/${encodeURIComponent(id)}/found-stock-options?${query}`,
+  );
+}
+export function addFoundStock(
+  id: string,
+  request: {
+    expected_version: number;
+    item_id: string;
+    location_id: string;
+    inventory_status_id: string;
+    lot_id?: string;
+    handling_unit_id?: string;
+    counted_quantity: string;
+    notes: string;
+  },
+) {
+  return cycleCountTransition(id, "found-stock", request);
+}
 export function createCycleCount(request: {
   business_date: string;
   tolerance_quantity: string;
@@ -407,6 +452,22 @@ export function approveCycleCount(
   return cycleCountTransition(id, "approve", {
     expected_version: expectedVersion,
     line_ids: lineIds,
+  });
+}
+export function reconcileCycleCountSerials(
+  id: string,
+  expectedVersion: number,
+  request: {
+    line_id: string;
+    missing_serial_ids?: string[];
+    found_serial_numbers?: string[];
+  },
+) {
+  return cycleCountTransition(id, "reconcile-serials", {
+    expected_version: expectedVersion,
+    line_id: request.line_id,
+    missing_serial_ids: request.missing_serial_ids ?? [],
+    found_serial_numbers: request.found_serial_numbers ?? [],
   });
 }
 export function rejectCycleCount(

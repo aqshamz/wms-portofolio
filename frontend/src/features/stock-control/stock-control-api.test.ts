@@ -14,7 +14,9 @@ import {
   listCycleCounts,
   listStockControlReasons,
   postInternalMove,
+  postInventoryStatusChange,
   postWarehouseTransfer,
+  reconcileCycleCountSerials,
   recordCycleCount,
   createWarehouseTransfer,
   listWarehouseTransfers,
@@ -49,6 +51,27 @@ describe("stock-control API", () => {
     await postInternalMove(request);
     expect(apiRequest).toHaveBeenCalledWith(
       "/api/v1/stock-control/internal-moves",
+      { method: "POST", body: request },
+    );
+  });
+
+  it("posts a status change with its retry key, reason, serial and balance version", async () => {
+    vi.mocked(apiRequest).mockResolvedValue({});
+    const request = {
+      operation_key: "stock.status-change.1",
+      business_date: "2026-10-06",
+      source_document_id: "ISC-1",
+      reason_code: "STATUS_HOLD",
+      notes: "Packaging requires review",
+      source_balance_id: "BAL-1",
+      target_inventory_status_id: "hold-id",
+      quantity: "1",
+      serial_ids: ["serial-1"],
+      expected_version: 9,
+    };
+    await postInventoryStatusChange(request);
+    expect(apiRequest).toHaveBeenCalledWith(
+      "/api/v1/stock-control/status-changes",
       { method: "POST", body: request },
     );
   });
@@ -163,6 +186,24 @@ describe("stock-control API", () => {
       {
         method: "POST",
         body: { expected_version: 2, line_ids: ["IADJ-1-L0002"] },
+      },
+    );
+
+    await reconcileCycleCountSerials("CCNT-1", 3, {
+      line_id: "CCNT-1-L0002",
+      missing_serial_ids: ["SER-1"],
+    });
+    expect(apiRequest).toHaveBeenNthCalledWith(
+      4,
+      "/api/v1/stock-control/cycle-counts/CCNT-1/reconcile-serials",
+      {
+        method: "POST",
+        body: {
+          expected_version: 3,
+          line_id: "CCNT-1-L0002",
+          missing_serial_ids: ["SER-1"],
+          found_serial_numbers: [],
+        },
       },
     );
   });

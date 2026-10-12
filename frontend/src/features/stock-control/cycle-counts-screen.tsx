@@ -140,6 +140,14 @@ export function CycleCountsScreen({
         {isGrand
           ? "Each document snapshots every positive balance for one served owner in active STORAGE and PICK_FACE locations. Operational locations such as receiving, QC, quarantine and docks remain outside the count."
           : "Counts are blind until review. Variances outside tolerance require a second count. Approval posts only selected lines; matching lines create no inventory movement."}
+        {isGrand ? (
+          <p className="mt-2">
+            Creating an opname freezes all stock movements and reservation
+            changes for that customer and warehouse, including stock outside the
+            count. The freeze remains during partial posting and is released
+            automatically when the document is completed or cancelled.
+          </p>
+        ) : null}
       </section>
       <Panel className="overflow-hidden">
         <form
@@ -248,6 +256,15 @@ export function CycleCountsScreen({
                     </td>
                     <td className="px-5 py-4">
                       <StatusBadge>{entry.status_code}</StatusBadge>
+                      {entry.count_type_code === "GRAND" ? (
+                        <p
+                          className={`mt-2 text-xs font-medium ${entry.stock_frozen ? "text-amber-800" : "text-slate-500"}`}
+                        >
+                          {entry.stock_frozen
+                            ? "Stock frozen"
+                            : "Freeze released"}
+                        </p>
+                      ) : null}
                     </td>
                     <td className="px-5 py-4">
                       <Button

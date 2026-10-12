@@ -165,6 +165,11 @@ const inventoryNavigation: InventoryNavigationItem[] = [
 
 const stockControlNavigation: StockControlNavigationItem[] = [
   {
+    label: "Inventory status changes",
+    href: "/stock-control/inventory-status-changes",
+    access: MODULE_ACCESS.INVENTORY.STATUS_CHANGE,
+  },
+  {
     label: "Internal movements",
     href: "/stock-control/internal-movements",
     access: MODULE_ACCESS.INVENTORY.MOVE,
@@ -212,6 +217,7 @@ const stockControlNavigation: StockControlNavigationItem[] = [
 ];
 
 const outboundNavigation: OutboundNavigationItem[] = [
+  { label: "Delivery orders", href: "/outbound/orders" },
   { label: "Return to vendor", href: "/outbound/vendor-returns" },
   { label: "Disposals", href: "/outbound/disposals" },
 ];

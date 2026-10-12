@@ -23,6 +23,19 @@ export interface InternalMoveRequest {
   expected_version: number;
 }
 
+export interface InventoryStatusChangeRequest {
+  operation_key: string;
+  business_date: string;
+  source_document_id: string;
+  reason_code: string;
+  notes?: string;
+  source_balance_id: string;
+  target_inventory_status_id: string;
+  quantity: string;
+  serial_ids: string[];
+  expected_version: number;
+}
+
 export interface WarehouseTransferRequest {
   operation_key: string;
   business_date: string;
@@ -148,7 +161,12 @@ export interface CycleCountLine {
   line_no: number;
   decision_code:
     "OPEN" | "COUNTED" | "NO_VARIANCE" | "POSTED" | "REJECTED" | "CANCELLED";
-  balance_id: string;
+  balance_id: string | null;
+  found_stock: boolean;
+  created_by: string;
+  counted_by: string | null;
+  created_by_display_name: string;
+  discovery_notes: string | null;
   snapshot_version_no: number;
   current_balance_version_no?: number;
   item_code: string;
@@ -172,10 +190,38 @@ export interface CycleCountLine {
   decision_reason: string | null;
   inventory_movement_id: string | null;
   resulting_balance_id: string | null;
+  current_serials: {
+    serial_id: string;
+    serial_no: string;
+  }[];
+  serial_reconciliations: {
+    cycle_count_serial_reconciliation_id: string;
+    serial_id: string;
+    serial_no: string;
+    direction_code: "FOUND" | "MISSING";
+    inventory_movement_id: string;
+    created_at: string;
+    created_by_display_name: string;
+  }[];
+}
+export interface FoundStockOptions {
+  items: {
+    item_id: string;
+    code: string;
+    name: string;
+    uom_code: string;
+    lot_controlled: boolean;
+    serial_controlled: boolean;
+  }[];
+  locations: { id: string; label: string }[];
+  statuses: { id: string; label: string }[];
+  lots: { id: string; label: string }[];
+  handling_units: { id: string; label: string }[];
 }
 export interface CycleCount {
   cycle_count_id: string;
   count_type_code: "CYCLE" | "GRAND";
+  stock_frozen: boolean;
   status_code:
     | "DRAFT"
     | "COUNTING"

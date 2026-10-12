@@ -50,7 +50,7 @@ export function GrandStockOpnameCreateDialog({
       }),
     onSuccess: (count) => {
       toast.success(
-        `${count.cycle_count_id} created with ${count.total_lines} blind-count lines.`,
+        `${count.cycle_count_id} created with ${count.total_lines} blind-count lines. Stock is now frozen for this customer and warehouse.`,
       );
       void client.invalidateQueries({
         queryKey: stockControlKeys.cycleCounts(),
@@ -121,9 +121,26 @@ export function GrandStockOpnameCreateDialog({
           </div>
         </div>
         <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-          Keep stock movements paused while the count is open. If a snapshotted
-          balance changes, the affected count cannot be posted from stale data.
-          Only one active grand opname is allowed for this warehouse/customer.
+          <p className="font-semibold">
+            Creating this opname freezes stock immediately.
+          </p>
+          <p className="mt-2">
+            All stock movements and reservation changes for this customer in
+            this warehouse are blocked, including receiving, QC, quarantine and
+            dock stock outside the count. Only approved corrections from this
+            opname can change stock.
+          </p>
+          <p className="mt-2">
+            The freeze remains during partial posting and ends automatically
+            when every line is finalized or the document is cancelled. Other
+            customers and warehouses remain available. Only one active grand
+            opname is allowed for this warehouse/customer.
+          </p>
+          <p className="mt-2">
+            Complete or cancel outstanding stock reservations and replenishments
+            before starting. Creation is blocked while any stock is reserved for
+            this customer and warehouse.
+          </p>
         </section>
         <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
           <Button
@@ -137,7 +154,7 @@ export function GrandStockOpnameCreateDialog({
             {create.isPending ? (
               <LoaderCircle className="size-4 animate-spin" />
             ) : null}
-            Create grand stock opname
+            Create and freeze stock
           </Button>
         </div>
       </form>
