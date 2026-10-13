@@ -19,6 +19,10 @@ export default async function OutboundOrdersPage() {
     <OutboundOrdersScreen
       canPlan={hasPermission(permissions, PERMISSIONS.OUTBOUND.PLAN)}
       canCancel={hasPermission(permissions, PERMISSIONS.OUTBOUND.CANCEL)}
+      canCloseShort={hasPermission(
+        permissions,
+        PERMISSIONS.OUTBOUND.CLOSE_SHORT,
+      )}
     />
   );
 }

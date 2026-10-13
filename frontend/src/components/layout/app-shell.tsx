@@ -218,6 +218,8 @@ const stockControlNavigation: StockControlNavigationItem[] = [
 
 const outboundNavigation: OutboundNavigationItem[] = [
   { label: "Delivery orders", href: "/outbound/orders" },
+  { label: "Packing", href: "/outbound/packings" },
+  { label: "Shipments / HU dispatch", href: "/outbound/shipments" },
   { label: "Return to vendor", href: "/outbound/vendor-returns" },
   { label: "Disposals", href: "/outbound/disposals" },
 ];

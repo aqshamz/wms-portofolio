@@ -18,6 +18,10 @@ export interface OutboundOrderLine {
   checked_qty: string;
   packed_qty: string;
   shipped_qty: string;
+  short_accepted_qty?: string;
+  closed_short_qty?: string;
+  open_qty?: string;
+  unallocated_qty?: string;
   requested_lot_no?: string;
   customer_line_reference?: string;
   notes?: string;
@@ -46,6 +50,8 @@ export interface OutboundOrder {
   status_code: string;
   version_no: number;
   created_at: string;
+  closed_short_at?: string;
+  closed_short_reason?: string;
   lines?: OutboundOrderLine[];
 }
 export interface OutboundOrderFilters {

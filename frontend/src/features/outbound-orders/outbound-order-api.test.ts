@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiRequest } from "@/lib/api/client";
 import {
   createOutboundOrder,
+  allocateAvailableOutboundStock,
   deleteOutboundOrderLine,
   outboundOrderListPath,
   transitionOutboundOrder,
@@ -10,6 +11,28 @@ import {
 vi.mock("@/lib/api/client", () => ({ apiRequest: vi.fn() }));
 beforeEach(() => vi.resetAllMocks());
 describe("Delivery Order API", () => {
+  it("explicitly allows available-stock allocation with a version guard", async () => {
+    await allocateAvailableOutboundStock("DO/1", 8);
+    expect(apiRequest).toHaveBeenCalledWith(
+      "/api/v1/outbound/orders/DO%2F1/allocate",
+      { method: "POST", body: { expected_version: 8, allow_partial: true } },
+    );
+  });
+  it("sends close-short reason and version to the separate action", async () => {
+    await transitionOutboundOrder(
+      "DO-1",
+      "close-short",
+      9,
+      "Client agreed to shortage",
+    );
+    expect(apiRequest).toHaveBeenCalledWith(
+      "/api/v1/outbound/orders/DO-1/close-short",
+      {
+        method: "POST",
+        body: { expected_version: 9, reason: "Client agreed to shortage" },
+      },
+    );
+  });
   it("encodes owner, warehouse, status and search", () => {
     expect(
       outboundOrderListPath({

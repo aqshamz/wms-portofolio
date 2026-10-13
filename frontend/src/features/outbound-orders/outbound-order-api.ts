@@ -73,7 +73,7 @@ export const validateOutboundOrder = (id: string, version: number) =>
   });
 export const transitionOutboundOrder = (
   id: string,
-  action: "release" | "cancel",
+  action: "release" | "cancel" | "close-short",
   version: number,
   reason?: string,
 ) =>
@@ -81,6 +81,11 @@ export const transitionOutboundOrder = (
     method: "POST",
     body: {
       expected_version: version,
-      ...(action === "cancel" ? { reason } : {}),
+      ...(action === "cancel" || action === "close-short" ? { reason } : {}),
     },
+  });
+export const allocateAvailableOutboundStock = (id: string, version: number) =>
+  apiRequest<{ order: OutboundOrder }>(`${orderPath(id)}/allocate`, {
+    method: "POST",
+    body: { expected_version: version, allow_partial: true },
   });

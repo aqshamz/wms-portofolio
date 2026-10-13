@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
   addOutboundOrderLine,
+  allocateAvailableOutboundStock,
   deleteOutboundOrderLine,
   getOutboundOrder,
   outboundOrderKeys,
@@ -44,6 +45,8 @@ type Action =
   | { kind: "validate" }
   | { kind: "release" }
   | { kind: "cancel" }
+  | { kind: "close-short" }
+  | { kind: "allocate" }
   | { kind: "delete"; line: OutboundOrderLine }
   | { kind: "header"; value: OutboundHeaderValues }
   | { kind: "line"; value: OutboundLineValues; line?: OutboundOrderLine };
@@ -176,11 +179,13 @@ export function OutboundOrderDetailDialog({
   id,
   canPlan,
   canCancel,
+  canCloseShort = false,
   onOpenChange,
 }: {
   id: string;
   canPlan: boolean;
   canCancel: boolean;
+  canCloseShort?: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const client = useQueryClient();
@@ -206,7 +211,15 @@ export function OutboundOrderDetailDialog({
         else toast.warning("Validation failed. Review the rule results.");
         return getOutboundOrder(id);
       }
-      if (action.kind === "release" || action.kind === "cancel")
+      if (action.kind === "allocate") {
+        const result = await allocateAvailableOutboundStock(id, version);
+        return result.order;
+      }
+      if (
+        action.kind === "release" ||
+        action.kind === "cancel" ||
+        action.kind === "close-short"
+      )
         return transitionOutboundOrder(id, action.kind, version, reason.trim());
       if (action.kind === "delete")
         return deleteOutboundOrderLine(
@@ -238,13 +251,23 @@ export function OutboundOrderDetailDialog({
     onSuccess: async (next, action) => {
       client.setQueryData(outboundOrderKeys.detail(id), next);
       await client.invalidateQueries({ queryKey: outboundOrderKeys.all });
+      if (action.kind === "allocate") await client.invalidateQueries();
       setEdit(undefined);
       setConfirmation(undefined);
       setError("");
       setReason("");
       if (action.kind !== "validate") {
         setValidation(undefined);
-        toast.success("Delivery Order updated.");
+        if (action.kind === "allocate" && next.version_no === order?.version_no)
+          toast.warning(
+            "No additional stock available. Remaining demand stays open.",
+          );
+        else
+          toast.success(
+            action.kind === "allocate"
+              ? "Available stock reserved. Shortages stay open on this DO."
+              : "Delivery Order updated.",
+          );
       }
     },
     onError: (err: Error) => {
@@ -377,6 +400,34 @@ export function OutboundOrderDetailDialog({
                     Release DO
                   </Button>
                 )}
+                {canPlan &&
+                  [
+                    "RELEASED",
+                    "PARTIALLY_ALLOCATED",
+                    "PARTIALLY_FULFILLED",
+                  ].includes(order.status_code) && (
+                    <Button
+                      disabled={busy}
+                      onClick={() => setConfirmation({ kind: "allocate" })}
+                    >
+                      Allocate available stock
+                    </Button>
+                  )}
+                {canCloseShort &&
+                  ["RELEASED", "PARTIALLY_FULFILLED"].includes(
+                    order.status_code,
+                  ) && (
+                    <Button
+                      variant="secondary"
+                      disabled={busy}
+                      onClick={() => {
+                        setReason("");
+                        setConfirmation({ kind: "close-short" });
+                      }}
+                    >
+                      Close remaining demand short
+                    </Button>
+                  )}
                 {canCancel &&
                   ["DRAFT", "VALIDATED", "RELEASED"].includes(
                     order.status_code,
@@ -418,14 +469,23 @@ export function OutboundOrderDetailDialog({
                     ? "Release this validated DO for allocation? Draft quantities cannot be edited after release. No stock moves yet."
                     : confirmation.kind === "cancel"
                       ? "Cancel this Delivery Order? It remains in history and cannot be processed."
-                      : confirmation.kind === "delete"
-                        ? `Delete draft line ${confirmation.line.line_no}?`
-                        : "Confirm change?"}
+                      : confirmation.kind === "close-short"
+                        ? "Permanently close ALL remaining uncommitted demand on this DO? Original quantities and shipment history are preserved. Reserved or in-process stock must be finished or released first. Delivery tracking for dispatched stock continues separately. A reason is required."
+                        : confirmation.kind === "allocate"
+                          ? "Reserve available stock using the configured picking strategy? Shortages stay open on this same DO for a later allocation and shipment. No physical stock moves yet."
+                          : confirmation.kind === "delete"
+                            ? `Delete draft line ${confirmation.line.line_no}?`
+                            : "Confirm change?"}
                 </p>
-                {confirmation.kind === "cancel" && (
+                {(confirmation.kind === "cancel" ||
+                  confirmation.kind === "close-short") && (
                   <Textarea
-                    aria-label="Cancellation reason"
-                    placeholder="Required cancellation reason"
+                    aria-label={
+                      confirmation.kind === "close-short"
+                        ? "Close-short reason"
+                        : "Cancellation reason"
+                    }
+                    placeholder="Required reason"
                     maxLength={4000}
                     value={reason}
                     onChange={(event) => setReason(event.target.value)}
@@ -435,7 +495,9 @@ export function OutboundOrderDetailDialog({
                 <div className="flex gap-3">
                   <Button
                     disabled={
-                      busy || (confirmation.kind === "cancel" && !reason.trim())
+                      busy ||
+                      (["cancel", "close-short"].includes(confirmation.kind) &&
+                        !reason.trim())
                     }
                     onClick={() => {
                       setError("");
@@ -470,6 +532,14 @@ export function OutboundOrderDetailDialog({
                 }}
                 onBack={() => setEdit(undefined)}
               />
+            )}
+            {order.closed_short_reason && (
+              <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-950">
+                Closed short: {order.closed_short_reason} ·{" "}
+                {order.closed_short_at
+                  ? new Date(order.closed_short_at).toLocaleString()
+                  : ""}
+              </p>
             )}
             <section className="space-y-4">
               <h3 className="font-bold">
@@ -520,6 +590,15 @@ export function OutboundOrderDetailDialog({
                     Checked {line.checked_qty} · Packed {line.packed_qty} ·
                     Shipped {line.shipped_qty} ({line.base_uom_code})
                   </p>
+                  {line.open_qty !== undefined && (
+                    <p className="text-slate-600">
+                      Open demand {line.open_qty} · Awaiting allocation{" "}
+                      {line.unallocated_qty} · Closed short{" "}
+                      {line.closed_short_qty ?? "0"} · Accepted checking
+                      shortage {line.short_accepted_qty ?? "0"} (
+                      {line.base_uom_code})
+                    </p>
+                  )}
                   <p className="text-slate-600">
                     Requested lot: {line.requested_lot_no ?? "—"} · Client line:{" "}
                     {line.customer_line_reference ?? "—"}

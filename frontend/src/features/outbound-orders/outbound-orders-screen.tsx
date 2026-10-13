@@ -28,6 +28,8 @@ const statuses = [
   "VALIDATED",
   "RELEASED",
   "PARTIALLY_ALLOCATED",
+  "PARTIALLY_FULFILLED",
+  "CLOSED_SHORT",
   "ALLOCATED",
   "WAVED",
   "PICKING",
@@ -47,9 +49,11 @@ const statuses = [
 export function OutboundOrdersScreen({
   canPlan,
   canCancel,
+  canCloseShort = false,
 }: {
   canPlan: boolean;
   canCancel: boolean;
+  canCloseShort?: boolean;
 }) {
   const [filters, setFilters] = useQueryStates({
     warehouse: parseAsString.withDefault(""),
@@ -154,12 +158,14 @@ export function OutboundOrdersScreen({
           </span>
           <ArrowRight className="size-4 text-slate-400" />
           <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
-            Allocation (next step)
+            Fulfillment
           </span>
         </div>
         <p className="mt-3 text-sm text-slate-600">
           Order UOMs are frozen on each line. Warehouse work uses base units. No
-          stock moves when creating or releasing a delivery order.
+          stock moves when creating or releasing a delivery order. Available
+          stock can be fulfilled now; shortages stay open on the same DO until
+          fulfilled or explicitly closed short by an authorized account.
         </p>
       </div>
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
@@ -392,6 +398,7 @@ export function OutboundOrdersScreen({
           id={selectedId}
           canPlan={canPlan}
           canCancel={canCancel}
+          canCloseShort={canCloseShort}
           onOpenChange={(open) => {
             if (!open) setSelectedId(undefined);
           }}
