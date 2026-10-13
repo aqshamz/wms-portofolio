@@ -37,6 +37,11 @@ func (r *OutboundCheckRepository) Lock(ctx context.Context, id string) (model.Ou
 }
 func (r *OutboundCheckRepository) List(ctx context.Context, f ListFilter) ([]CheckRow, int64, error) {
 	q := checkQuery(r.db.WithContext(ctx)).Where("o.owner_id=?", f.OwnerID)
+	if f.ReadyOnly {
+		q = q.Where("s.code='PASSED' AND o.status_id IN (SELECT status_id FROM document_status WHERE document_type_id=o.document_type_id AND code='CHECKED')").
+			Where("EXISTS (SELECT 1 FROM outbound_check_line cl WHERE cl.outbound_check_id=c.outbound_check_id AND cl.checked_qty>0)").
+			Where("NOT EXISTS (SELECT 1 FROM packing p JOIN document_status ps ON ps.status_id=p.status_id WHERE NOT ps.is_cancelled AND (p.outbound_check_id=c.outbound_check_id OR EXISTS (SELECT 1 FROM packing_line pl JOIN outbound_check_line pcl ON pcl.outbound_check_line_id=pl.outbound_check_line_id WHERE pl.packing_id=p.packing_id AND pcl.outbound_check_id=c.outbound_check_id)))")
+	}
 	if f.WarehouseID != "" {
 		q = q.Where("o.warehouse_id=?", f.WarehouseID)
 	}
@@ -73,5 +78,10 @@ func (r *OutboundCheckRepository) HasUnresolvedParent(ctx context.Context, paren
 func (r *OutboundCheckRepository) HasOpenForStaging(ctx context.Context, stagingID string) (bool, error) {
 	var n int64
 	err := r.db.WithContext(ctx).Table("outbound_check c").Joins("JOIN document_status s ON s.status_id=c.status_id").Where("c.staging_id=? AND s.code='OPEN'", stagingID).Count(&n).Error
+	return n > 0, Error(err)
+}
+func (r *OutboundCheckRepository) HasPassedForStaging(ctx context.Context, stagingID string) (bool, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Table("outbound_check c").Joins("JOIN document_status s ON s.status_id=c.status_id").Where("c.staging_id=? AND s.code='PASSED'", stagingID).Count(&n).Error
 	return n > 0, Error(err)
 }

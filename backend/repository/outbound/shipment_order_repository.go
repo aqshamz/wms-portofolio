@@ -12,6 +12,9 @@ type ShipmentOrderRepository struct{ db *gorm.DB }
 func NewShipmentOrderRepository(db *gorm.DB) *ShipmentOrderRepository {
 	return &ShipmentOrderRepository{db: db}
 }
+func (r *ShipmentOrderRepository) CompleteAll(ctx context.Context, id string) error {
+	return Error(r.db.WithContext(ctx).Model(&model.ShipmentOrder{}).Where("shipment_id=? AND removed_at IS NULL", id).Update("fulfilled_at", time.Now()).Error)
+}
 func (r *ShipmentOrderRepository) RemoveAll(ctx context.Context, id, actor string) error {
 	return Error(r.db.WithContext(ctx).Model(&model.ShipmentOrder{}).
 		Where("shipment_id=? AND removed_at IS NULL", id).

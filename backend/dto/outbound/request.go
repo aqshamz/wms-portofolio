@@ -1,5 +1,10 @@
 package outbound
 
+type CloseShortOutboundRequest struct {
+	ExpectedVersion int64  `json:"expected_version"`
+	Reason          string `json:"reason"`
+}
+
 type OutboundOrderLineRequest struct {
 	UOMID                 *string `json:"uom_id" binding:"omitempty,uuid"`
 	ItemID                string  `json:"item_id" binding:"required,uuid"`

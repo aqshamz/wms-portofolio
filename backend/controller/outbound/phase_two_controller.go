@@ -116,6 +116,34 @@ func (cn *Controller) ListPackings(c *gin.Context) {
 	}
 	utils.Success(c, http.StatusOK, "packing documents retrieved", v)
 }
+
+func (cn *Controller) PackingCandidates(c *gin.Context) {
+	f, _, ok := listFilter(c, false)
+	if !ok {
+		return
+	}
+	f.ReadyOnly = true
+	v, err := cn.service.ListChecks(c.Request.Context(), f)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "packing candidates retrieved", v)
+}
+
+func (cn *Controller) ShipmentCandidates(c *gin.Context) {
+	f, _, ok := listFilter(c, false)
+	if !ok {
+		return
+	}
+	f.ReadyOnly = true
+	v, err := cn.service.ListPackings(c.Request.Context(), f)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "shipment candidates retrieved", v)
+}
 func (cn *Controller) GetPacking(c *gin.Context) {
 	v, err := cn.service.GetPacking(c.Request.Context(), c.Param("id"))
 	if err != nil {
@@ -203,6 +231,19 @@ func (cn *Controller) CompleteShipment(c *gin.Context) {
 		return
 	}
 	utils.Success(c, http.StatusOK, "shipment dispatched", v)
+}
+
+func (cn *Controller) DispatchHandlingUnit(c *gin.Context) {
+	var q dto.DispatchHandlingUnitRequest
+	if !utils.BindStrictJSON(c, &q) {
+		return
+	}
+	v, err := cn.service.DispatchShipmentHandlingUnit(c.Request.Context(), c.Param("id"), c.Param("hu_id"), q, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "handling unit dispatched", v)
 }
 func (cn *Controller) CancelShipment(c *gin.Context) {
 	v, err := cn.service.CancelShipment(c.Request.Context(), c.Param("id"), actor(c))

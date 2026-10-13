@@ -105,6 +105,12 @@ func (r *InventoryBalanceRepository) CountPositiveForHandlingUnit(ctx context.Co
 	return count, Error(err)
 }
 
+func (r *InventoryBalanceRepository) PositiveForHandlingUnit(ctx context.Context, id string) ([]model.InventoryBalance, error) {
+	var rows []model.InventoryBalance
+	err := r.db.WithContext(ctx).Where("handling_unit_id=? AND on_hand_qty>0", id).Order("balance_id").Find(&rows).Error
+	return rows, Error(err)
+}
+
 const balanceSelect = `b.balance_id,b.owner_id,b.warehouse_id,b.location_id,l.code location_code,lt.code location_type_code,b.item_id,
  i.code item_code,i.name item_name,i.serial_controlled,b.lot_id,lot.lot_number,b.handling_unit_id,
  hu.barcode handling_unit_barcode,b.inventory_status_id,

@@ -69,6 +69,13 @@ func (s *Service) CreateCheck(ctx context.Context, q dto.CreateCheckRequest, act
 		if err != nil {
 			return err
 		}
+		passed, err := local.repositories.Check.HasPassedForStaging(ctx, staging.ID)
+		if err != nil {
+			return err
+		}
+		if passed {
+			return state("staging already has a passed check; use the current fulfillment cycle")
+		}
 		if q.ParentCheckID == nil {
 			if orderRow.StatusCode != "STAGED" {
 				return state("only a STAGED order can start its first check")

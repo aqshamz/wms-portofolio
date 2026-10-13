@@ -34,6 +34,7 @@ func Error(err error) error {
 }
 
 type ListFilter struct {
+	ReadyOnly                                bool
 	OwnerID, WarehouseID, StatusCode, Search string
 	Page, PageSize                           int
 }

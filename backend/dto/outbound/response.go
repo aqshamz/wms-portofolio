@@ -25,6 +25,9 @@ type OutboundOrderLineResponse struct {
 	CheckedQty            string  `json:"checked_qty"`
 	RejectedQty           string  `json:"rejected_qty"`
 	ShortAcceptedQty      string  `json:"short_accepted_qty"`
+	ClosedShortQty        string  `json:"closed_short_qty"`
+	OpenQty               string  `json:"open_qty"`
+	UnallocatedQty        string  `json:"unallocated_qty"`
 	PackedQty             string  `json:"packed_qty"`
 	ShippedQty            string  `json:"shipped_qty"`
 	DeliveredQty          string  `json:"delivered_qty"`
@@ -61,6 +64,9 @@ type OutboundOrderResponse struct {
 	Notes                 *string                     `json:"notes"`
 	VersionNo             int64                       `json:"version_no"`
 	CreatedAt             time.Time                   `json:"created_at"`
+	ClosedShortAt         *time.Time                  `json:"closed_short_at"`
+	ClosedShortBy         *string                     `json:"closed_short_by"`
+	ClosedShortReason     *string                     `json:"closed_short_reason"`
 	Lines                 []OutboundOrderLineResponse `json:"lines,omitempty"`
 }
 type ValidationResultResponse struct {

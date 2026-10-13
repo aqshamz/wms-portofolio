@@ -92,8 +92,8 @@ func (s *Service) CreateWave(ctx context.Context, request dto.CreateWaveRequest,
 			if order.OwnerID != request.OwnerID || order.WarehouseID != request.WarehouseID {
 				return invalid("all outbound orders must match the wave owner and warehouse")
 			}
-			if row.StatusCode != "ALLOCATED" {
-				return state("only fully ALLOCATED outbound orders can enter a wave")
+			if row.StatusCode != "ALLOCATED" && row.StatusCode != "PARTIALLY_ALLOCATED" {
+				return state("only allocated or partially allocated outbound orders can enter a wave")
 			}
 			activeWave, err := local.repositories.WaveOrder.HasActiveWave(ctx, outboundID)
 			if err != nil {
@@ -198,8 +198,8 @@ func (s *Service) ReleaseWave(ctx context.Context, id string, request dto.Releas
 			if err != nil {
 				return err
 			}
-			if orderRow.StatusCode != "ALLOCATED" {
-				return state("every wave order must remain ALLOCATED")
+			if orderRow.StatusCode != "ALLOCATED" && orderRow.StatusCode != "PARTIALLY_ALLOCATED" {
+				return state("every wave order must remain allocated or partially allocated")
 			}
 			reservations, err := local.repositories.Reservation.ListActiveByOrder(ctx, order.ID)
 			if err != nil {
@@ -228,6 +228,9 @@ func (s *Service) ReleaseWave(ctx context.Context, id string, request dto.Releas
 					return err
 				}
 				remaining := new(big.Rat).Sub(reserved, picked)
+				if remaining.Sign() <= 0 {
+					continue
+				}
 				taskID, err := local.generateID(ctx, "PICK_TASK", wave.BusinessDate, nil, &warehouse.ID)
 				if err != nil {
 					return err

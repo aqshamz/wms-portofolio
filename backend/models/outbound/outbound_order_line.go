@@ -19,6 +19,7 @@ type OutboundOrderLine struct {
 	DeliveredQty          string    `gorm:"column:delivered_qty;type:numeric(20,6);not null;default:0"`
 	RejectedQty           string    `gorm:"column:rejected_qty;type:numeric(20,6);not null;default:0"`
 	ShortAcceptedQty      string    `gorm:"column:short_accepted_qty;type:numeric(20,6);not null;default:0"`
+	ClosedShortQty        string    `gorm:"column:closed_short_qty;type:numeric(20,6);not null;default:0"`
 	UOMID                 string    `gorm:"column:uom_id;type:uuid;not null"`
 	RequestedLotNo        *string   `gorm:"column:requested_lot_no;size:100"`
 	CustomerLineReference *string   `gorm:"column:customer_line_reference;size:100"`

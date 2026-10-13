@@ -25,7 +25,13 @@ func (r *PackingRepository) Create(ctx context.Context, v *model.Packing) error 
 func (r *PackingRepository) HasActiveByOutbound(ctx context.Context, outboundID string) (bool, error) {
 	var n int64
 	err := r.db.WithContext(ctx).Table("packing p").Joins("JOIN document_status s ON s.status_id=p.status_id").
-		Where("p.outbound_id=? AND NOT s.is_cancelled", outboundID).Count(&n).Error
+		Where("p.outbound_id=? AND NOT s.is_final", outboundID).Count(&n).Error
+	return n > 0, Error(err)
+}
+func (r *PackingRepository) HasForCheck(ctx context.Context, checkID string) (bool, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Table("packing p").Joins("JOIN document_status s ON s.status_id=p.status_id").
+		Where("NOT s.is_cancelled AND (p.outbound_check_id=? OR EXISTS (SELECT 1 FROM packing_line pl JOIN outbound_check_line cl ON cl.outbound_check_line_id=pl.outbound_check_line_id WHERE pl.packing_id=p.packing_id AND cl.outbound_check_id=?))", checkID, checkID).Count(&n).Error
 	return n > 0, Error(err)
 }
 func (r *PackingRepository) Get(ctx context.Context, id string) (PackingRow, error) {
@@ -40,6 +46,12 @@ func (r *PackingRepository) Lock(ctx context.Context, id string) (model.Packing,
 }
 func (r *PackingRepository) List(ctx context.Context, f ListFilter) ([]PackingRow, int64, error) {
 	q := packingQuery(r.db.WithContext(ctx)).Where("o.owner_id=?", f.OwnerID)
+	if f.ReadyOnly {
+		q = q.Where("s.code='COMPLETED' AND o.status_id IN (SELECT status_id FROM document_status WHERE document_type_id=o.document_type_id AND code='PACKED')").
+			Where("EXISTS (SELECT 1 FROM packing_line pl WHERE pl.packing_id=p.packing_id)").
+			Where("NOT EXISTS (SELECT 1 FROM shipment_packing sp JOIN shipment s ON s.shipment_id=sp.shipment_id JOIN document_status ds ON ds.status_id=s.status_id WHERE sp.packing_id=p.packing_id AND NOT ds.is_cancelled)").
+			Where("NOT EXISTS (SELECT 1 FROM shipment_order so WHERE so.outbound_id=p.outbound_id AND so.removed_at IS NULL AND so.fulfilled_at IS NULL)")
+	}
 	if f.WarehouseID != "" {
 		q = q.Where("p.warehouse_id=?", f.WarehouseID)
 	}

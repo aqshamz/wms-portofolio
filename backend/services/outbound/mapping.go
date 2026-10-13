@@ -11,6 +11,12 @@ func mapOrder(v repository.OutboundOrderRow, lines []repository.OutboundOrderLin
 		// All execution progress fields below are in BaseUOMID, not order UOMID.
 		r.Lines = append(r.Lines, dto.OutboundOrderLineResponse{ID: x.ID, LineNo: x.LineNo, ItemID: x.ItemID, ItemCode: x.ItemCode, ItemName: x.ItemName, OrderedQty: x.OrderedQty, UOMConversionToBase: x.UOMConversionToBase, OrderedBaseQty: x.OrderedBaseQty, BaseUOMID: x.BaseUOMID, BaseUOMCode: x.BaseUOMCode, AllocatedQty: x.AllocatedQty, PickedQty: x.PickedQty, CheckedQty: x.CheckedQty, RejectedQty: x.RejectedQty, ShortAcceptedQty: x.ShortAcceptedQty, PackedQty: x.PackedQty, ShippedQty: x.ShippedQty, DeliveredQty: x.DeliveredQty, UOMID: x.UOMID, UOMCode: x.UOMCode, RequestedLotNo: x.RequestedLotNo, CustomerLineReference: x.CustomerLineReference, Notes: x.Notes})
 	}
+	r.ClosedShortAt, r.ClosedShortBy, r.ClosedShortReason = v.ClosedShortAt, v.ClosedShortBy, v.ClosedShortReason
+	for i, x := range lines {
+		r.Lines[i].ClosedShortQty = x.ClosedShortQty
+		r.Lines[i].OpenQty = decimal(openDemand(x.OutboundOrderLine))
+		r.Lines[i].UnallocatedQty = decimal(unallocatedDemand(x.OutboundOrderLine))
+	}
 	return r
 }
 func mapReservation(v repository.ReservationRow) dto.ReservationResponse {

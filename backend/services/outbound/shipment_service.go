@@ -119,11 +119,28 @@ func (s *Service) CreateShipment(ctx context.Context, q dto.CreateShipmentReques
 			if err != nil {
 				return err
 			}
-			if packing.StatusCode != "COMPLETED" || packing.OwnerID != q.OwnerID || packing.WarehouseID != q.WarehouseID {
+			if packing.StatusCode != "COMPLETED" || packing.LineCount == 0 || packing.OwnerID != q.OwnerID || packing.WarehouseID != q.WarehouseID {
 				return state("every packing must be COMPLETED for the shipment owner and warehouse")
 			}
 			if seen[packing.OutboundID] {
 				return invalid("packing_ids contain the same outbound order more than once")
+			}
+			if _, err := local.repositories.Order.Lock(ctx, packing.OutboundID); err != nil {
+				return err
+			}
+			orderRow, err := local.repositories.Order.Get(ctx, packing.OutboundID)
+			if err != nil {
+				return err
+			}
+			if orderRow.StatusCode != "PACKED" {
+				return state("shipment requires a PACKED order")
+			}
+			used, err := local.repositories.ShipmentPacking.HasActive(ctx, packingID)
+			if err != nil {
+				return err
+			}
+			if used {
+				return state("packing already belongs to a non-cancelled shipment")
 			}
 			seen[packing.OutboundID] = true
 			orders = append(orders, model.ShipmentOrder{ShipmentID: id, OutboundID: packing.OutboundID, AddedBy: actor})
@@ -140,6 +157,11 @@ func (s *Service) CreateShipment(ctx context.Context, q dto.CreateShipmentReques
 	return s.GetShipment(ctx, id)
 }
 func (s *Service) DispatchShipmentLine(ctx context.Context, shipmentID, packingLineID string, q dto.DispatchShipmentLineRequest, actor string) (dto.ShipmentResponse, error) {
+	return s.dispatchShipmentLine(ctx, shipmentID, packingLineID, q, actor, nil)
+}
+
+// A non-nil batch fingerprint is only supplied after validating the entire HU.
+func (s *Service) dispatchShipmentLine(ctx context.Context, shipmentID, packingLineID string, q dto.DispatchShipmentLineRequest, actor string, batchFingerprint *string) (dto.ShipmentResponse, error) {
 	if !validID(shipmentID, 120) || !validID(packingLineID, 150) || !validUUID(actor) || q.ExpectedBalanceVersion < 1 {
 		return dto.ShipmentResponse{}, invalid("invalid shipment dispatch request")
 	}
@@ -152,6 +174,9 @@ func (s *Service) DispatchShipmentLine(ctx context.Context, shipmentID, packingL
 		return dto.ShipmentResponse{}, err
 	}
 	fp := fingerprint(shipmentID, packingLineID, q.BusinessDate)
+	if batchFingerprint != nil {
+		fp = *batchFingerprint
+	}
 	if existing, e := s.repositories.Inventory.Movement.GetByOperationKey(ctx, operationKey); e == nil {
 		if existing.OperationFingerprint == nil || *existing.OperationFingerprint != fp {
 			return dto.ShipmentResponse{}, repository.ErrConflict
@@ -183,6 +208,11 @@ func (s *Service) DispatchShipmentLine(ctx context.Context, shipmentID, packingL
 		if err != nil {
 			return err
 		}
+		if sourceRow.HandlingUnitID != nil {
+			if _, err := local.repositories.Inventory.HandlingUnit.Lock(ctx, *sourceRow.HandlingUnitID); err != nil {
+				return err
+			}
+		}
 		identity := inventoryrepository.BalanceIdentity{OwnerID: sourceRow.OwnerID, WarehouseID: sourceRow.WarehouseID, LocationID: sourceRow.LocationID, ItemID: sourceRow.ItemID, LotID: sourceRow.LotID, HandlingUnitID: sourceRow.HandlingUnitID, InventoryStatusID: sourceRow.InventoryStatusID}
 		source, err := local.repositories.Inventory.Balance.FindLocked(ctx, identity)
 		if err != nil {
@@ -195,7 +225,7 @@ func (s *Service) DispatchShipmentLine(ctx context.Context, shipmentID, packingL
 		if mustRat(source.OnHandQty).Cmp(mustRat(qty)) < 0 {
 			return state("packing balance no longer covers shipped quantity")
 		}
-		if source.HandlingUnitID != nil {
+		if source.HandlingUnitID != nil && batchFingerprint == nil {
 			if mustRat(source.OnHandQty).Cmp(mustRat(qty)) != 0 {
 				return state("handling-unit stock must be shipped in full")
 			}
@@ -210,11 +240,11 @@ func (s *Service) DispatchShipmentLine(ctx context.Context, shipmentID, packingL
 		if err := local.repositories.Inventory.Balance.SetQuantities(ctx, source.ID, decimal(new(big.Rat).Sub(mustRat(source.OnHandQty), mustRat(qty))), source.ReservedQty); err != nil {
 			return err
 		}
-		serialID, err := local.moveSerialIdentity(ctx, source.ID, nil, mustRat(qty))
+		serialID, err := local.moveDocumentSerial(ctx, source.ID, nil, mustRat(qty), candidate.PackedSerialID)
 		if err != nil {
 			return err
 		}
-		if source.HandlingUnitID != nil {
+		if source.HandlingUnitID != nil && batchFingerprint == nil {
 			if err := local.repositories.Inventory.HandlingUnit.ClearLocation(ctx, *source.HandlingUnitID, source.LocationID); err != nil {
 				return err
 			}
@@ -264,6 +294,9 @@ func (s *Service) CompleteShipment(ctx context.Context, id, actor string) (dto.S
 		if row.StatusCode != "PLANNED" {
 			return state("only a PLANNED shipment can be completed")
 		}
+		if row.LineCount == 0 {
+			return state("shipment must contain dispatched stock before completion")
+		}
 		missing, err := local.repositories.ShipmentLine.MissingCount(ctx, id)
 		if err != nil {
 			return err
@@ -287,6 +320,9 @@ func (s *Service) CompleteShipment(ctx context.Context, id, actor string) (dto.S
 		if err := local.repositories.Shipment.Complete(ctx, id, next.ID, actor); err != nil {
 			return err
 		}
+		if err := local.repositories.ShipmentOrder.CompleteAll(ctx, id); err != nil {
+			return err
+		}
 		orders, err := local.repositories.ShipmentOrder.List(ctx, id)
 		if err != nil {
 			return err
@@ -296,7 +332,15 @@ func (s *Service) CompleteShipment(ctx context.Context, id, actor string) (dto.S
 			if err != nil {
 				return err
 			}
-			orderNext, err := local.transition(ctx, order.DocumentTypeID, order.StatusID, "SHIPPED")
+			lines, err := local.repositories.Line.List(ctx, order.ID)
+			if err != nil {
+				return err
+			}
+			nextCode := "SHIPPED"
+			if hasOpenDemand(lines) {
+				nextCode = "PARTIALLY_FULFILLED"
+			}
+			orderNext, err := local.transition(ctx, order.DocumentTypeID, order.StatusID, nextCode)
 			if err != nil {
 				return err
 			}

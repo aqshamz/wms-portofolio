@@ -76,6 +76,7 @@ func main() {
 		{Version: 25, Name: "grand stock opname freeze", Up: stockcontrolrepository.MigrateGrandStockOpnameFreeze},
 		{Version: 26, Name: "count found stock handling", Up: stockcontrolrepository.MigrateCountFoundStock},
 		{Version: 27, Name: "outbound quantity snapshots", Up: outboundrepository.MigrateQuantitySnapshots},
+		{Version: 28, Name: "outbound partial fulfillment and close short", Up: outboundrepository.MigratePartialFulfillment},
 	}); err != nil {
 		log.Fatalf("apply database migrations: %v", err)
 	}

@@ -52,6 +52,8 @@ type ReplacementPickResponse struct {
 }
 
 type PackingLineResponse struct {
+	SerialNo             string  `json:"serial_no,omitempty"`
+	HandlingUnitBarcode  string  `json:"handling_unit_barcode,omitempty"`
 	ID                   string  `json:"packing_line_id"`
 	OutboundCheckLineID  string  `json:"outbound_check_line_id"`
 	PickTaskID           string  `json:"pick_task_id"`
@@ -62,6 +64,7 @@ type PackingLineResponse struct {
 	PackingBalanceID     string  `json:"packing_balance_id,omitempty"`
 	HandlingUnitID       *string `json:"handling_unit_id"`
 	PackedQty            string  `json:"packed_qty"`
+	ExpectedQty          string  `json:"expected_qty"`
 	UOMCode              string  `json:"uom_code"`
 	MovementID           string  `json:"movement_id,omitempty"`
 }
@@ -81,16 +84,19 @@ type PackingResponse struct {
 }
 
 type ShipmentLineResponse struct {
-	ID                   string `json:"shipment_line_id,omitempty"`
-	PackingLineID        string `json:"packing_line_id"`
-	OutboundID           string `json:"outbound_id"`
-	ItemCode             string `json:"item_code"`
-	LotNumber            string `json:"lot_number,omitempty"`
-	SourceBalanceID      string `json:"source_balance_id"`
-	SourceBalanceVersion int64  `json:"source_balance_version"`
-	ShippedQty           string `json:"shipped_qty"`
-	UOMCode              string `json:"uom_code"`
-	MovementID           string `json:"movement_id,omitempty"`
+	SerialNo             string  `json:"serial_no,omitempty"`
+	HandlingUnitBarcode  string  `json:"handling_unit_barcode,omitempty"`
+	HandlingUnitID       *string `json:"handling_unit_id"`
+	ID                   string  `json:"shipment_line_id,omitempty"`
+	PackingLineID        string  `json:"packing_line_id"`
+	OutboundID           string  `json:"outbound_id"`
+	ItemCode             string  `json:"item_code"`
+	LotNumber            string  `json:"lot_number,omitempty"`
+	SourceBalanceID      string  `json:"source_balance_id"`
+	SourceBalanceVersion int64   `json:"source_balance_version"`
+	ShippedQty           string  `json:"shipped_qty"`
+	UOMCode              string  `json:"uom_code"`
+	MovementID           string  `json:"movement_id,omitempty"`
 }
 
 type ShipmentResponse struct {

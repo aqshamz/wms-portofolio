@@ -327,11 +327,7 @@ func (s *Service) CompleteDelivery(ctx context.Context, id string, q dto.Complet
 		if err != nil {
 			return err
 		}
-		orderNext, err := local.transition(ctx, order.DocumentTypeID, order.StatusID, "DELIVERED")
-		if err != nil {
-			return err
-		}
-		return local.repositories.Order.SetStatusLocked(ctx, order.ID, orderNext.ID, actor, map[string]interface{}{"completed_at": deliveredAt})
+		return local.refreshDeliveryOutcome(ctx, order.ID, actor, deliveredAt)
 	})
 	if err != nil {
 		return dto.DeliveryResponse{}, err
@@ -399,11 +395,7 @@ func (s *Service) FailDelivery(ctx context.Context, id string, q dto.FailDeliver
 		if err != nil {
 			return err
 		}
-		orderNext, err := local.transition(ctx, order.DocumentTypeID, order.StatusID, "DELIVERY_FAILED")
-		if err != nil {
-			return err
-		}
-		return local.repositories.Order.SetStatusLocked(ctx, order.ID, orderNext.ID, actor, nil)
+		return local.refreshDeliveryOutcome(ctx, order.ID, actor, eventAt)
 	})
 	if err != nil {
 		return dto.DeliveryResponse{}, err
@@ -511,6 +503,15 @@ func (s *Service) ReturnDeliveryLine(ctx context.Context, deliveryID, lineID str
 		}
 		if source.HandlingUnitID != nil && (n.Cmp(remaining) != 0 || mustRat(line.DeliveredQty).Sign() != 0 || mustRat(line.ReturnedQty).Sign() != 0) {
 			return state("handling-unit delivery stock must return as one complete line")
+		}
+		if source.HandlingUnitID != nil {
+			count, err := local.repositories.ShipmentLine.CountHandlingUnit(ctx, delivery.ShipmentID, *source.HandlingUnitID)
+			if err != nil {
+				return err
+			}
+			if count > 1 {
+				return state("multi-line handling units require a whole-HU return transaction; line returns cannot split the container")
+			}
 		}
 		identity := inventoryrepository.BalanceIdentity{OwnerID: row.OwnerID, WarehouseID: row.WarehouseID, LocationID: policy.ReturnLocationID, ItemID: source.ItemID, LotID: source.LotID, HandlingUnitID: source.HandlingUnitID, InventoryStatusID: policy.ReturnInventoryStatusID}
 		target, err := local.repositories.Inventory.Balance.FindLocked(ctx, identity)
@@ -656,11 +657,7 @@ func (s *Service) CloseReturnedDelivery(ctx context.Context, id string, q dto.De
 		if err != nil {
 			return err
 		}
-		orderNext, err := local.transition(ctx, order.DocumentTypeID, order.StatusID, target)
-		if err != nil {
-			return err
-		}
-		return local.repositories.Order.SetStatusLocked(ctx, order.ID, orderNext.ID, actor, map[string]interface{}{"completed_at": eventAt})
+		return local.refreshDeliveryOutcome(ctx, order.ID, actor, eventAt)
 	})
 	if err != nil {
 		return dto.DeliveryResponse{}, err

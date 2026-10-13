@@ -31,8 +31,8 @@ func (s *Service) AllocateOutboundOrder(ctx context.Context, id string, request 
 		if err != nil {
 			return err
 		}
-		if row.StatusCode != "RELEASED" && row.StatusCode != "PARTIALLY_ALLOCATED" {
-			return state("only RELEASED or PARTIALLY_ALLOCATED orders can be allocated")
+		if row.StatusCode != "RELEASED" && row.StatusCode != "PARTIALLY_ALLOCATED" && row.StatusCode != "PARTIALLY_FULFILLED" {
+			return state("only released, partially allocated or partially fulfilled orders can be allocated")
 		}
 		strategy, err := local.pickingStrategy(ctx, header.OwnerID, header.WarehouseID, request.PickingStrategyID)
 		if err != nil {
@@ -71,6 +71,7 @@ func (s *Service) AllocateOutboundOrder(ctx context.Context, id string, request 
 				return err
 			}
 			remaining := new(big.Rat).Sub(ordered, already)
+			remaining.Sub(remaining, mustRat(line.ClosedShortQty))
 			requestedTotal.Add(requestedTotal, remaining)
 			if remaining.Sign() == 0 {
 				continue
@@ -130,6 +131,10 @@ func (s *Service) AllocateOutboundOrder(ctx context.Context, id string, request 
 		shortage := new(big.Rat).Sub(requestedTotal, allocatedTotal)
 		if shortage.Sign() > 0 && !request.AllowPartial {
 			return state("insufficient allocatable inventory; retry with allow_partial=true to reserve available stock")
+		}
+		// An empty stock search must not create a false allocation state/version.
+		if allocatedTotal.Sign() == 0 {
+			return nil
 		}
 		all, err := local.repositories.Line.AllAllocated(ctx, id)
 		if err != nil {
@@ -268,6 +273,16 @@ func (s *Service) ReleaseReservation(ctx context.Context, id string, request dto
 			return err
 		}
 		nextCode := "RELEASED"
+		lines, err := local.repositories.Line.List(ctx, order.ID)
+		if err != nil {
+			return err
+		}
+		for _, line := range lines {
+			if mustRat(line.ShippedQty).Sign() > 0 {
+				nextCode = "PARTIALLY_FULFILLED"
+				break
+			}
+		}
 		if has {
 			nextCode = "PARTIALLY_ALLOCATED"
 		}

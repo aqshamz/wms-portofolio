@@ -76,12 +76,23 @@ func (s *Service) CreatePacking(ctx context.Context, q dto.CreatePackingRequest,
 		if active {
 			return state("outbound order already has an active packing document")
 		}
+		used, err := local.repositories.Packing.HasForCheck(ctx, check.ID)
+		if err != nil {
+			return err
+		}
+		if used {
+			return state("this check already has a packing document")
+		}
 		location, err := local.repositories.Inventory.Location.GetShared(ctx, q.PackingLocationID)
 		if err != nil {
 			return err
 		}
 		if location.WarehouseID != order.WarehouseID || !location.IsActive || location.IsLocked {
 			return invalid("packing location is not an active unlocked location in the order warehouse")
+		}
+		locationType, err := local.repositories.Inventory.LocationType.FindByID(ctx, location.LocationTypeID)
+		if err != nil || !locationType.IsActive || locationType.Code != "PACKING" {
+			return invalid("packing location must use the active PACKING location type")
 		}
 		kind, initial, err := local.document(ctx, "PACKING")
 		if err != nil {
@@ -91,7 +102,7 @@ func (s *Service) CreatePacking(ctx context.Context, q dto.CreatePackingRequest,
 		if err != nil {
 			return err
 		}
-		v := model.Packing{ID: id, DocumentTypeID: kind.ID, StatusID: initial.ID, OutboundID: order.ID, WarehouseID: order.WarehouseID, PackingLocationID: &q.PackingLocationID, CreatedBy: actor}
+		v := model.Packing{ID: id, DocumentTypeID: kind.ID, StatusID: initial.ID, OutboundID: order.ID, OutboundCheckID: &check.ID, WarehouseID: order.WarehouseID, PackingLocationID: &q.PackingLocationID, CreatedBy: actor}
 		if err := local.repositories.Packing.Create(ctx, &v); err != nil {
 			return err
 		}
@@ -154,6 +165,33 @@ func (s *Service) PackLine(ctx context.Context, packingID, checkLineID string, q
 		if err != nil {
 			return err
 		}
+		var targetHandlingUnit *inventorymodel.HandlingUnit
+		if q.HandlingUnitID != nil {
+			hu, err := local.repositories.Inventory.HandlingUnit.Lock(ctx, *q.HandlingUnitID)
+			if err != nil {
+				return err
+			}
+			if hu.OwnerID != sourceRow.OwnerID || hu.WarehouseID != sourceRow.WarehouseID || hu.IsClosed || hu.ParentHandlingUnitID != nil {
+				return invalid("handling unit must be open, unnested and in the packing scope")
+			}
+			children, err := local.repositories.Inventory.HandlingUnit.CountChildren(ctx, hu.ID)
+			if err != nil {
+				return err
+			}
+			if children > 0 {
+				return state("nested handling units cannot be used for packing")
+			}
+			if sourceRow.HandlingUnitID == nil && hu.CurrentLocationID != nil && packing.PackingLocationID != nil && *hu.CurrentLocationID != *packing.PackingLocationID {
+				positive, err := local.repositories.Inventory.Balance.CountPositiveForHandlingUnit(ctx, hu.ID)
+				if err != nil {
+					return err
+				}
+				if positive > 0 {
+					return state("handling unit with stock at another location cannot be relocated by packing one line")
+				}
+			}
+			targetHandlingUnit = &hu
+		}
 		identity := inventoryrepository.BalanceIdentity{OwnerID: sourceRow.OwnerID, WarehouseID: sourceRow.WarehouseID, LocationID: sourceRow.LocationID, ItemID: sourceRow.ItemID, LotID: sourceRow.LotID, HandlingUnitID: sourceRow.HandlingUnitID, InventoryStatusID: sourceRow.InventoryStatusID}
 		source, err := local.repositories.Inventory.Balance.FindLocked(ctx, identity)
 		if err != nil {
@@ -162,29 +200,31 @@ func (s *Service) PackLine(ctx context.Context, packingID, checkLineID string, q
 		if source.VersionNo != q.ExpectedBalanceVersion {
 			return repository.ErrConcurrentWrite
 		}
-		qty := candidate.ExpectedQty
-		qtyRat := mustRat(qty)
+		qty, qtyRat, err := quantity(candidate.ExpectedQty, "checked quantity", false)
+		if err != nil {
+			return err
+		}
 		if mustRat(source.OnHandQty).Cmp(qtyRat) < 0 {
 			return state("staging balance no longer covers checked quantity")
 		}
 		if packing.PackingLocationID == nil {
 			return state("packing document has no packing location")
 		}
-		targetHU := q.HandlingUnitID
-		var targetHandlingUnit *inventorymodel.HandlingUnit
-		if targetHU != nil {
-			hu, err := local.repositories.Inventory.HandlingUnit.GetShared(ctx, *targetHU)
-			if err != nil {
-				return err
-			}
-			if hu.OwnerID != source.OwnerID || hu.WarehouseID != source.WarehouseID || hu.IsClosed {
-				return invalid("handling unit is not open in the same owner and warehouse")
-			}
-			targetHandlingUnit = &hu
+		location, err := local.repositories.Inventory.Location.GetShared(ctx, *packing.PackingLocationID)
+		if err != nil {
+			return err
 		}
+		locationType, err := local.repositories.Inventory.LocationType.FindByID(ctx, location.LocationTypeID)
+		if err != nil || !locationType.IsActive || locationType.Code != "PACKING" || !location.IsActive || location.IsLocked || location.WarehouseID != source.WarehouseID {
+			return state("packing location is no longer an active unlocked PACKING area")
+		}
+		targetHU := q.HandlingUnitID
 		if source.HandlingUnitID != nil {
 			if targetHU == nil || *targetHU != *source.HandlingUnitID {
 				return state("stock already in a handling unit must remain in that handling unit while packing")
+			}
+			if targetHandlingUnit.CurrentLocationID == nil || *targetHandlingUnit.CurrentLocationID != source.LocationID {
+				return state("handling-unit location does not match its source stock")
 			}
 			if mustRat(source.OnHandQty).Cmp(qtyRat) != 0 {
 				return state("handling-unit stock must be packed in full")
@@ -222,7 +262,7 @@ func (s *Service) PackLine(ctx context.Context, packingID, checkLineID string, q
 				return err
 			}
 		}
-		serialID, err := local.moveSerialIdentity(ctx, source.ID, &packingBalanceID, qtyRat)
+		serialID, err := local.moveDocumentSerial(ctx, source.ID, &packingBalanceID, qtyRat, candidate.PickedSerialID)
 		if err != nil {
 			return err
 		}
@@ -292,6 +332,9 @@ func (s *Service) CompletePacking(ctx context.Context, id, actor string) (dto.Pa
 		}
 		if row.StatusCode != "OPEN" {
 			return state("only an OPEN packing document can be completed")
+		}
+		if row.LineCount == 0 {
+			return state("packing must contain posted stock before completion")
 		}
 		missing, err := local.repositories.PackingLine.MissingCount(ctx, id)
 		if err != nil {

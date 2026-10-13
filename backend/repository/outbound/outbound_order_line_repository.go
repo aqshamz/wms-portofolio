@@ -88,11 +88,14 @@ func (r *OutboundOrderLineRepository) AcceptShort(ctx context.Context, id, qty s
 }
 func (r *OutboundOrderLineRepository) AllAllocated(ctx context.Context, id string) (bool, error) {
 	var n int64
-	err := r.db.WithContext(ctx).Model(&model.OutboundOrderLine{}).Where("outbound_id=? AND allocated_qty<ordered_base_qty", id).Count(&n).Error
+	err := r.db.WithContext(ctx).Model(&model.OutboundOrderLine{}).Where("outbound_id=? AND allocated_qty<ordered_base_qty-closed_short_qty", id).Count(&n).Error
 	return n == 0, Error(err)
 }
 func (r *OutboundOrderLineRepository) HasAllocation(ctx context.Context, id string) (bool, error) {
 	var n int64
-	err := r.db.WithContext(ctx).Model(&model.OutboundOrderLine{}).Where("outbound_id=? AND allocated_qty>0", id).Count(&n).Error
+	err := r.db.WithContext(ctx).Model(&model.OutboundOrderLine{}).Where("outbound_id=? AND allocated_qty>shipped_qty+short_accepted_qty", id).Count(&n).Error
 	return n > 0, Error(err)
+}
+func (r *OutboundOrderLineRepository) CloseRemaining(ctx context.Context, id string) error {
+	return Error(r.db.WithContext(ctx).Model(&model.OutboundOrderLine{}).Where("outbound_id=?", id).Update("closed_short_qty", gorm.Expr("ordered_base_qty-allocated_qty")).Error)
 }

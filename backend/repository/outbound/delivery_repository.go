@@ -60,3 +60,15 @@ func (r *DeliveryRepository) Update(ctx context.Context, id string, values map[s
 	}
 	return nil
 }
+
+// Every dispatched cycle needs its own final proof/return outcome before the DO
+// can become delivery-final. A delivery from an earlier cycle cannot finish it.
+func (r *DeliveryRepository) OutstandingByOrder(ctx context.Context, id string) (int64, int64, error) {
+	var v struct {
+		Pending int64
+		Failed  int64
+	}
+	err := r.db.WithContext(ctx).Table("shipment_order so").Select("count(*) FILTER (WHERE d.delivery_id IS NULL OR NOT ds.is_final OR ds.is_cancelled) pending,count(*) FILTER (WHERE ds.code='FAILED') failed").
+		Joins("LEFT JOIN delivery d ON d.shipment_id=so.shipment_id AND d.outbound_id=so.outbound_id").Joins("LEFT JOIN document_status ds ON ds.status_id=d.status_id").Where("so.outbound_id=? AND so.removed_at IS NULL AND so.fulfilled_at IS NOT NULL", id).Scan(&v).Error
+	return v.Pending, v.Failed, Error(err)
+}

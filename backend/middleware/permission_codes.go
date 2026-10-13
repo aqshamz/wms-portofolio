@@ -28,6 +28,7 @@ const (
 
 	PermissionOutboundRead           = "OUTBOUND.READ"
 	PermissionOutboundPlan           = "OUTBOUND.PLAN"
+	PermissionOutboundCloseShort     = "OUTBOUND.CLOSE_SHORT"
 	PermissionOutboundPick           = "OUTBOUND.PICK"
 	PermissionOutboundStage          = "OUTBOUND.STAGE"
 	PermissionOutboundCheck          = "OUTBOUND.CHECK"

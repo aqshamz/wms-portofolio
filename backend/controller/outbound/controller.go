@@ -196,6 +196,18 @@ func (cn *Controller) AllocateOrder(c *gin.Context) {
 	}
 	utils.Success(c, http.StatusOK, "outbound allocation completed", v)
 }
+func (cn *Controller) CloseShortOrder(c *gin.Context) {
+	var request dto.CloseShortOutboundRequest
+	if !utils.BindStrictJSON(c, &request) {
+		return
+	}
+	response, err := cn.service.CloseShortOutboundOrder(c.Request.Context(), c.Param("id"), request, actor(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	utils.Success(c, http.StatusOK, "outbound remaining demand closed short", response)
+}
 func (cn *Controller) ListReservations(c *gin.Context) {
 	f, _, ok := listFilter(c, false)
 	if !ok {

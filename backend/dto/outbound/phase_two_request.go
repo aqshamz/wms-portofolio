@@ -61,6 +61,17 @@ type DispatchShipmentLineRequest struct {
 	OperationKey           string `json:"operation_key" binding:"required,max=160"`
 }
 
+type DispatchBalanceVersion struct {
+	BalanceID       string `json:"balance_id" binding:"required,max=160"`
+	ExpectedVersion int64  `json:"expected_version" binding:"required,min=1"`
+}
+
+type DispatchHandlingUnitRequest struct {
+	BusinessDate     string                   `json:"business_date" binding:"required"`
+	OperationKey     string                   `json:"operation_key" binding:"required,max=160"`
+	ExpectedBalances []DispatchBalanceVersion `json:"expected_balances" binding:"required,min=1,max=1000,dive"`
+}
+
 type CreateDeliveryRequest struct {
 	ShipmentID        string  `json:"shipment_id" binding:"required,max=120"`
 	OutboundID        string  `json:"outbound_id" binding:"required,max=120"`

@@ -69,6 +69,7 @@ func testOutboundPartOne(t *testing.T, fresh bool) {
 	outboundOK(t, stockrepository.Migrate(tx))
 	outboundOK(t, repository.Migrate(tx))
 	outboundOK(t, repository.MigrateQuantitySnapshots(tx))
+	outboundOK(t, repository.MigratePartialFulfillment(tx))
 	ctx := context.Background()
 	outboundOK(t, masterservice.NewCatalogService(masterrepository.NewCatalogRepositories(tx)).SeedCatalog(ctx))
 	operational, err := masterservice.NewOperationalService(masterrepository.NewOperationalRepositories(tx), "Asia/Jakarta")
@@ -90,8 +91,14 @@ func testOutboundPartOne(t *testing.T, fresh bool) {
 	outboundOK(t, tx.Create(&zone).Error)
 	pickType := mastermodel.LocationType{Code: "OBP_" + suffix, Name: "Pick storage", AllowsStorage: true, AllowsPicking: true}
 	outboundOK(t, tx.Create(&pickType).Error)
-	packingType := mastermodel.LocationType{Code: "OBK_" + suffix, Name: "Packing"}
-	outboundOK(t, tx.Create(&packingType).Error)
+	var packingType mastermodel.LocationType
+	err = tx.Where("code='PACKING'").Take(&packingType).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		packingType = mastermodel.LocationType{Code: "PACKING", Name: "Packing"}
+		outboundOK(t, tx.Create(&packingType).Error)
+	} else {
+		outboundOK(t, err)
+	}
 	var stagingType mastermodel.LocationType
 	err = tx.Where("code='STAGING'").Take(&stagingType).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -120,7 +127,7 @@ func testOutboundPartOne(t *testing.T, fresh bool) {
 	item := mastermodel.Item{OwnerID: owner.ID, Code: "OBI_" + suffix, Name: "Outbound item", BaseUOMID: each.ID}
 	outboundOK(t, tx.Create(&item).Error)
 	outboundOK(t, tx.Create(&mastermodel.ItemUOM{ItemID: item.ID, UOMID: each.ID, ConversionToBase: "1", IsPickingUOM: true}).Error)
-	carton := mastermodel.UOM{Code: "CTN_" + suffix, Name: "Test carton"}
+	carton := mastermodel.UOM{Code: "C" + suffix, Name: "Test carton"}
 	outboundOK(t, tx.Create(&carton).Error)
 	cartonMapping := mastermodel.ItemUOM{ItemID: item.ID, UOMID: carton.ID, ConversionToBase: "3", IsPickingUOM: true}
 	outboundOK(t, tx.Create(&cartonMapping).Error)
@@ -308,7 +315,11 @@ func testOutboundPartOne(t *testing.T, fresh bool) {
 	if packing.StatusCode != "OPEN" || len(packing.Lines) != 1 {
 		t.Fatalf("unexpected packing: %+v", packing)
 	}
-	packing, err = service.PackLine(ctx, packing.ID, packing.Lines[0].OutboundCheckLineID, dto.PackLineRequest{ExpectedBalanceVersion: packing.Lines[0].SourceBalanceVersion, BusinessDate: businessDate, OperationKey: "pack-" + suffix}, account.ID)
+	huType := mastermodel.HandlingUnitType{Code: "PKHU_" + suffix, Name: "Packing container"}
+	outboundOK(t, tx.Create(&huType).Error)
+	hu := inventorymodel.HandlingUnit{ID: "HU-PK-" + suffix, OwnerID: owner.ID, WarehouseID: warehouse.ID, HandlingUnitTypeID: huType.ID, Barcode: "CARTON-" + suffix, CurrentLocationID: &packingLocation.ID, CreatedBy: &account.ID}
+	outboundOK(t, tx.Create(&hu).Error)
+	packing, err = service.PackLine(ctx, packing.ID, packing.Lines[0].OutboundCheckLineID, dto.PackLineRequest{ExpectedBalanceVersion: packing.Lines[0].SourceBalanceVersion, BusinessDate: businessDate, OperationKey: "pack-" + suffix, HandlingUnitID: &hu.ID}, account.ID)
 	outboundOK(t, err)
 	packing, err = service.CompletePacking(ctx, packing.ID, account.ID)
 	outboundOK(t, err)
@@ -327,8 +338,24 @@ func testOutboundPartOne(t *testing.T, fresh bool) {
 	if shipment.StatusCode != "PLANNED" || len(shipment.Lines) != 1 {
 		t.Fatalf("unexpected shipment: %+v", shipment)
 	}
-	shipment, err = service.DispatchShipmentLine(ctx, shipment.ID, shipment.Lines[0].PackingLineID, dto.DispatchShipmentLineRequest{ExpectedBalanceVersion: shipment.Lines[0].SourceBalanceVersion, BusinessDate: businessDate, OperationKey: "ship-" + suffix}, account.ID)
+	requestHU := dto.DispatchHandlingUnitRequest{BusinessDate: businessDate, OperationKey: "ship-hu-" + suffix, ExpectedBalances: []dto.DispatchBalanceVersion{{BalanceID: shipment.Lines[0].SourceBalanceID, ExpectedVersion: shipment.Lines[0].SourceBalanceVersion}}}
+	badHU := requestHU
+	badHU.ExpectedBalances = []dto.DispatchBalanceVersion{{BalanceID: shipment.Lines[0].SourceBalanceID, ExpectedVersion: shipment.Lines[0].SourceBalanceVersion + 1}}
+	_, err = service.DispatchShipmentHandlingUnit(ctx, shipment.ID, hu.ID, badHU, account.ID)
+	if !errors.Is(err, repository.ErrConcurrentWrite) {
+		t.Fatalf("stale HU dispatch got %v", err)
+	}
+	shipment, err = service.DispatchShipmentHandlingUnit(ctx, shipment.ID, hu.ID, requestHU, account.ID)
 	outboundOK(t, err)
+	replayedHU, err := service.DispatchShipmentHandlingUnit(ctx, shipment.ID, hu.ID, requestHU, account.ID)
+	outboundOK(t, err)
+	if replayedHU.Lines[0].MovementID != shipment.Lines[0].MovementID {
+		t.Fatal("HU retry posted another movement")
+	}
+	outboundOK(t, tx.Where("handling_unit_id=?", hu.ID).Take(&hu).Error)
+	if hu.CurrentLocationID != nil {
+		t.Fatal("dispatched HU still located in warehouse")
+	}
 	_, err = service.CompleteShipment(ctx, shipment.ID, account.ID)
 	if !errors.Is(err, ErrInvalidState) {
 		t.Fatalf("shipment without a primary driver got %v", err)
@@ -478,4 +505,120 @@ func testOutboundPartOne(t *testing.T, fresh bool) {
 	if returnedBalance.LocationID != stagingLocation.ID || returnedBalance.InventoryStatusID != hold.ID || returnedBalance.OnHandQty != "3.000000" {
 		t.Fatalf("returned stock was not quarantined by policy: %+v", returnedBalance)
 	}
+
+	t.Run("partial_fulfillment", func(t *testing.T) {
+		testPartialFulfillment(t, tx, service, partialFixture{actor: account.ID, owner: owner.ID, warehouse: warehouse.ID, customer: customer.ID, shipTo: shipTo.ID, uom: each.ID, status: available.ID, strategy: strategy.ID, pick: pickLocation.ID, stage: stagingLocation.ID, pack: packingLocation.ID, date: businessDate, suffix: suffix})
+	})
+	t.Run("serialized_shared_balance_HU", func(t *testing.T) {
+		serialItem := mastermodel.Item{OwnerID: owner.ID, Code: "SER_" + suffix, Name: "Serialized packed item", BaseUOMID: each.ID, SerialControlled: true}
+		outboundOK(t, tx.Create(&serialItem).Error)
+		secondPick := mastermodel.WarehouseLocation{WarehouseID: warehouse.ID, ZoneID: zone.ID, LocationTypeID: pickType.ID, Code: "PICK-SERIAL-02", PickSequence: 20}
+		outboundOK(t, tx.Create(&secondPick).Error)
+		for i, loc := range []string{pickLocation.ID, secondPick.ID} {
+			stock := inventorymodel.InventoryBalance{ID: fmt.Sprintf("SERBAL-%s-%d", suffix, i), OwnerID: owner.ID, WarehouseID: warehouse.ID, LocationID: loc, ItemID: serialItem.ID, InventoryStatusID: available.ID, OnHandQty: "1", ReservedQty: "0", UOMID: each.ID, VersionNo: 1}
+			outboundOK(t, tx.Create(&stock).Error)
+			serial := inventorymodel.SerialNumber{ID: fmt.Sprintf("SER-%s-%d", suffix, i), OwnerID: owner.ID, ItemID: serialItem.ID, SerialNo: fmt.Sprintf("SN-%s-%d", suffix, i), CreatedBy: &account.ID}
+			outboundOK(t, tx.Create(&serial).Error)
+			outboundOK(t, tx.Create(&inventorymodel.SerialInventory{SerialID: serial.ID, BalanceID: stock.ID, OwnerID: owner.ID, ItemID: serialItem.ID}).Error)
+		}
+		multiOrder, e := service.CreateOutboundOrder(ctx, dto.CreateOutboundOrderRequest{OwnerID: owner.ID, CustomerID: customer.ID, ShipToPartnerID: shipTo.ID, WarehouseID: warehouse.ID, BusinessDate: businessDate, ClientDeliveryOrderNo: "CLIENT-HU-MULTI-" + suffix, RequestedShipAt: businessDate + "T18:00:00+07:00", Lines: []dto.OutboundOrderLineRequest{{ItemID: serialItem.ID, OrderedQty: "1"}, {ItemID: serialItem.ID, OrderedQty: "1"}}}, account.ID)
+		outboundOK(t, e)
+		_, e = service.ValidateOutboundOrder(ctx, multiOrder.ID, dto.ValidateOutboundRequest{ExpectedVersion: multiOrder.VersionNo}, account.ID)
+		outboundOK(t, e)
+		multiOrder, e = service.GetOutboundOrder(ctx, multiOrder.ID)
+		outboundOK(t, e)
+		multiOrder, e = service.ReleaseOutboundOrder(ctx, multiOrder.ID, dto.TransitionRequest{ExpectedVersion: multiOrder.VersionNo}, account.ID)
+		outboundOK(t, e)
+		_, e = service.AllocateOutboundOrder(ctx, multiOrder.ID, dto.AllocateOutboundRequest{ExpectedVersion: multiOrder.VersionNo, PickingStrategyID: &strategy.ID}, account.ID)
+		outboundOK(t, e)
+		multiWave, e := service.CreateWave(ctx, dto.CreateWaveRequest{OwnerID: owner.ID, WarehouseID: warehouse.ID, BusinessDate: businessDate, WaveTypeCode: "SINGLE_ORDER", PickingStrategyID: &strategy.ID, OutboundIDs: []string{multiOrder.ID}}, account.ID)
+		outboundOK(t, e)
+		multiWave, e = service.ReleaseWave(ctx, multiWave.ID, dto.ReleaseWaveRequest{ExpectedVersion: multiWave.VersionNo, StagingLocationID: stagingLocation.ID, PriorityCode: "NORMAL"}, account.ID)
+		outboundOK(t, e)
+		multiTasks, e := service.ListPickTasks(ctx, repository.ListFilter{OwnerID: owner.ID, WarehouseID: warehouse.ID, Page: 1, PageSize: 100}, "")
+		outboundOK(t, e)
+		for _, task := range multiTasks.Items {
+			if task.OutboundID != multiOrder.ID {
+				continue
+			}
+			task, e = service.StartPickTask(ctx, task.ID, account.ID)
+			outboundOK(t, e)
+			_, e = service.ConfirmPick(ctx, task.ID, dto.ConfirmPickRequest{PickedQty: "1", ExpectedBalanceVersion: task.BalanceVersion, BusinessDate: businessDate, OperationKey: "pick-serial-" + task.ID}, account.ID)
+			outboundOK(t, e)
+		}
+		multiStaging, e := service.CreateStaging(ctx, dto.CreateStagingRequest{OutboundID: multiOrder.ID, WaveID: multiWave.ID}, account.ID)
+		outboundOK(t, e)
+		multiStaging, e = service.CompleteStaging(ctx, multiStaging.ID, account.ID)
+		outboundOK(t, e)
+		multiCheck, e := service.CreateCheck(ctx, dto.CreateCheckRequest{StagingID: multiStaging.ID}, account.ID)
+		outboundOK(t, e)
+		for _, line := range multiCheck.Lines {
+			multiCheck, e = service.RecordCheckLine(ctx, multiCheck.ID, line.ID, dto.RecordCheckLineRequest{CheckedQty: "1", ResultCode: "PASS"}, account.ID)
+			outboundOK(t, e)
+		}
+		multiCheck, e = service.CompleteCheck(ctx, multiCheck.ID, account.ID)
+		outboundOK(t, e)
+		multiHU := inventorymodel.HandlingUnit{ID: "HU-MULTI-" + suffix, OwnerID: owner.ID, WarehouseID: warehouse.ID, HandlingUnitTypeID: huType.ID, Barcode: "CARTON-MULTI-" + suffix, CurrentLocationID: &packingLocation.ID, CreatedBy: &account.ID}
+		outboundOK(t, tx.Create(&multiHU).Error)
+		multiPacking, e := service.CreatePacking(ctx, dto.CreatePackingRequest{OutboundCheckID: multiCheck.ID, PackingLocationID: packingLocation.ID}, account.ID)
+		outboundOK(t, e)
+		for i := 0; i < len(multiPacking.Lines); i++ {
+			line := multiPacking.Lines[i]
+			multiPacking, e = service.PackLine(ctx, multiPacking.ID, line.OutboundCheckLineID, dto.PackLineRequest{ExpectedBalanceVersion: line.SourceBalanceVersion, BusinessDate: businessDate, HandlingUnitID: &multiHU.ID, OperationKey: "pack-serial-" + line.OutboundCheckLineID}, account.ID)
+			outboundOK(t, e)
+		}
+		multiPacking, e = service.CompletePacking(ctx, multiPacking.ID, account.ID)
+		outboundOK(t, e)
+		multiShipment, e := service.CreateShipment(ctx, dto.CreateShipmentRequest{OwnerID: owner.ID, WarehouseID: warehouse.ID, BusinessDate: businessDate, PackingIDs: []string{multiPacking.ID}}, account.ID)
+		outboundOK(t, e)
+		if len(multiShipment.Lines) != 2 || multiShipment.Lines[0].SourceBalanceID != multiShipment.Lines[1].SourceBalanceID {
+			t.Fatal("expected two serialized lines sharing one packed HU balance")
+		}
+		sharedID := multiShipment.Lines[0].SourceBalanceID
+		request := dto.DispatchHandlingUnitRequest{BusinessDate: businessDate, OperationKey: "dispatch-serial-hu-" + suffix, ExpectedBalances: []dto.DispatchBalanceVersion{{BalanceID: sharedID, ExpectedVersion: multiShipment.Lines[0].SourceBalanceVersion}}}
+		outboundOK(t, tx.Model(&inventorymodel.MovementType{}).Where("code='SHIP'").Update("is_active", false).Error)
+		_, e = service.DispatchShipmentHandlingUnit(ctx, multiShipment.ID, multiHU.ID, request, account.ID)
+		if !errors.Is(e, ErrInvalidState) {
+			t.Fatalf("disabled SHIP movement got %v", e)
+		}
+		var unchanged inventorymodel.InventoryBalance
+		outboundOK(t, tx.Where("balance_id=?", sharedID).Take(&unchanged).Error)
+		serials, e := service.repositories.Inventory.SerialState.IDsByBalance(ctx, sharedID)
+		outboundOK(t, e)
+		if unchanged.OnHandQty != "2.000000" || len(serials) != 2 || unchanged.VersionNo != request.ExpectedBalances[0].ExpectedVersion {
+			t.Fatal("failed HU dispatch did not roll back quantities and serials")
+		}
+		outboundOK(t, tx.Model(&inventorymodel.MovementType{}).Where("code='SHIP'").Update("is_active", true).Error)
+		multiShipment, e = service.DispatchShipmentHandlingUnit(ctx, multiShipment.ID, multiHU.ID, request, account.ID)
+		outboundOK(t, e)
+		serials, e = service.repositories.Inventory.SerialState.IDsByBalance(ctx, sharedID)
+		outboundOK(t, e)
+		if len(serials) != 0 {
+			t.Fatal("dispatched serials still have warehouse states")
+		}
+		for _, line := range multiShipment.Lines {
+			movement, e := service.repositories.Inventory.Movement.Get(ctx, line.MovementID)
+			outboundOK(t, e)
+			if movement.SerialID == nil {
+				t.Fatal("serialized HU movement lost serial lineage")
+			}
+		}
+		multiShipment, e = service.CompleteShipment(ctx, multiShipment.ID, account.ID)
+		outboundOK(t, e)
+		if multiShipment.StatusCode != "SHIPPED" {
+			t.Fatal("mixed-line HU shipment did not complete")
+		}
+		multiDelivery, e := service.CreateDelivery(ctx, dto.CreateDeliveryRequest{ShipmentID: multiShipment.ID, OutboundID: multiOrder.ID, BusinessDate: businessDate}, account.ID)
+		outboundOK(t, e)
+		multiDelivery, e = service.DepartDelivery(ctx, multiDelivery.ID, dto.DeliveryEventRequest{EventAt: now.Add(2 * time.Hour).Format(time.RFC3339)}, account.ID)
+		outboundOK(t, e)
+		multiDelivery, e = service.ArriveDelivery(ctx, multiDelivery.ID, dto.DeliveryEventRequest{EventAt: now.Add(3 * time.Hour).Format(time.RFC3339)}, account.ID)
+		outboundOK(t, e)
+		multiDelivery, e = service.FailDelivery(ctx, multiDelivery.ID, dto.FailDeliveryRequest{ReasonCode: "RECIPIENT_REJECTED", EventAt: now.Add(4 * time.Hour).Format(time.RFC3339)}, account.ID)
+		outboundOK(t, e)
+		_, e = service.ReturnDeliveryLine(ctx, multiDelivery.ID, multiDelivery.Lines[0].ID, dto.ReturnDeliveryLineRequest{ReturnedQty: "1", EventAt: now.Add(5 * time.Hour).Format(time.RFC3339), OperationKey: "reject-split-HU-return-" + suffix}, account.ID)
+		if !errors.Is(e, ErrInvalidState) {
+			t.Fatalf("partial multi-line HU return got %v", e)
+		}
+	})
 }

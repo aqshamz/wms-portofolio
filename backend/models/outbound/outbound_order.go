@@ -27,6 +27,9 @@ type OutboundOrder struct {
 	ValidatedBy           *string    `gorm:"column:validated_by;type:uuid"`
 	AllocatedAt           *time.Time `gorm:"column:allocated_at"`
 	CompletedAt           *time.Time `gorm:"column:completed_at"`
+	ClosedShortAt         *time.Time `gorm:"column:closed_short_at"`
+	ClosedShortBy         *string    `gorm:"column:closed_short_by;type:uuid"`
+	ClosedShortReason     *string    `gorm:"column:closed_short_reason;type:text"`
 	CreatedAt             time.Time  `gorm:"column:created_at;not null;default:clock_timestamp()"`
 	CreatedBy             string     `gorm:"column:created_by;type:uuid;not null"`
 	UpdatedAt             time.Time  `gorm:"column:updated_at;not null;default:clock_timestamp()"`
